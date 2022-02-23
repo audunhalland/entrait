@@ -27,7 +27,7 @@ pub fn entrait(attr: TokenStream, input: TokenStream) -> TokenStream {
 
 struct EntraitAttrs {
     trait_ident: syn::Ident,
-    impl_ident: Option<syn::Ident>,
+    impl_target_type: Option<syn::Type>,
 }
 
 struct EntraitBody {
@@ -62,8 +62,15 @@ impl EntraitBody {
     }
 }
 
-fn gen_trait_def(EntraitAttrs { trait_ident, .. }: &EntraitAttrs, body: &EntraitBody) -> proc_macro2::TokenStream {
-    let EntraitBody { input_fn, trait_fn_inputs, .. } = body;
+fn gen_trait_def(
+    EntraitAttrs { trait_ident, .. }: &EntraitAttrs,
+    body: &EntraitBody,
+) -> proc_macro2::TokenStream {
+    let EntraitBody {
+        input_fn,
+        trait_fn_inputs,
+        ..
+    } = body;
     let input_fn_ident = &input_fn.sig.ident;
     let fn_output = &input_fn.sig.output;
 
@@ -75,11 +82,21 @@ fn gen_trait_def(EntraitAttrs { trait_ident, .. }: &EntraitAttrs, body: &Entrait
         pub trait #trait_ident {
             #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output;
         }
-    }
+    };
 }
 
-fn gen_impl_block(EntraitAttrs { trait_ident, impl_ident }: &EntraitAttrs, body: &EntraitBody) -> Option<proc_macro2::TokenStream> {
-    let EntraitBody { input_fn, trait_fn_inputs, call_param_list } = body;
+fn gen_impl_block(
+    EntraitAttrs {
+        trait_ident,
+        impl_target_type,
+    }: &EntraitAttrs,
+    body: &EntraitBody,
+) -> Option<proc_macro2::TokenStream> {
+    let EntraitBody {
+        input_fn,
+        trait_fn_inputs,
+        call_param_list,
+    } = body;
     let input_fn_ident = &input_fn.sig.ident;
     let fn_output = &input_fn.sig.output;
 
@@ -87,30 +104,32 @@ fn gen_impl_block(EntraitAttrs { trait_ident, impl_ident }: &EntraitAttrs, body:
     let opt_async = body.opt_async();
     let opt_dot_await = body.opt_dot_await();
 
-    impl_ident.as_ref().map(|impl_ident|
+    impl_target_type.as_ref().map(|impl_target_type| {
         quote! {
             #async_trait_attribute
-            impl #trait_ident for #impl_ident {
+            impl #trait_ident for #impl_target_type {
                 #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
                     #input_fn_ident(#call_param_list) #opt_dot_await
                 }
             }
         }
-    )
+    })
 }
 
 impl Parse for EntraitAttrs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let trait_ident = input.parse()?;
 
-        let impl_ident = if input.peek(syn::token::For) {
+        let impl_target_type = if input.peek(syn::token::For) {
             input.parse::<syn::token::For>()?;
             Some(input.parse()?)
-        } else { None };
+        } else {
+            None
+        };
 
         Ok(EntraitAttrs {
             trait_ident,
-            impl_ident,
+            impl_target_type,
         })
     }
 }
