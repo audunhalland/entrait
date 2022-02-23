@@ -23,7 +23,7 @@ trait MyFunction {
 }
 ```
 
-`my_function`'s first and only parameter is `c` which is generic over some type `C`. This would correspond to the `self` parameter in the trait. But what is this type supposed to be? We can generate this implementation in the same go using `for Type`:
+`my_function`'s first and only parameter is `a` which is generic over some type `A`. This would correspond to the `self` parameter in the trait. But what is this type supposed to be? We can generate this implementation in the same go using `for Type`:
 
 ```rust
 struct App;
