@@ -23,7 +23,7 @@ trait MyFunction {
 }
 ```
 
-`my_function`'s first and only parameter is `a` which is generic over some type `A`. This would correspond to the `self` parameter in the trait. But what is this type supposed to be? We can generate this implementation in the same go using `for Type`:
+`my_function`'s first and only parameter is `a` which is generic over some unknown type `A`. This would correspond to the `self` parameter in the trait. But what is this type supposed to be? We can generate an implementation in the same go, using `for Type`:
 
 ```rust
 struct App;
@@ -32,6 +32,17 @@ struct App;
 fn my_function<A>(app: &A) {
     ...
 }
+
+// Generated:
+// trait MyFunction {
+//     fn my_function(&self);
+// }
+//
+// impl MyFunction for App {
+//     fn my_function(&self) {
+//         my_function(self)
+//     }
+// }
 
 fn main() {
     let app = App;
@@ -56,6 +67,19 @@ fn bar<A>(a: &A) {
     ...
 }
 ```
+
+The functions may take any number of parameters, but the first one is always considered specially as the "dependency parameter".
+
+Functions may also be non-generic, depending directly on the App:
+
+```rust
+#[entrait(ExtractSomething for App)]
+fn extract_something(app: &App) -> SomeType {
+    app.some_thing
+}
+```
+
+These kinds of functions may be considered "leaves" of a dependency tree.
 
 ## Plans
 The goal of this project is to explore ideas around how to architect larger applications in Rust. The core idea is to architect around one shared "App object" which represents the actual runtime dependencies of an application (various database connection pools etc).
