@@ -10,13 +10,13 @@ description = "The entrait macro"
 syn = { version = "1.0.75", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
-async-trait = { version = "0.1", optional = true }
 
 [features]
-async_trait = ["async-trait"]
+async_trait = []
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
 
 [lib]
 proc-macro = true
