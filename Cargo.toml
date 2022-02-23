@@ -1,10 +1,12 @@
 [package]
 name = "entrait"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
 description = "The entrait macro"
+repository = "https://github.com/audunhalland/entrait/"
+keywords = ["ioc", "di", "procedural-macro", "macros"]
 
 [dependencies]
 syn = { version = "1.0.75", features = ["full"] }
