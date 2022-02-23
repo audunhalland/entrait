@@ -4,12 +4,19 @@ version = "0.1.0"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
-description = "Traiten macro definitions"
+description = "The entrait macro"
 
 [dependencies]
 syn = { version = "1.0.75", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
+async-trait = { version = "0.1", optional = true }
+
+[features]
+async_trait = ["async-trait"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
 
 [lib]
 proc-macro = true

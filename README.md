@@ -86,5 +86,4 @@ The goal of this project is to explore ideas around how to architect larger appl
 
 Concrete things to explore
 
-* [ ] `async` functions
 * [ ] generate `mockall` code (at least this would be needed when there are multiple trait bounds)
