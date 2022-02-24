@@ -91,27 +91,35 @@ use syn::parse::{Parse, ParseStream};
 
 extern crate proc_macro;
 
-use proc_macro::TokenStream;
-
 ///
 /// Generate a trait definition from a regular function.
 ///
 #[proc_macro_attribute]
-pub fn entrait(attr: TokenStream, input: TokenStream) -> TokenStream {
+pub fn entrait(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let attrs = syn::parse_macro_input!(attr as EntraitAttrs);
-    let body = syn::parse_macro_input!(input as EntraitBody);
+    let func = syn::parse_macro_input!(input as EntraitFn);
 
-    let input_fn = &body.input_fn;
-    let trait_def = gen_trait_def(&attrs, &body);
-    let impl_block = gen_impl_block(&attrs, &body);
+    let trait_def = gen_trait_def(&attrs, &func);
+    let impl_block = gen_impl_block(&attrs, &func);
+
+    let EntraitFn {
+        fn_attrs,
+        fn_vis,
+        fn_sig,
+        fn_body,
+        ..
+    } = func;
 
     let output = quote! {
-        #input_fn
+        #(#fn_attrs)* #fn_vis #fn_sig #fn_body
         #trait_def
         #impl_block
     };
 
-    TokenStream::from(output)
+    proc_macro::TokenStream::from(output)
 }
 
 struct EntraitAttrs {
@@ -119,15 +127,20 @@ struct EntraitAttrs {
     impl_target_type: Option<syn::Type>,
 }
 
-struct EntraitBody {
-    input_fn: syn::ItemFn,
+struct EntraitFn {
+    fn_attrs: Vec<syn::Attribute>,
+    fn_vis: syn::Visibility,
+    fn_sig: syn::Signature,
+    // don't try to parse fn_body, just pass through the tokens:
+    fn_body: proc_macro2::TokenStream,
+
     trait_fn_inputs: proc_macro2::TokenStream,
     call_param_list: proc_macro2::TokenStream,
 }
 
-impl EntraitBody {
+impl EntraitFn {
     fn opt_async(&self) -> Option<proc_macro2::TokenStream> {
-        if self.input_fn.sig.asyncness.is_some() {
+        if self.fn_sig.asyncness.is_some() {
             Some(quote! { async })
         } else {
             None
@@ -135,7 +148,7 @@ impl EntraitBody {
     }
 
     fn opt_dot_await(&self) -> Option<proc_macro2::TokenStream> {
-        if self.input_fn.sig.asyncness.is_some() {
+        if self.fn_sig.asyncness.is_some() {
             Some(quote! { .await })
         } else {
             None
@@ -143,7 +156,7 @@ impl EntraitBody {
     }
 
     fn opt_async_trait_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        if cfg!(feature = "async_trait") && self.input_fn.sig.asyncness.is_some() {
+        if cfg!(feature = "async_trait") && self.fn_sig.asyncness.is_some() {
             Some(quote! { #[async_trait::async_trait] })
         } else {
             None
@@ -153,15 +166,15 @@ impl EntraitBody {
 
 fn gen_trait_def(
     EntraitAttrs { trait_ident, .. }: &EntraitAttrs,
-    body: &EntraitBody,
+    body: &EntraitFn,
 ) -> proc_macro2::TokenStream {
-    let EntraitBody {
-        input_fn,
+    let EntraitFn {
+        fn_sig,
         trait_fn_inputs,
         ..
     } = body;
-    let input_fn_ident = &input_fn.sig.ident;
-    let fn_output = &input_fn.sig.output;
+    let input_fn_ident = &fn_sig.ident;
+    let fn_output = &fn_sig.output;
 
     let opt_async_trait_attr = body.opt_async_trait_attribute();
     let opt_async = body.opt_async();
@@ -179,15 +192,16 @@ fn gen_impl_block(
         trait_ident,
         impl_target_type,
     }: &EntraitAttrs,
-    body: &EntraitBody,
+    body: &EntraitFn,
 ) -> Option<proc_macro2::TokenStream> {
-    let EntraitBody {
-        input_fn,
+    let EntraitFn {
+        fn_sig,
         trait_fn_inputs,
         call_param_list,
+        ..
     } = body;
-    let input_fn_ident = &input_fn.sig.ident;
-    let fn_output = &input_fn.sig.output;
+    let input_fn_ident = &fn_sig.ident;
+    let fn_output = &fn_sig.output;
 
     let async_trait_attribute = body.opt_async_trait_attribute();
     let opt_async = body.opt_async();
@@ -223,28 +237,33 @@ impl Parse for EntraitAttrs {
     }
 }
 
-impl Parse for EntraitBody {
+impl Parse for EntraitFn {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let input_fn = input.parse()?;
+        let fn_attrs = input.call(syn::Attribute::parse_outer)?;
+        let fn_vis = input.parse()?;
+        let fn_sig = input.parse()?;
+        let fn_body = input.parse()?;
 
-        let trait_fn_inputs = extract_trait_fn_inputs(&input_fn)?;
-        let call_param_list = extract_call_param_list(&input_fn)?;
+        let trait_fn_inputs = extract_trait_fn_inputs(&fn_sig)?;
+        let call_param_list = extract_call_param_list(&fn_sig)?;
 
-        Ok(EntraitBody {
-            input_fn,
+        Ok(EntraitFn {
+            fn_attrs,
+            fn_vis,
+            fn_sig,
+            fn_body,
             trait_fn_inputs,
             call_param_list,
         })
     }
 }
 
-fn extract_trait_fn_inputs(input_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
-    let sig = &input_fn.sig;
+fn extract_trait_fn_inputs(sig: &syn::Signature) -> syn::Result<proc_macro2::TokenStream> {
     let mut inputs = sig.inputs.clone();
 
     if inputs.is_empty() {
         return Err(syn::Error::new(
-            input_fn.sig.__span(),
+            sig.__span(),
             "Function must take at least one parameter",
         ));
     }
@@ -257,9 +276,8 @@ fn extract_trait_fn_inputs(input_fn: &syn::ItemFn) -> syn::Result<proc_macro2::T
     })
 }
 
-fn extract_call_param_list(input_fn: &syn::ItemFn) -> syn::Result<proc_macro2::TokenStream> {
-    let params = input_fn
-        .sig
+fn extract_call_param_list(sig: &syn::Signature) -> syn::Result<proc_macro2::TokenStream> {
+    let params = sig
         .inputs
         .iter()
         .enumerate()
