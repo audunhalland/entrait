@@ -122,9 +122,21 @@ pub fn entrait(
     proc_macro::TokenStream::from(output)
 }
 
+#[proc_macro_derive(Lol)]
+pub fn lol(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    input
+}
+
 struct EntraitAttrs {
     trait_ident: syn::Ident,
     impl_target_type: Option<syn::Type>,
+    use_async_trait: bool,
+    use_mockall: bool,
+}
+
+enum Extension {
+    AsyncTrait,
+    Mockall,
 }
 
 struct EntraitFn {
@@ -155,8 +167,8 @@ impl EntraitFn {
         }
     }
 
-    fn opt_async_trait_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        if cfg!(feature = "async_trait") && self.fn_sig.asyncness.is_some() {
+    fn opt_async_trait_attribute(&self, attrs: &EntraitAttrs) -> Option<proc_macro2::TokenStream> {
+        if attrs.use_async_trait && self.fn_sig.asyncness.is_some() {
             Some(quote! { #[async_trait::async_trait] })
         } else {
             None
@@ -164,19 +176,17 @@ impl EntraitFn {
     }
 }
 
-fn gen_trait_def(
-    EntraitAttrs { trait_ident, .. }: &EntraitAttrs,
-    body: &EntraitFn,
-) -> proc_macro2::TokenStream {
+fn gen_trait_def(attrs: &EntraitAttrs, body: &EntraitFn) -> proc_macro2::TokenStream {
     let EntraitFn {
         fn_sig,
         trait_fn_inputs,
         ..
     } = body;
+    let trait_ident = &attrs.trait_ident;
     let input_fn_ident = &fn_sig.ident;
     let fn_output = &fn_sig.output;
 
-    let opt_async_trait_attr = body.opt_async_trait_attribute();
+    let opt_async_trait_attr = body.opt_async_trait_attribute(attrs);
     let opt_async = body.opt_async();
 
     return quote! {
@@ -187,13 +197,10 @@ fn gen_trait_def(
     };
 }
 
-fn gen_impl_block(
-    EntraitAttrs {
-        trait_ident,
-        impl_target_type,
-    }: &EntraitAttrs,
-    body: &EntraitFn,
-) -> Option<proc_macro2::TokenStream> {
+fn gen_impl_block(attrs: &EntraitAttrs, body: &EntraitFn) -> Option<proc_macro2::TokenStream> {
+    let impl_target_type = attrs.impl_target_type.as_ref()?;
+    let trait_ident = &attrs.trait_ident;
+
     let EntraitFn {
         fn_sig,
         trait_fn_inputs,
@@ -203,17 +210,15 @@ fn gen_impl_block(
     let input_fn_ident = &fn_sig.ident;
     let fn_output = &fn_sig.output;
 
-    let async_trait_attribute = body.opt_async_trait_attribute();
+    let async_trait_attribute = body.opt_async_trait_attribute(attrs);
     let opt_async = body.opt_async();
     let opt_dot_await = body.opt_dot_await();
 
-    impl_target_type.as_ref().map(|impl_target_type| {
-        quote! {
-            #async_trait_attribute
-            impl #trait_ident for #impl_target_type {
-                #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
-                    #input_fn_ident(#call_param_list) #opt_dot_await
-                }
+    Some(quote! {
+        #async_trait_attribute
+        impl #trait_ident for #impl_target_type {
+            #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
+                #input_fn_ident(#call_param_list) #opt_dot_await
             }
         }
     })
@@ -221,6 +226,26 @@ fn gen_impl_block(
 
 impl Parse for EntraitAttrs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut use_async_trait = false;
+        let mut use_mockall = false;
+
+        input.peek(syn::token::Macro);
+
+        while input.peek(syn::token::Pound) {
+            input.parse::<syn::token::Pound>()?;
+
+            println!("parsed pound {input}");
+
+            let custom_attr;
+            syn::bracketed!(custom_attr in input);
+            let extension: Extension = custom_attr.parse()?;
+
+            match extension {
+                Extension::AsyncTrait => use_async_trait = true,
+                Extension::Mockall => use_mockall = true,
+            };
+        }
+
         let trait_ident = input.parse()?;
 
         let impl_target_type = if input.peek(syn::token::For) {
@@ -230,10 +255,51 @@ impl Parse for EntraitAttrs {
             None
         };
 
+        if input.peek(syn::token::Comma) {
+            input.parse::<syn::token::Comma>()?;
+            input.parse::<syn::token::Use>()?;
+
+            loop {
+                let extension: Extension = input.parse()?;
+
+                match extension {
+                    Extension::AsyncTrait => use_async_trait = true,
+                    Extension::Mockall => use_mockall = true,
+                };
+
+                if input.peek(syn::token::Add) {
+                    input.parse::<syn::token::Add>()?;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        println!("use_async_trait: {use_async_trait}");
+
         Ok(EntraitAttrs {
             trait_ident,
             impl_target_type,
+            use_async_trait,
+            use_mockall,
         })
+    }
+}
+
+impl Parse for Extension {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ident: syn::Ident = input.parse()?;
+        let span = ident.span();
+        let ident_string = ident.to_string();
+
+        match ident_string.as_str() {
+            "async_trait" => Ok(Extension::AsyncTrait),
+            "mockall" => Ok(Extension::Mockall),
+            _ => Err(syn::Error::new(
+                span,
+                format!("Unkonwn entrait extension \"{ident_string}\""),
+            )),
+        }
     }
 }
 
