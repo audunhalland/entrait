@@ -102,6 +102,7 @@ pub fn entrait(
     let attrs = syn::parse_macro_input!(attr as EntraitAttrs);
     let func = syn::parse_macro_input!(input as EntraitFn);
 
+    let fn_sig_macro = gen_fn_sig_macro(&func);
     let trait_def = gen_trait_def(&attrs, &func);
     let impl_block = gen_impl_block(&attrs, &func);
 
@@ -115,11 +116,28 @@ pub fn entrait(
 
     let output = quote! {
         #(#fn_attrs)* #fn_vis #fn_sig #fn_body
+        #fn_sig_macro
         #trait_def
         #impl_block
     };
 
+    //println!("{}", output);
+
     proc_macro::TokenStream::from(output)
+}
+
+#[proc_macro]
+pub fn print_tokens(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    println!("{}", input);
+
+    input
+}
+
+#[proc_macro]
+pub fn print_consume_tokens(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    println!("print consume: {input}");
+
+    proc_macro::TokenStream::from(quote! {})
 }
 
 struct EntraitAttrs {
@@ -134,6 +152,7 @@ struct EntraitFn {
     // don't try to parse fn_body, just pass through the tokens:
     fn_body: proc_macro2::TokenStream,
 
+    sig_macro_ident: syn::Ident,
     trait_fn_inputs: proc_macro2::TokenStream,
     call_param_list: proc_macro2::TokenStream,
 }
@@ -164,6 +183,27 @@ impl EntraitFn {
     }
 }
 
+fn gen_fn_sig_macro(body: &EntraitFn) -> proc_macro2::TokenStream {
+    let EntraitFn {
+        fn_sig,
+        trait_fn_inputs,
+        sig_macro_ident,
+        ..
+    } = body;
+    let input_fn_ident = &fn_sig.ident;
+    let fn_output = &fn_sig.output;
+
+    let opt_async = body.opt_async();
+
+    return quote! {
+        macro_rules! #sig_macro_ident {
+            () => {
+                #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output;
+            };
+        }
+    };
+}
+
 fn gen_trait_def(
     EntraitAttrs { trait_ident, .. }: &EntraitAttrs,
     body: &EntraitFn,
@@ -171,6 +211,7 @@ fn gen_trait_def(
     let EntraitFn {
         fn_sig,
         trait_fn_inputs,
+        sig_macro_ident,
         ..
     } = body;
     let input_fn_ident = &fn_sig.ident;
@@ -241,9 +282,10 @@ impl Parse for EntraitFn {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let fn_attrs = input.call(syn::Attribute::parse_outer)?;
         let fn_vis = input.parse()?;
-        let fn_sig = input.parse()?;
+        let fn_sig: syn::Signature = input.parse()?;
         let fn_body = input.parse()?;
 
+        let sig_macro_ident = quote::format_ident!("__entrait_{}_sig", fn_sig.ident);
         let trait_fn_inputs = extract_trait_fn_inputs(&fn_sig)?;
         let call_param_list = extract_call_param_list(&fn_sig)?;
 
@@ -252,6 +294,7 @@ impl Parse for EntraitFn {
             fn_vis,
             fn_sig,
             fn_body,
+            sig_macro_ident,
             trait_fn_inputs,
             call_param_list,
         })

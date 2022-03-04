@@ -19,6 +19,7 @@ async_trait = []
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
+mockall = "0.11"
 
 [lib]
 proc-macro = true
