@@ -94,7 +94,7 @@ macro_rules! expand_mock {
     ($target:tt, [] $($traits:item)*) => {
         entrait::generate_mock!($target $($traits)*);
     };
-    ($target:tt, [$macro:ident $($rest_macros:ident)*] $($traits:item)*) => {
+    ($target:tt, [$macro:ident $(,$rest_macros:ident)*] $($traits:item)*) => {
         $macro!($target, [$($rest_macros),*] $($traits)*);
     };
 }
