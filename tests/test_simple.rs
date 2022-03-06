@@ -6,7 +6,7 @@ mod app {
     }
 }
 
-#[entrait(Foo for app::App)]
+#[entrait(#[mockall] Foo for app::App)]
 fn foo<A>(app: &A) -> u32
 where
     A: Bar + Baz,

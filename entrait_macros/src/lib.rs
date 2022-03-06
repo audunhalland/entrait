@@ -96,6 +96,13 @@ pub fn generate_mock(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 struct EntraitAttrs {
     trait_ident: syn::Ident,
     impl_target_type: Option<syn::Type>,
+    use_async_trait: bool,
+    use_mockall: bool,
+}
+
+enum Extension {
+    AsyncTrait(bool),
+    Mockall,
 }
 
 struct EntraitFn {
@@ -133,8 +140,8 @@ impl EntraitFn {
     }
 
     // FIXME: Must have explicit parameter to generate this:
-    fn opt_async_trait_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        if self.fn_sig.asyncness.is_some() {
+    fn opt_async_trait_attribute(&self, attrs: &EntraitAttrs) -> Option<proc_macro2::TokenStream> {
+        if attrs.use_async_trait && self.fn_sig.asyncness.is_some() {
             Some(quote! { #[async_trait::async_trait] })
         } else {
             None
@@ -163,19 +170,17 @@ fn gen_fn_sig_macro(body: &EntraitFn) -> proc_macro2::TokenStream {
     };
 }
 
-fn gen_trait_def(
-    EntraitAttrs { trait_ident, .. }: &EntraitAttrs,
-    body: &EntraitFn,
-) -> proc_macro2::TokenStream {
+fn gen_trait_def(attrs: &EntraitAttrs, body: &EntraitFn) -> proc_macro2::TokenStream {
     let EntraitFn {
         fn_sig,
         trait_fn_inputs,
         ..
     } = body;
+    let trait_ident = &attrs.trait_ident;
     let input_fn_ident = &fn_sig.ident;
     let fn_output = &fn_sig.output;
 
-    let opt_async_trait_attr = body.opt_async_trait_attribute();
+    let opt_async_trait_attr = body.opt_async_trait_attribute(attrs);
     let opt_async = body.opt_async();
 
     return quote! {
@@ -186,13 +191,12 @@ fn gen_trait_def(
     };
 }
 
-fn gen_impl_block(
-    EntraitAttrs {
+fn gen_impl_block(attrs: &EntraitAttrs, body: &EntraitFn) -> Option<proc_macro2::TokenStream> {
+    let EntraitAttrs {
         trait_ident,
         impl_target_type,
-    }: &EntraitAttrs,
-    body: &EntraitFn,
-) -> Option<proc_macro2::TokenStream> {
+        ..
+    } = attrs;
     let EntraitFn {
         fn_sig,
         trait_fn_inputs,
@@ -202,7 +206,7 @@ fn gen_impl_block(
     let input_fn_ident = &fn_sig.ident;
     let fn_output = &fn_sig.output;
 
-    let async_trait_attribute = body.opt_async_trait_attribute();
+    let async_trait_attribute = body.opt_async_trait_attribute(attrs);
     let opt_async = body.opt_async();
     let opt_dot_await = body.opt_dot_await();
 
@@ -220,6 +224,8 @@ fn gen_impl_block(
 
 impl Parse for EntraitAttrs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut use_async_trait = false;
+        let mut use_mockall = false;
         let trait_ident = input.parse()?;
 
         let impl_target_type = if input.peek(syn::token::For) {
@@ -229,10 +235,53 @@ impl Parse for EntraitAttrs {
             None
         };
 
+        if input.peek(syn::token::Comma) {
+            input.parse::<syn::token::Comma>()?;
+            //input.parse::<syn::token::Use>()?;
+
+            loop {
+                let extension: Extension = input.parse()?;
+
+                match extension {
+                    Extension::AsyncTrait(enabled) => use_async_trait = enabled,
+                    Extension::Mockall => use_mockall = true,
+                };
+
+                if input.peek(syn::token::Add) {
+                    input.parse::<syn::token::Add>()?;
+                } else {
+                    break;
+                }
+            }
+        }
+
         Ok(EntraitAttrs {
             trait_ident,
             impl_target_type,
+            use_async_trait,
+            use_mockall,
         })
+    }
+}
+
+impl Parse for Extension {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ident: syn::Ident = input.parse()?;
+        let span = ident.span();
+        let ident_string = ident.to_string();
+
+        match ident_string.as_str() {
+            "async_trait" => {
+                input.parse::<syn::token::Eq>()?;
+                let value: syn::LitBool = input.parse()?;
+                Ok(Extension::AsyncTrait(value.value()))
+            }
+            "mockall" => Ok(Extension::Mockall),
+            _ => Err(syn::Error::new(
+                span,
+                format!("Unkonwn entrait extension \"{ident_string}\""),
+            )),
+        }
     }
 }
 
