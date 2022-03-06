@@ -87,7 +87,14 @@
 #![forbid(unsafe_code)]
 
 pub use entrait_macros::entrait;
+pub use entrait_macros::generate_mock;
 
-// FIXME: remove
-pub use entrait_macros::print_consume_tokens;
-pub use entrait_macros::print_tokens;
+#[macro_export]
+macro_rules! expand_mock {
+    ($target:tt, [] $($traits:item)*) => {
+        entrait::generate_mock!($target $($traits)*);
+    };
+    ($target:tt, [$macro:ident $($rest_macros:ident)*] $($traits:item)*) => {
+        $macro!($target, [$($rest_macros),*] $($traits)*);
+    };
+}

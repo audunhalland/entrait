@@ -45,17 +45,52 @@ pub fn entrait(
 }
 
 #[proc_macro]
-pub fn print_tokens(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    println!("{}", input);
+pub fn generate_mock(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let mock_input = syn::parse_macro_input!(input as EntraitMockInput);
 
-    input
-}
+    let mock_ident = mock_input.mock_ident;
 
-#[proc_macro]
-pub fn print_consume_tokens(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    println!("print consume: {input}");
+    let impls = mock_input.trait_items.into_iter().map(|trait_item| {
+        let trait_ident = trait_item.ident;
 
-    proc_macro::TokenStream::from(quote! {})
+        let items = trait_item.items.into_iter().map(|item| match item {
+            syn::TraitItem::Method(mut trait_item_method) => {
+                trait_item_method.sig.inputs = trait_item_method
+                    .sig
+                    .inputs
+                    .into_iter()
+                    .map(|fn_arg| match fn_arg {
+                        syn::FnArg::Receiver(receiver) => syn::FnArg::Receiver(syn::Receiver {
+                            attrs: receiver.attrs,
+                            reference: receiver.reference,
+                            mutability: receiver.mutability,
+                            // All this for fixing this hygiene issue:
+                            self_token: syn::parse_quote! { self },
+                        }),
+                        _ => fn_arg,
+                    })
+                    .collect();
+
+                quote! { #trait_item_method }
+            }
+            _ => quote! {},
+        });
+
+        quote! {
+            impl #trait_ident for #mock_ident {
+                #(#items);*
+            }
+        }
+    });
+
+    let output = quote! {
+        mockall::mock! {
+            #mock_ident {}
+            #(#impls)*
+        }
+    };
+
+    proc_macro::TokenStream::from(output)
 }
 
 struct EntraitAttrs {
@@ -73,6 +108,11 @@ struct EntraitFn {
     sig_macro_ident: syn::Ident,
     trait_fn_inputs: proc_macro2::TokenStream,
     call_param_list: proc_macro2::TokenStream,
+}
+
+struct EntraitMockInput {
+    mock_ident: syn::Ident,
+    trait_items: Vec<syn::ItemTrait>,
 }
 
 impl EntraitFn {
@@ -130,7 +170,6 @@ fn gen_trait_def(
     let EntraitFn {
         fn_sig,
         trait_fn_inputs,
-        sig_macro_ident,
         ..
     } = body;
     let input_fn_ident = &fn_sig.ident;
@@ -204,7 +243,7 @@ impl Parse for EntraitFn {
         let fn_sig: syn::Signature = input.parse()?;
         let fn_body = input.parse()?;
 
-        let sig_macro_ident = quote::format_ident!("__entrait_{}_sig", fn_sig.ident);
+        let sig_macro_ident = quote::format_ident!("__entrait_{}", fn_sig.ident);
         let trait_fn_inputs = extract_trait_fn_inputs(&fn_sig)?;
         let call_param_list = extract_call_param_list(&fn_sig)?;
 
@@ -269,4 +308,22 @@ fn extract_call_param_list(sig: &syn::Signature) -> syn::Result<proc_macro2::Tok
     Ok(quote! {
         #(#params),*
     })
+}
+
+impl Parse for EntraitMockInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mock_ident = input.parse()?;
+        let mut trait_items: Vec<syn::ItemTrait> = Vec::new();
+
+        while !input.is_empty() {
+            trait_items.push(input.parse()?);
+        }
+
+        println!("parsed traits: {trait_items:?}");
+
+        Ok(EntraitMockInput {
+            mock_ident,
+            trait_items,
+        })
+    }
 }
