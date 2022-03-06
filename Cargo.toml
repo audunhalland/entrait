@@ -10,9 +10,6 @@ keywords = ["ioc", "di", "procedural-macro", "macros"]
 
 [dependencies]
 entrait_macros = { path = "entrait_macros", version = "0.1.0" }
-syn = { version = "1.0.75", features = ["full"] }
-quote = "1"
-proc-macro2 = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
