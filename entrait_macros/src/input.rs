@@ -29,11 +29,6 @@ pub struct EntraitFn {
     pub call_param_list: proc_macro2::TokenStream,
 }
 
-pub struct EntraitMockInput {
-    pub mock_ident: syn::Ident,
-    pub trait_items: Vec<syn::ItemTrait>,
-}
-
 impl EntraitAttrs {
     pub fn opt_mockall_automock_attribute(&self) -> Option<proc_macro2::TokenStream> {
         if self.mockable {
@@ -204,4 +199,25 @@ fn extract_call_param_list(sig: &syn::Signature) -> syn::Result<proc_macro2::Tok
     Ok(quote! {
         #(#params),*
     })
+}
+
+pub struct EntraitMockInput {
+    pub mock_ident: syn::Ident,
+    pub trait_items: Vec<syn::ItemTrait>,
+}
+
+impl Parse for EntraitMockInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mock_ident = input.parse()?;
+        let mut trait_items: Vec<syn::ItemTrait> = Vec::new();
+
+        while !input.is_empty() {
+            trait_items.push(input.parse()?);
+        }
+
+        Ok(EntraitMockInput {
+            mock_ident,
+            trait_items,
+        })
+    }
 }

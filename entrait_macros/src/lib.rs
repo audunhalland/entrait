@@ -5,7 +5,6 @@
 #![forbid(unsafe_code)]
 
 use quote::quote;
-use syn::parse::{Parse, ParseStream};
 
 extern crate proc_macro;
 
@@ -211,20 +210,4 @@ fn gen_impl_block(attrs: &EntraitAttrs, func: &EntraitFn) -> Option<proc_macro2:
             }
         }
     })
-}
-
-impl Parse for EntraitMockInput {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mock_ident = input.parse()?;
-        let mut trait_items: Vec<syn::ItemTrait> = Vec::new();
-
-        while !input.is_empty() {
-            trait_items.push(input.parse()?);
-        }
-
-        Ok(EntraitMockInput {
-            mock_ident,
-            trait_items,
-        })
-    }
 }
