@@ -1,8 +1,15 @@
+//!
+//! inputs to procedural macros
+//!
+
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 
-pub struct EntraitAttrs {
+///
+/// The `entrait` invocation
+///
+pub struct EntraitAttr {
     pub trait_ident: syn::Ident,
     pub impl_target_type: Option<syn::Type>,
     pub debug: bool,
@@ -11,6 +18,9 @@ pub struct EntraitAttrs {
     pub mock_deps_as: Option<syn::Ident>,
 }
 
+///
+/// "keyword args" to `entrait`.
+///
 pub enum Extension {
     Debug(bool),
     AsyncTrait(bool),
@@ -18,6 +28,9 @@ pub enum Extension {
     MockDepsAs(syn::Ident),
 }
 
+///
+/// The "body" that is decorated with entrait.
+///
 pub struct EntraitFn {
     pub fn_attrs: Vec<syn::Attribute>,
     pub fn_vis: syn::Visibility,
@@ -29,46 +42,7 @@ pub struct EntraitFn {
     pub call_param_list: proc_macro2::TokenStream,
 }
 
-impl EntraitAttrs {
-    pub fn opt_mockall_automock_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        if self.mockable {
-            Some(quote! { #[mockall::automock] })
-        } else {
-            None
-        }
-    }
-}
-
-impl EntraitFn {
-    pub fn opt_async(&self) -> Option<proc_macro2::TokenStream> {
-        if self.fn_sig.asyncness.is_some() {
-            Some(quote! { async })
-        } else {
-            None
-        }
-    }
-
-    pub fn opt_dot_await(&self) -> Option<proc_macro2::TokenStream> {
-        if self.fn_sig.asyncness.is_some() {
-            Some(quote! { .await })
-        } else {
-            None
-        }
-    }
-
-    pub fn opt_async_trait_attribute(
-        &self,
-        attrs: &EntraitAttrs,
-    ) -> Option<proc_macro2::TokenStream> {
-        if attrs.async_trait && self.fn_sig.asyncness.is_some() {
-            Some(quote! { #[async_trait::async_trait] })
-        } else {
-            None
-        }
-    }
-}
-
-impl Parse for EntraitAttrs {
+impl Parse for EntraitAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let trait_ident = input.parse()?;
 
@@ -95,7 +69,7 @@ impl Parse for EntraitAttrs {
             };
         }
 
-        Ok(EntraitAttrs {
+        Ok(EntraitAttr {
             trait_ident,
             impl_target_type,
             debug,
@@ -201,12 +175,22 @@ fn extract_call_param_list(sig: &syn::Signature) -> syn::Result<proc_macro2::Tok
     })
 }
 
-pub struct EntraitMockInput {
+///
+/// Input to `entrait::generate_mock`.
+/// its purpose is to output an `mockall::mock!` invocation.
+///
+/// `mockall::mock` is supposed to output `C {} impl T for C {..}..`,
+/// This input receives trait items instead of impl items.
+/// The reason for that is to handle a hygiene issue involving `self` when
+/// outputting impl items in macro_rules.
+/// `generate_mock` will rewrite trait items to impl items automatically.
+///
+pub struct EntraitGenerateMockInput {
     pub mock_ident: syn::Ident,
     pub trait_items: Vec<syn::ItemTrait>,
 }
 
-impl Parse for EntraitMockInput {
+impl Parse for EntraitGenerateMockInput {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mock_ident = input.parse()?;
         let mut trait_items: Vec<syn::ItemTrait> = Vec::new();
@@ -215,7 +199,7 @@ impl Parse for EntraitMockInput {
             trait_items.push(input.parse()?);
         }
 
-        Ok(EntraitMockInput {
+        Ok(EntraitGenerateMockInput {
             mock_ident,
             trait_items,
         })

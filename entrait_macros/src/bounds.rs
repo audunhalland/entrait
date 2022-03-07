@@ -1,3 +1,7 @@
+//!
+//! Utilities for extracting the trait bounds of the first parameter to a function.
+//!
+
 use crate::input::EntraitFn;
 use syn::spanned::Spanned;
 
@@ -60,10 +64,7 @@ fn extract_generic_bounds_from_type<'f>(
             extract_generic_bounds_from_type(func, type_reference.elem.as_ref())
         }
         syn::Type::Paren(paren) => extract_generic_bounds_from_type(func, paren.elem.as_ref()),
-        _ => Err(syn::Error::new(
-            ty.span(),
-            format!("Cannot process this type"),
-        )),
+        _ => Err(syn::Error::new(ty.span(), "Cannot process this type")),
     }
 }
 
