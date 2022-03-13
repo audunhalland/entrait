@@ -90,7 +90,7 @@
 //! `entrait` does not implement Dependency Injection (DI). DI is a strictly object-oriented concept that will often look awkward in Rust.
 //! The author thinks of DI as the "reification of code modules": In a DI-enabled programming environment, code modules are grouped together
 //! as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
-//! When this patteern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
+//! When this pattern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
 //!
 //! `entrait` tries to turn this around by saying that the primary abstraction that is depended upon is a set of _functions_, not a set of code modules.
 //!
