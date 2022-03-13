@@ -174,7 +174,7 @@
 //! `unimock = true` implies `mockall = true`.
 //!
 //! ### conditional mock implementations
-//! Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this, there are the `test` variants:
+//! Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this, there are the `= test` variants:
 //!
 //! * `mockall = test`
 //! * `unimock = test`
