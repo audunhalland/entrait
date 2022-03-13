@@ -1,6 +1,6 @@
 # entrait
 
-Experimental proc macro to ease development using _Inversion of Control_ patterns in Rust.
+A proc macro to ease development using _Inversion of Control_ patterns in Rust.
 
 `entrait` is used to generate a trait from the definition of a regular function.
 The main use case for this is that other functions may depend upon the trait
@@ -78,6 +78,22 @@ fn extract_something(app: &App) -> SomeType {
 
 These kinds of functions may be considered "leaves" of a dependency tree.
 
+### "Philosophy"
+The idea behind `entrait` is to explore a specific architectural pattern:
+* Interfaces with _one_ runtime implementation
+* named traits as the interface of single functions
+
+`entrait` does not implement Dependency Injection (DI). DI is a strictly object-oriented concept that will often look awkward in Rust.
+The author thinks of DI as the "reification of code modules": In a DI-enabled programming environment, code modules are grouped together
+as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
+When this patteern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
+
+`entrait` tries to turn this around by saying that the primary abstraction that is depended upon is a set of _functions_, not a set of code modules.
+
+An architectural consequence is that one ends up with _one ubiquitous type_ that represents a running application that implements all
+these function abstraction traits. But the point is that this is all loosely coupled: Most function definitions themselves do not refer
+to this god-like type, they only depend upon traits.
+
 ### `async` support
 Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated
 for your trait:
@@ -90,11 +106,13 @@ async fn foo<D>(deps: &D) {
 This is designed to be forwards compatible with real async fn in traits. When that day comes, you should be able to just remove the `async_trait=true`
 to get a proper zero-cost future.
 
-### `mockall` support
-The macro supports autogenerating `mockall` mock structs:
+### Mock support
+The macro supports autogenerating [mockall] mock structs:
+
+[mockall]: https://docs.rs/mockall/latest/mockall/
 
 ```rust
-#[entrait(Foo, mockable=true)]
+#[entrait(Foo, mockall=true)]
 fn foo<D>(_: &D) -> u32 {
     unimplemented!()
 }
@@ -103,56 +121,84 @@ fn my_func(deps: &(impl Foo)) -> u32 {
     deps.foo()
 }
 
-#[test]
-fn test_my_func() {
-    let deps = MockFoo();
+fn main() {
+    let mut deps = MockFoo::new();
     deps.expect_foo().returning(|| 42);
     assert_eq!(42, my_func(&deps));
 }
 ```
-This is easy enough when there is only one trait bound, because the generated trait need only be attributed with `mockall::automock`.
+Using `mockall` is easy enough when there is only one trait bound, because the generated trait need only be attributed with `mockall::automock`.
 
-With multiple trait bounds, this becomes a little harder: We need some concrete struct that implement all the given traits:
+#### multiple trait bounds with `unimock`
+With multiple trait bounds, this becomes a little harder: We need some concrete struct that implement all the given traits.
+This is easily solved by the crate [unimock], and using `unimock = true`:
+
+[unimock]: https://docs.rs/unimock/latest/unimock/
 
 ```rust
-#[entrait(Foo, mockable=true)]
+use unimock::Unimock;
+
+#[entrait(Foo, unimock=true)]
 fn foo<D>(_: &D) -> u32 {
     unimplemented!()
 }
-#[entrait(Bar, mockable=true)]
+#[entrait(Bar, unimock=true)]
 fn bar<D>(_: &D) -> u32 {
     unimplemented!()
 }
 
-#[entrait(MyFunc, mock_deps_as=FooPlusBar)]
 fn my_func(deps: &(impl Foo + Bar)) -> u32 {
     deps.foo() + deps.bar()
 }
 
-#[test]
-fn test_my_func() {
-    let deps = MockFooPlusBar();
-    deps.expect_foo().returning(|| 40);
-    deps.expect_bar().returning(|| 2);
+fn main() {
+    let deps = Unimock::new()
+        .mock(|foo: &mut MockFoo| {
+            foo.expect_foo().returning(|| 40);
+        })
+        .mock(|bar: &mut MockBar| {
+            bar.expect_bar().returning(|| 2);
+        });
+
     assert_eq!(42, my_func(&deps));
 }
 ```
 
-This works, by entraiting `my_func` and passing `mock_deps_as=FooPlusBar`. However, this requires some rather hairy macro magic behind the scenes:
-In order to generate `MockFooPlusBar`, `mockall` needs access to the trait definitions and method signatures of both `Foo` and `Bar`. These
-traits are not definied locally inside the `my_func` item, they are _standalone items_ defined elsewhere.
+`unimock = true` implies `mockall = true`.
 
-The magic works by having each `mockable=true` entraitment define its own `macro_rules` where one can get this trait definition derived from the trait name.
-For `$[entrait(Foo, mockable=true)` the macro generated is:
+#### conditional mock implementations
+Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this, there are the `test_*` variants:
 
+* `test_mockall = true`
+* `test_unimock = true`
+
+which puts the corresponding attributes in `#[cfg_attr(test, ...)]`:
+
+```rust
+#[entrait(Foo, test_unimock=true)]
+fn foo<D>(_: &D) -> u32 {
+    unimplemented!()
+}
+
+fn takes_foo(foo: impl Foo) {}
+
+fn main() {
+    // we can still instantiate Unimock, but it's not useful,
+    // because now it doesn't implement `Foo`:
+    let mock = unimock::Unimock::new();
+    //takes_foo(mock);
+    //--------- ^^^^ the trait `Foo` is not implemented for `Unimock`
+}
+
+#[test]
+fn test() {
+    // this compiles!
+    let mock = unimock::Unimock::new();
+    takes_foo(mock);
+}
 ```
-macro_rules! entrait_mock_Foo { ... }
-```
 
-`entrait` invokes this macro to expand `Foo`'s trait definition,
-at the end passing all this information into `mockall::mock`.
+This is opt-in because there could be scenarios where this behaviour is not desired, e.g. when you write a library and want mocks exported for those.
 
-At the time of writing, procedural macros outputting new `macro_rules` do not play very well with `rust-analyzer`. So you may want to type out the mock
-generator yourself instead.
 
 License: MIT

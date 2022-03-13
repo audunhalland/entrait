@@ -1,6 +1,6 @@
 [package]
 name = "entrait"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
@@ -9,9 +9,10 @@ repository = "https://github.com/audunhalland/entrait/"
 keywords = ["ioc", "di", "procedural-macro", "macros"]
 
 [dependencies]
-entrait_macros = { path = "entrait_macros", version = "0.1.0" }
+entrait_macros = { path = "entrait_macros", version = "0.2.0" }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["macros", "rt"] }
 async-trait = "0.1"
 mockall = "0.11"
+unimock = "0.1"

@@ -7,7 +7,7 @@ async fn foo<A: Bar>(a: &A) -> u32 {
     a.bar().await
 }
 
-#[entrait(Bar for App, async_trait=true, mockable=true)]
+#[entrait(Bar for App, async_trait=true, mockall=true)]
 async fn bar(app: &App) -> u32 {
     app.0
 }

@@ -14,8 +14,10 @@ pub struct EntraitAttr {
     pub impl_target_type: Option<syn::Type>,
     pub debug: bool,
     pub async_trait: bool,
-    pub mockable: bool,
-    pub mock_deps_as: Option<syn::Ident>,
+    pub unimock: bool,
+    pub test_unimock: bool,
+    pub mockall: bool,
+    pub test_mockall: bool,
 }
 
 ///
@@ -24,8 +26,10 @@ pub struct EntraitAttr {
 pub enum Extension {
     Debug(bool),
     AsyncTrait(bool),
-    Mockable(bool),
-    MockDepsAs(syn::Ident),
+    Unimock(bool),
+    TestUnimock(bool),
+    Mockall(bool),
+    TestMockall(bool),
 }
 
 ///
@@ -55,8 +59,10 @@ impl Parse for EntraitAttr {
 
         let mut debug = false;
         let mut async_trait = false;
-        let mut mockable = false;
-        let mut mock_deps = None;
+        let mut unimock = false;
+        let mut test_unimock = false;
+        let mut mockall = false;
+        let mut test_mockall = false;
 
         while input.peek(syn::token::Comma) {
             input.parse::<syn::token::Comma>()?;
@@ -64,8 +70,10 @@ impl Parse for EntraitAttr {
             match input.parse::<Extension>()? {
                 Extension::Debug(enabled) => debug = enabled,
                 Extension::AsyncTrait(enabled) => async_trait = enabled,
-                Extension::Mockable(enabled) => mockable = enabled,
-                Extension::MockDepsAs(ident) => mock_deps = Some(ident),
+                Extension::Unimock(enabled) => unimock = enabled,
+                Extension::TestUnimock(enabled) => test_unimock = enabled,
+                Extension::Mockall(enabled) => mockall = enabled,
+                Extension::TestMockall(enabled) => test_mockall = enabled,
             };
         }
 
@@ -74,8 +82,10 @@ impl Parse for EntraitAttr {
             impl_target_type,
             debug,
             async_trait,
-            mockable,
-            mock_deps_as: mock_deps,
+            unimock,
+            test_unimock,
+            mockall,
+            test_mockall,
         })
     }
 }
@@ -93,8 +103,14 @@ impl Parse for Extension {
             "async_trait" => Ok(Extension::AsyncTrait(
                 input.parse::<syn::LitBool>()?.value(),
             )),
-            "mockable" => Ok(Extension::Mockable(input.parse::<syn::LitBool>()?.value())),
-            "mock_deps_as" => Ok(Extension::MockDepsAs(input.parse()?)),
+            "unimock" => Ok(Extension::Unimock(input.parse::<syn::LitBool>()?.value())),
+            "test_unimock" => Ok(Extension::TestUnimock(
+                input.parse::<syn::LitBool>()?.value(),
+            )),
+            "mockall" => Ok(Extension::Mockall(input.parse::<syn::LitBool>()?.value())),
+            "test_mockall" => Ok(Extension::TestMockall(
+                input.parse::<syn::LitBool>()?.value(),
+            )),
             _ => Err(syn::Error::new(
                 span,
                 format!("Unkonwn entrait extension \"{ident_string}\""),

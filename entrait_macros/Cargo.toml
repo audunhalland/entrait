@@ -1,6 +1,6 @@
 [package]
 name = "entrait_macros"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
@@ -12,11 +12,6 @@ keywords = []
 syn = { version = "1.0.75", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
-
-[dev-dependencies]
-tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
-mockall = "0.11"
 
 [lib]
 proc-macro = true
