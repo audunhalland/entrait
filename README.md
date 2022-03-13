@@ -167,15 +167,15 @@ fn main() {
 `unimock = true` implies `mockall = true`.
 
 #### conditional mock implementations
-Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this, there are the `test_*` variants:
+Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this, there are the `test` variants:
 
-* `test_mockall = true`
-* `test_unimock = true`
+* `mockall = test`
+* `unimock = test`
 
 which puts the corresponding attributes in `#[cfg_attr(test, ...)]`:
 
 ```rust
-#[entrait(Foo, test_unimock=true)]
+#[entrait(Foo, unimock=test)]
 fn foo<D>(_: &D) -> u32 {
     unimplemented!()
 }

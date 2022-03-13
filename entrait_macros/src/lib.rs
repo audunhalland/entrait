@@ -117,22 +117,20 @@ fn gen_impl_block(attr: &EntraitAttr, func: &EntraitFn) -> Option<proc_macro2::T
 
 impl EntraitAttr {
     pub fn opt_unimock_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        if self.unimock {
-            Some(quote! { #[::unimock::unimock] })
-        } else if self.test_unimock {
-            Some(quote! { #[cfg_attr(test, ::unimock::unimock)] })
-        } else {
-            None
+        match self.unimock {
+            input::EnabledValue::Always => Some(quote! { #[::unimock::unimock] }),
+            input::EnabledValue::TestOnly => Some(quote! { #[cfg_attr(test, ::unimock::unimock)] }),
+            input::EnabledValue::Never => None,
         }
     }
 
     pub fn opt_mockall_automock_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        if self.mockall {
-            Some(quote! { #[::mockall::automock] })
-        } else if self.test_mockall {
-            Some(quote! { #[cfg_attr(test, ::mockall::automock)] })
-        } else {
-            None
+        match self.mockall {
+            input::EnabledValue::Always => Some(quote! { #[::mockall::automock] }),
+            input::EnabledValue::TestOnly => {
+                Some(quote! { #[cfg_attr(test, ::mockall::automock)] })
+            }
+            input::EnabledValue::Never => None,
         }
     }
 }

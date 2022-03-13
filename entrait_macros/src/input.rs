@@ -14,10 +14,8 @@ pub struct EntraitAttr {
     pub impl_target_type: Option<syn::Type>,
     pub debug: bool,
     pub async_trait: bool,
-    pub unimock: bool,
-    pub test_unimock: bool,
-    pub mockall: bool,
-    pub test_mockall: bool,
+    pub unimock: EnabledValue,
+    pub mockall: EnabledValue,
 }
 
 ///
@@ -26,10 +24,14 @@ pub struct EntraitAttr {
 pub enum Extension {
     Debug(bool),
     AsyncTrait(bool),
-    Unimock(bool),
-    TestUnimock(bool),
-    Mockall(bool),
-    TestMockall(bool),
+    Unimock(EnabledValue),
+    Mockall(EnabledValue),
+}
+
+pub enum EnabledValue {
+    Never,
+    Always,
+    TestOnly,
 }
 
 ///
@@ -59,10 +61,8 @@ impl Parse for EntraitAttr {
 
         let mut debug = false;
         let mut async_trait = false;
-        let mut unimock = false;
-        let mut test_unimock = false;
-        let mut mockall = false;
-        let mut test_mockall = false;
+        let mut unimock = EnabledValue::Never;
+        let mut mockall = EnabledValue::Never;
 
         while input.peek(syn::token::Comma) {
             input.parse::<syn::token::Comma>()?;
@@ -71,9 +71,7 @@ impl Parse for EntraitAttr {
                 Extension::Debug(enabled) => debug = enabled,
                 Extension::AsyncTrait(enabled) => async_trait = enabled,
                 Extension::Unimock(enabled) => unimock = enabled,
-                Extension::TestUnimock(enabled) => test_unimock = enabled,
                 Extension::Mockall(enabled) => mockall = enabled,
-                Extension::TestMockall(enabled) => test_mockall = enabled,
             };
         }
 
@@ -83,9 +81,7 @@ impl Parse for EntraitAttr {
             debug,
             async_trait,
             unimock,
-            test_unimock,
             mockall,
-            test_mockall,
         })
     }
 }
@@ -103,18 +99,44 @@ impl Parse for Extension {
             "async_trait" => Ok(Extension::AsyncTrait(
                 input.parse::<syn::LitBool>()?.value(),
             )),
-            "unimock" => Ok(Extension::Unimock(input.parse::<syn::LitBool>()?.value())),
-            "test_unimock" => Ok(Extension::TestUnimock(
-                input.parse::<syn::LitBool>()?.value(),
+            "unimock" => Ok(Extension::Unimock(input.parse()?)),
+            "test_unimock" => Ok(Extension::Unimock(
+                if input.parse::<syn::LitBool>()?.value() {
+                    EnabledValue::TestOnly
+                } else {
+                    EnabledValue::Never
+                },
             )),
-            "mockall" => Ok(Extension::Mockall(input.parse::<syn::LitBool>()?.value())),
-            "test_mockall" => Ok(Extension::TestMockall(
-                input.parse::<syn::LitBool>()?.value(),
+            "mockall" => Ok(Extension::Mockall(input.parse()?)),
+            "test_mockall" => Ok(Extension::Mockall(
+                if input.parse::<syn::LitBool>()?.value() {
+                    EnabledValue::TestOnly
+                } else {
+                    EnabledValue::Never
+                },
             )),
             _ => Err(syn::Error::new(
                 span,
                 format!("Unkonwn entrait extension \"{ident_string}\""),
             )),
+        }
+    }
+}
+
+impl Parse for EnabledValue {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(syn::Ident) {
+            let ident: syn::Ident = input.parse()?;
+            match ident.to_string().as_ref() {
+                "test" => Ok(Self::TestOnly),
+                _ => Err(syn::Error::new(ident.span(), "unrecognized keyword")),
+            }
+        } else {
+            if input.parse::<syn::LitBool>()?.value() {
+                Ok(Self::Always)
+            } else {
+                Ok(Self::Never)
+            }
         }
     }
 }

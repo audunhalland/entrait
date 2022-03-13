@@ -1,12 +1,12 @@
 use entrait::entrait;
 
-#[entrait(Bar, async_trait = true, test_unimock = true)]
+#[entrait(Bar, async_trait = true, unimock = test)]
 #[allow(dead_code)]
 async fn bar<A>(_: &A) -> u32 {
     unimplemented!()
 }
 
-#[entrait(Baz, async_trait = true, test_unimock = true)]
+#[entrait(Baz, async_trait = true, unimock = test)]
 #[allow(dead_code)]
 async fn baz<A>(_: &A) -> u32 {
     unimplemented!()
