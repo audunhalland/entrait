@@ -1,6 +1,6 @@
 [package]
 name = "entrait"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
@@ -9,7 +9,7 @@ repository = "https://github.com/audunhalland/entrait/"
 keywords = ["ioc", "di", "procedural-macro", "macros"]
 
 [dependencies]
-entrait_macros = { path = "entrait_macros", version = "0.2.0" }
+entrait_macros = { path = "entrait_macros", version = "0.2.1" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
