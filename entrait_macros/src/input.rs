@@ -167,34 +167,3 @@ impl Parse for InputFn {
         })
     }
 }
-
-///
-/// Input to `entrait::generate_mock`.
-/// its purpose is to output an `mockall::mock!` invocation.
-///
-/// `mockall::mock` is supposed to output `C {} impl T for C {..}..`,
-/// This input receives trait items instead of impl items.
-/// The reason for that is to handle a hygiene issue involving `self` when
-/// outputting impl items in macro_rules.
-/// `generate_mock` will rewrite trait items to impl items automatically.
-///
-pub struct EntraitGenerateMockInput {
-    pub mock_ident: syn::Ident,
-    pub trait_items: Vec<syn::ItemTrait>,
-}
-
-impl Parse for EntraitGenerateMockInput {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mock_ident = input.parse()?;
-        let mut trait_items: Vec<syn::ItemTrait> = Vec::new();
-
-        while !input.is_empty() {
-            trait_items.push(input.parse()?);
-        }
-
-        Ok(EntraitGenerateMockInput {
-            mock_ident,
-            trait_items,
-        })
-    }
-}
