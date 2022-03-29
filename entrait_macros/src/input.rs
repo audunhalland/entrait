@@ -122,7 +122,7 @@ impl Parse for Maybe<Extension> {
                 Maybe::None
             }),
             "test_mockall" => Ok(if input.parse::<syn::LitBool>()?.value {
-                Maybe::Some(Extension::Unimock(EnabledValue::TestOnly, span))
+                Maybe::Some(Extension::Mockall(EnabledValue::TestOnly, span))
             } else {
                 Maybe::None
             }),
