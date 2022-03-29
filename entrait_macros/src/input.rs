@@ -3,9 +3,7 @@
 //!
 
 use proc_macro2::Span;
-use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::spanned::Spanned;
 
 ///
 /// The `entrait` invocation
@@ -42,15 +40,12 @@ enum Maybe<T> {
 ///
 /// The "body" that is decorated with entrait.
 ///
-pub struct EntraitInputFn {
+pub struct InputFn {
     pub fn_attrs: Vec<syn::Attribute>,
     pub fn_vis: syn::Visibility,
     pub fn_sig: syn::Signature,
     // don't try to parse fn_body, just pass through the tokens:
     pub fn_body: proc_macro2::TokenStream,
-
-    pub trait_fn_inputs: proc_macro2::TokenStream,
-    pub call_param_list: proc_macro2::TokenStream,
 }
 
 impl Parse for EntraitAttr {
@@ -157,76 +152,20 @@ impl Parse for Maybe<EnabledValue> {
     }
 }
 
-impl Parse for EntraitInputFn {
+impl Parse for InputFn {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let fn_attrs = input.call(syn::Attribute::parse_outer)?;
         let fn_vis = input.parse()?;
         let fn_sig: syn::Signature = input.parse()?;
         let fn_body = input.parse()?;
 
-        let trait_fn_inputs = extract_trait_fn_inputs(&fn_sig)?;
-        let call_param_list = extract_call_param_list(&fn_sig)?;
-
-        Ok(EntraitInputFn {
+        Ok(InputFn {
             fn_attrs,
             fn_vis,
             fn_sig,
             fn_body,
-            trait_fn_inputs,
-            call_param_list,
         })
     }
-}
-
-fn extract_trait_fn_inputs(sig: &syn::Signature) -> syn::Result<proc_macro2::TokenStream> {
-    let mut inputs = sig.inputs.clone();
-
-    if inputs.is_empty() {
-        return Err(syn::Error::new(
-            sig.span(),
-            "Function must take at least one parameter",
-        ));
-    }
-
-    let first_mut = inputs.first_mut().unwrap();
-    *first_mut = syn::parse_quote! { &self };
-
-    Ok(quote! {
-        #inputs
-    })
-}
-
-fn extract_call_param_list(sig: &syn::Signature) -> syn::Result<proc_macro2::TokenStream> {
-    let params = sig
-        .inputs
-        .iter()
-        .enumerate()
-        .map(|(index, arg)| {
-            if index == 0 {
-                Ok(quote! { self })
-            } else {
-                match arg {
-                    syn::FnArg::Receiver(_) => {
-                        Err(syn::Error::new(arg.span(), "Unexpected receiver arg"))
-                    }
-                    syn::FnArg::Typed(pat_typed) => match pat_typed.pat.as_ref() {
-                        syn::Pat::Ident(pat_ident) => {
-                            let ident = &pat_ident.ident;
-                            Ok(quote! { #ident })
-                        }
-                        _ => Err(syn::Error::new(
-                            arg.span(),
-                            "Expected ident for function argument",
-                        )),
-                    },
-                }
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(quote! {
-        #(#params),*
-    })
 }
 
 ///

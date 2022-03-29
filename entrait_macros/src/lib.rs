@@ -24,23 +24,11 @@ pub fn entrait(
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let attr = syn::parse_macro_input!(attr as EntraitAttr);
-    let func = syn::parse_macro_input!(input as EntraitInputFn);
+    let input_fn = syn::parse_macro_input!(input as InputFn);
 
-    let trait_def = gen_trait_def(&attr, &func);
-    let impl_block = gen_impl_block(&attr, &func);
-
-    let EntraitInputFn {
-        fn_attrs,
-        fn_vis,
-        fn_sig,
-        fn_body,
-        ..
-    } = func;
-
-    let output = quote! {
-        #(#fn_attrs)* #fn_vis #fn_sig #fn_body
-        #trait_def
-        #impl_block
+    let output = match output_tokens(&attr, input_fn) {
+        Ok(token_stream) => token_stream,
+        Err(err) => err.into_compile_error(),
     };
 
     if attr.debug.is_some() {
@@ -50,76 +38,96 @@ pub fn entrait(
     proc_macro::TokenStream::from(output)
 }
 
-fn gen_trait_def(attr: &EntraitAttr, func: &EntraitInputFn) -> proc_macro2::TokenStream {
-    let span = attr.trait_ident.span();
-    let trait_def = gen_trait_def_no_mock(attr, func);
+fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
+    let trait_def = gen_trait_def(attr, &input_fn)?;
+    let impl_block = match attr.impl_target_type.as_ref() {
+        Some(impl_target_type) => Some(gen_impl_block(impl_target_type, attr, &input_fn)?),
+        None => None,
+    };
 
-    match (
-        attr.opt_unimock_attribute(),
-        attr.opt_mockall_automock_attribute(),
-    ) {
-        (None, None) => trait_def,
-        (unimock, automock) => quote_spanned! { span=>
-            #unimock
-            #automock
-            #trait_def
-        },
-    }
+    let InputFn {
+        fn_attrs,
+        fn_vis,
+        fn_sig,
+        fn_body,
+        ..
+    } = input_fn;
+
+    Ok(quote! {
+        #(#fn_attrs)* #fn_vis #fn_sig #fn_body
+        #trait_def
+        #impl_block
+    })
 }
 
-fn gen_trait_def_no_mock(attr: &EntraitAttr, func: &EntraitInputFn) -> proc_macro2::TokenStream {
-    let EntraitInputFn {
-        fn_sig,
-        trait_fn_inputs,
-        ..
-    } = func;
+fn gen_trait_def(attr: &EntraitAttr, input_fn: &InputFn) -> syn::Result<proc_macro2::TokenStream> {
+    let span = attr.trait_ident.span();
+    let trait_def = gen_trait_def_no_mock(attr, input_fn)?;
+
+    Ok(
+        match (
+            attr.opt_unimock_attribute(),
+            attr.opt_mockall_automock_attribute(),
+        ) {
+            (None, None) => trait_def,
+            (unimock, automock) => quote_spanned! { span=>
+                #unimock
+                #automock
+                #trait_def
+            },
+        },
+    )
+}
+
+fn gen_trait_def_no_mock(
+    attr: &EntraitAttr,
+    input_fn: &InputFn,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let InputFn { fn_sig, .. } = input_fn;
     let trait_ident = &attr.trait_ident;
     let span = trait_ident.span();
     let input_fn_ident = &fn_sig.ident;
     let fn_output = &fn_sig.output;
 
-    let opt_async_trait_attr = func.opt_async_trait_attribute(attr);
-    let opt_async = func.opt_async(span);
+    let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
+    let opt_async = input_fn.opt_async(span);
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
 
-    quote_spanned! { span=>
+    Ok(quote_spanned! { span=>
         #opt_async_trait_attr
         pub trait #trait_ident {
             #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output;
         }
-    }
+    })
 }
 
-fn gen_impl_block(attr: &EntraitAttr, func: &EntraitInputFn) -> Option<proc_macro2::TokenStream> {
-    let EntraitAttr {
-        trait_ident,
-        impl_target_type,
-        ..
-    } = attr;
-    let EntraitInputFn {
-        fn_sig,
-        trait_fn_inputs,
-        call_param_list,
-        ..
-    } = func;
+fn gen_impl_block(
+    impl_target_type: &syn::Type,
+    attr: &EntraitAttr,
+    input_fn: &InputFn,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let EntraitAttr { trait_ident, .. } = attr;
+    let InputFn { fn_sig, .. } = input_fn;
 
-    impl_target_type.as_ref().map(|impl_target_type| {
-        let span = impl_target_type.span();
+    let span = impl_target_type.span();
 
-        let mut input_fn_ident = fn_sig.ident.clone();
-        let fn_output = &fn_sig.output;
+    let mut input_fn_ident = fn_sig.ident.clone();
+    input_fn_ident.set_span(span);
 
-        input_fn_ident.set_span(span);
+    // TODO: set span for output
+    let fn_output = &fn_sig.output;
 
-        let async_trait_attribute = func.opt_async_trait_attribute(attr);
-        let opt_dot_await = func.opt_dot_await(span);
-        let opt_async = func.opt_async(span);
+    let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
+    let opt_dot_await = input_fn.opt_dot_await(span);
+    let opt_async = input_fn.opt_async(span);
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
+    let call_param_list = input_fn.call_param_list(span)?;
 
-        quote_spanned! { span=>
-            #async_trait_attribute
-            impl #trait_ident for #impl_target_type {
-                #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
-                    #input_fn_ident(#call_param_list) #opt_dot_await
-                }
+    Ok(quote_spanned! { span=>
+        #async_trait_attribute
+        impl #trait_ident for #impl_target_type {
+            #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
+                #input_fn_ident(#call_param_list) #opt_dot_await
             }
         }
     })
@@ -151,8 +159,8 @@ impl EntraitAttr {
     }
 }
 
-impl EntraitInputFn {
-    pub fn opt_async(&self, span: Span) -> Option<proc_macro2::TokenStream> {
+impl InputFn {
+    fn opt_async(&self, span: Span) -> Option<proc_macro2::TokenStream> {
         if self.fn_sig.asyncness.is_some() {
             Some(quote_spanned! { span=> async })
         } else {
@@ -160,7 +168,7 @@ impl EntraitInputFn {
         }
     }
 
-    pub fn opt_dot_await(&self, span: Span) -> Option<proc_macro2::TokenStream> {
+    fn opt_dot_await(&self, span: Span) -> Option<proc_macro2::TokenStream> {
         if self.fn_sig.asyncness.is_some() {
             Some(quote_spanned! { span=> .await })
         } else {
@@ -168,13 +176,62 @@ impl EntraitInputFn {
         }
     }
 
-    pub fn opt_async_trait_attribute(
-        &self,
-        attr: &EntraitAttr,
-    ) -> Option<proc_macro2::TokenStream> {
+    fn opt_async_trait_attribute(&self, attr: &EntraitAttr) -> Option<proc_macro2::TokenStream> {
         match (attr.async_trait, self.fn_sig.asyncness.is_some()) {
             (Some(span), true) => Some(quote_spanned! { span=> #[::async_trait::async_trait] }),
             _ => None,
         }
+    }
+
+    fn trait_fn_inputs(&self, span: Span) -> syn::Result<proc_macro2::TokenStream> {
+        let mut inputs = self.fn_sig.inputs.clone();
+
+        if inputs.is_empty() {
+            return Err(syn::Error::new(
+                self.fn_sig.span(),
+                "Function must take at least one parameter",
+            ));
+        }
+
+        let first_mut = inputs.first_mut().unwrap();
+        *first_mut = syn::parse_quote_spanned! { span=> &self };
+
+        Ok(quote! {
+            #inputs
+        })
+    }
+
+    fn call_param_list(&self, span: Span) -> syn::Result<proc_macro2::TokenStream> {
+        let params = self
+            .fn_sig
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(index, arg)| {
+                if index == 0 {
+                    Ok(quote_spanned! { span=> self })
+                } else {
+                    match arg {
+                        syn::FnArg::Receiver(_) => {
+                            Err(syn::Error::new(arg.span(), "Unexpected receiver arg"))
+                        }
+                        syn::FnArg::Typed(pat_typed) => match pat_typed.pat.as_ref() {
+                            syn::Pat::Ident(pat_ident) => {
+                                let ident = &pat_ident.ident;
+                                Ok(quote_spanned! { span=> #ident })
+                            }
+                            _ => Err(syn::Error::new(
+                                arg.span(),
+                                "Expected ident for function argument",
+                            )),
+                        },
+                    }
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(quote_spanned! { span=>
+            #(#params),*
+        })
     }
 }
