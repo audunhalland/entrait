@@ -2,6 +2,7 @@
 //! inputs to procedural macros
 //!
 
+use proc_macro2::Span;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
@@ -12,32 +13,36 @@ use syn::spanned::Spanned;
 pub struct EntraitAttr {
     pub trait_ident: syn::Ident,
     pub impl_target_type: Option<syn::Type>,
-    pub debug: bool,
-    pub async_trait: bool,
-    pub unimock: EnabledValue,
-    pub mockall: EnabledValue,
+    pub debug: Option<Span>,
+    pub async_trait: Option<Span>,
+    pub unimock: Option<(EnabledValue, Span)>,
+    pub mockall: Option<(EnabledValue, Span)>,
 }
 
 ///
 /// "keyword args" to `entrait`.
 ///
 pub enum Extension {
-    Debug(bool),
-    AsyncTrait(bool),
-    Unimock(EnabledValue),
-    Mockall(EnabledValue),
+    Debug(Span),
+    AsyncTrait(Span),
+    Unimock(EnabledValue, Span),
+    Mockall(EnabledValue, Span),
 }
 
 pub enum EnabledValue {
-    Never,
     Always,
     TestOnly,
+}
+
+enum Maybe<T> {
+    Some(T),
+    None,
 }
 
 ///
 /// The "body" that is decorated with entrait.
 ///
-pub struct EntraitFn {
+pub struct EntraitInputFn {
     pub fn_attrs: Vec<syn::Attribute>,
     pub fn_vis: syn::Visibility,
     pub fn_sig: syn::Signature,
@@ -59,19 +64,20 @@ impl Parse for EntraitAttr {
             None
         };
 
-        let mut debug = false;
-        let mut async_trait = false;
-        let mut unimock = EnabledValue::Never;
-        let mut mockall = EnabledValue::Never;
+        let mut debug = None;
+        let mut async_trait = None;
+        let mut unimock = None;
+        let mut mockall = None;
 
         while input.peek(syn::token::Comma) {
             input.parse::<syn::token::Comma>()?;
 
-            match input.parse::<Extension>()? {
-                Extension::Debug(enabled) => debug = enabled,
-                Extension::AsyncTrait(enabled) => async_trait = enabled,
-                Extension::Unimock(enabled) => unimock = enabled,
-                Extension::Mockall(enabled) => mockall = enabled,
+            match input.parse::<Maybe<Extension>>()? {
+                Maybe::Some(Extension::Debug(span)) => debug = Some(span),
+                Maybe::Some(Extension::AsyncTrait(span)) => async_trait = Some(span),
+                Maybe::Some(Extension::Unimock(enabled, span)) => unimock = Some((enabled, span)),
+                Maybe::Some(Extension::Mockall(enabled, span)) => mockall = Some((enabled, span)),
+                _ => {}
             };
         }
 
@@ -86,7 +92,7 @@ impl Parse for EntraitAttr {
     }
 }
 
-impl Parse for Extension {
+impl Parse for Maybe<Extension> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ident: syn::Ident = input.parse()?;
         let span = ident.span();
@@ -95,26 +101,36 @@ impl Parse for Extension {
         input.parse::<syn::token::Eq>()?;
 
         match ident_string.as_str() {
-            "debug" => Ok(Extension::Debug(input.parse::<syn::LitBool>()?.value())),
-            "async_trait" => Ok(Extension::AsyncTrait(
-                input.parse::<syn::LitBool>()?.value(),
-            )),
-            "unimock" => Ok(Extension::Unimock(input.parse()?)),
-            "test_unimock" => Ok(Extension::Unimock(
-                if input.parse::<syn::LitBool>()?.value() {
-                    EnabledValue::TestOnly
-                } else {
-                    EnabledValue::Never
-                },
-            )),
-            "mockall" => Ok(Extension::Mockall(input.parse()?)),
-            "test_mockall" => Ok(Extension::Mockall(
-                if input.parse::<syn::LitBool>()?.value() {
-                    EnabledValue::TestOnly
-                } else {
-                    EnabledValue::Never
-                },
-            )),
+            "debug" => Ok(if input.parse::<syn::LitBool>()?.value() {
+                Maybe::Some(Extension::Debug(span))
+            } else {
+                Maybe::None
+            }),
+            "async_trait" => Ok(if input.parse::<syn::LitBool>()?.value() {
+                Maybe::Some(Extension::AsyncTrait(span))
+            } else {
+                Maybe::None
+            }),
+            "unimock" => Ok(if let Maybe::Some(enabled) = input.parse()? {
+                Maybe::Some(Extension::Unimock(enabled, span))
+            } else {
+                Maybe::None
+            }),
+            "test_unimock" => Ok(if input.parse::<syn::LitBool>()?.value {
+                Maybe::Some(Extension::Unimock(EnabledValue::TestOnly, span))
+            } else {
+                Maybe::None
+            }),
+            "mockall" => Ok(if let Maybe::Some(enabled) = input.parse()? {
+                Maybe::Some(Extension::Mockall(enabled, span))
+            } else {
+                Maybe::None
+            }),
+            "test_mockall" => Ok(if input.parse::<syn::LitBool>()?.value {
+                Maybe::Some(Extension::Unimock(EnabledValue::TestOnly, span))
+            } else {
+                Maybe::None
+            }),
             _ => Err(syn::Error::new(
                 span,
                 format!("Unkonwn entrait extension \"{ident_string}\""),
@@ -123,25 +139,25 @@ impl Parse for Extension {
     }
 }
 
-impl Parse for EnabledValue {
+impl Parse for Maybe<EnabledValue> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(syn::Ident) {
             let ident: syn::Ident = input.parse()?;
             match ident.to_string().as_ref() {
-                "test" => Ok(Self::TestOnly),
+                "test" => Ok(Maybe::Some(EnabledValue::TestOnly)),
                 _ => Err(syn::Error::new(ident.span(), "unrecognized keyword")),
             }
         } else {
             if input.parse::<syn::LitBool>()?.value() {
-                Ok(Self::Always)
+                Ok(Maybe::Some(EnabledValue::Always))
             } else {
-                Ok(Self::Never)
+                Ok(Maybe::None)
             }
         }
     }
 }
 
-impl Parse for EntraitFn {
+impl Parse for EntraitInputFn {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let fn_attrs = input.call(syn::Attribute::parse_outer)?;
         let fn_vis = input.parse()?;
@@ -151,7 +167,7 @@ impl Parse for EntraitFn {
         let trait_fn_inputs = extract_trait_fn_inputs(&fn_sig)?;
         let call_param_list = extract_call_param_list(&fn_sig)?;
 
-        Ok(EntraitFn {
+        Ok(EntraitInputFn {
             fn_attrs,
             fn_vis,
             fn_sig,
