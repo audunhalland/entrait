@@ -66,7 +66,7 @@ fn gen_trait_def(attr: &EntraitAttr, input_fn: &InputFn) -> syn::Result<proc_mac
 
     Ok(
         match (
-            attr.opt_unimock_attribute(),
+            attr.opt_unimock_attribute(input_fn),
             attr.opt_mockall_automock_attribute(),
         ) {
             (None, None) => trait_def,
@@ -134,13 +134,28 @@ fn gen_impl_block(
 }
 
 impl EntraitAttr {
-    pub fn opt_unimock_attribute(&self) -> Option<proc_macro2::TokenStream> {
+    pub fn opt_unimock_attribute(&self, input_fn: &InputFn) -> Option<proc_macro2::TokenStream> {
         match self.unimock {
-            Some((input::EnabledValue::Always, span)) => {
-                Some(quote_spanned! { span=> #[::unimock::unimock] })
-            }
-            Some((input::EnabledValue::TestOnly, span)) => {
-                Some(quote_spanned! { span=> #[cfg_attr(test, ::unimock::unimock)] })
+            Some((ref enabled_value, span)) => {
+                let fn_ident = &input_fn.fn_sig.ident;
+
+                let unmocked = if self.disable_unmock.is_some() {
+                    quote! { _ }
+                } else {
+                    quote! { #fn_ident }
+                };
+
+                let unimock_attr = quote_spanned! {span=>
+                    ::unimock::unimock(mod=#fn_ident, as=[Fn], unmocked=[#unmocked])
+                };
+                Some(match enabled_value {
+                    input::EnabledValue::Always => quote_spanned! {span=>
+                        #[#unimock_attr]
+                    },
+                    input::EnabledValue::TestOnly => quote_spanned! {span=>
+                        #[cfg_attr(test, #unimock_attr)]
+                    },
+                })
             }
             None => None,
         }
