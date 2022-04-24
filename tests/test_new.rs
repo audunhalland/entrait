@@ -1,6 +1,6 @@
 #![feature(generic_associated_types)]
 
-use entrait::*;
+use entrait::unimock::*;
 use std::any::Any;
 use unimock::*;
 
@@ -24,7 +24,7 @@ async fn get_username(rt: &impl Authenticate, id: u32, password: &str) -> Result
     Ok(user.username)
 }
 
-#[entrait(Authenticate for Runtime, async_trait=true, unimock = true)]
+#[entrait(Authenticate for Runtime, async_trait=true)]
 async fn authenticate(
     deps: &(impl FetchUser + VerifyPassword),
     id: u32,
@@ -38,7 +38,7 @@ async fn authenticate(
     }
 }
 
-#[entrait(FetchUser for Runtime, unimock = true)]
+#[entrait(FetchUser for Runtime)]
 fn fetch_user(_: &impl Any, _id: u32) -> Option<User> {
     Some(User {
         username: "name".into(),
@@ -46,7 +46,7 @@ fn fetch_user(_: &impl Any, _id: u32) -> Option<User> {
     })
 }
 
-#[entrait(VerifyPassword for Runtime, unimock = true)]
+#[entrait(VerifyPassword for Runtime)]
 fn verify_password(_: &impl Any, _password: &str, _hash: &str) -> bool {
     true
 }
@@ -89,5 +89,12 @@ mod tests {
 
         let user = authenticate(&mocks, 42, "pw").await.unwrap();
         assert_eq!("foobar", user.username);
+    }
+
+    #[tokio::test]
+    async fn test_full_spy() {
+        let user = authenticate(&spy(None), 42, "pw").await.unwrap();
+
+        assert_eq!("name", user.username);
     }
 }

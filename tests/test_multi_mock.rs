@@ -1,14 +1,14 @@
 #![feature(generic_associated_types)]
 
-use entrait::entrait;
+use entrait::unimock::*;
 use unimock::*;
 
-#[entrait(Bar, async_trait = true, unimock = true)]
+#[entrait(Bar, async_trait = true)]
 async fn bar<A>(_: &A) -> i32 {
     unimplemented!()
 }
 
-#[entrait(Baz, async_trait = true, unimock = true)]
+#[entrait(Baz, async_trait = true)]
 async fn baz<A>(_: &A) -> i32 {
     unimplemented!()
 }

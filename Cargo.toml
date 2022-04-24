@@ -15,3 +15,4 @@ entrait_macros = { path = "entrait_macros", version = "0.2.1" }
 tokio = { version = "1", features = ["macros", "rt"] }
 async-trait = "0.1"
 unimock = { git = "https://github.com/audunhalland/unimock", branch = "gat-mock" }
+mockall = "0.11"
