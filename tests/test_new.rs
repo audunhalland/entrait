@@ -58,12 +58,12 @@ mod tests {
     #[tokio::test]
     async fn test_get_username() {
         let username = get_username(
-            &mock(authenticate::Fn, |each| {
+            &mock(Some(authenticate::Fn::stub(|each| {
                 each.call(matching!(_, _)).returns(Ok(User {
                     username: "foobar".into(),
                     hash: "h4sh".into(),
                 }));
-            }),
+            }))),
             42,
             "pw",
         )
@@ -74,15 +74,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_authenticate() {
-        let mocks = mock(fetch_user::Fn, |each| {
-            each.call(matching!(42)).once().returns(Some(User {
-                username: "foobar".into(),
-                hash: "h4sh".into(),
-            }));
-        })
-        .also(verify_password::Fn, |each| {
-            each.call(matching!("pw", "h4sh")).once().returns(true);
-        });
+        let mocks = mock([
+            fetch_user::Fn::each_call(matching!(42))
+                .returns(Some(User {
+                    username: "foobar".into(),
+                    hash: "h4sh".into(),
+                }))
+                .in_any_order(),
+            verify_password::Fn::each_call(matching!("pw", "h4sh"))
+                .returns(true)
+                .once()
+                .in_any_order(),
+        ]);
 
         let user = authenticate(&mocks, 42, "pw").await.unwrap();
         assert_eq!("foobar", user.username);

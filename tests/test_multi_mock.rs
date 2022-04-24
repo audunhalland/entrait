@@ -24,12 +24,10 @@ mod inline_bounds {
 
     #[tokio::test]
     async fn test_mock() {
-        let mock = mock(bar::Fn, |each| {
-            each.call(matching!()).returns(40);
-        })
-        .also(baz::Fn, |each| {
-            each.call(matching!()).returns(2);
-        });
+        let mock = mock([
+            bar::Fn::each_call(matching!()).returns(40).in_any_order(),
+            baz::Fn::each_call(matching!()).returns(2).in_any_order(),
+        ]);
 
         let result = sum(&mock).await;
 
@@ -52,12 +50,10 @@ mod where_bounds {
     async fn test_mock() {
         assert_eq!(
             42,
-            sum(&mock(bar::Fn, |each| {
-                each.call(matching!()).returns(40);
-            })
-            .also(baz::Fn, |each| {
-                each.call(matching!()).returns(2);
-            }))
+            sum(&mock([
+                bar::Fn::each_call(matching!()).returns(40).in_any_order(),
+                baz::Fn::each_call(matching!()).returns(2).in_any_order(),
+            ]))
             .await
         );
     }
@@ -75,12 +71,10 @@ mod impl_trait_bounds {
     async fn test_mock() {
         assert_eq!(
             42,
-            sum(&mock(bar::Fn, |each| {
-                each.call(matching!()).returns(40);
-            })
-            .also(baz::Fn, |each| {
-                each.call(matching!()).returns(2);
-            }))
+            sum(&mock([
+                bar::Fn::each_call(matching!()).returns(40).in_any_order(),
+                baz::Fn::each_call(matching!()).returns(2).in_any_order(),
+            ]))
             .await
         );
     }
