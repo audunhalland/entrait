@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 - Improve outputted spans to reflect macro arguments instead of input function
+- Bump unimock to next major version
+- Support explicit trait visibility, private/inherited by default
 
 ## [0.2.1] - 2022-03-13
 ### Added

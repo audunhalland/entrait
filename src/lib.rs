@@ -111,6 +111,16 @@
 //! This is designed to be forwards compatible with real async fn in traits. When that day comes, you should be able to just remove the `async_trait=true`
 //! to get a proper zero-cost future.
 //!
+//! ## Trait visibility
+//! by default, entrait generates a trait that is module-private (no visibility keyword). To change this, just put a visibility
+//! specifier before the trait name:
+//!
+//! ```rust
+//! use entrait::*;
+//! #[entrait(pub Foo)]   // <-- public trait
+//! fn foo<D>(deps: &D) { // <-- private function
+//! }
+//! ```
 //!
 //! # Mock support
 //!
@@ -169,7 +179,7 @@
 //!     }
 //! }
 //!
-//! enum Planet {
+//! pub enum Planet {
 //!     Earth,
 //!     Mars
 //! }

@@ -9,7 +9,7 @@ mod app {
 mod where_bounds {
     use super::*;
 
-    #[entrait(Foo for app::App)]
+    #[entrait(pub Foo for app::App)]
     fn foo<A>(app: &A) -> u32
     where
         A: Bar + Baz,
@@ -23,7 +23,7 @@ mod where_bounds {
 mod impl_bounds {
     use super::*;
 
-    #[entrait(Foo for app::App)]
+    #[entrait(pub Foo for app::App)]
     fn foo(app: &(impl Bar + Baz)) -> u32 {
         println!("Foo");
         app.bar();

@@ -77,6 +77,7 @@ fn gen_trait_def_no_mock(
     input_fn: &InputFn,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let InputFn { fn_sig, .. } = input_fn;
+    let trait_visibility = &attr.trait_visibility;
     let trait_ident = &attr.trait_ident;
     let span = trait_ident.span();
     let input_fn_ident = &fn_sig.ident;
@@ -88,7 +89,7 @@ fn gen_trait_def_no_mock(
 
     Ok(quote_spanned! { span=>
         #opt_async_trait_attr
-        pub trait #trait_ident {
+        #trait_visibility trait #trait_ident {
             #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output;
         }
     })

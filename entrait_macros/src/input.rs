@@ -9,6 +9,7 @@ use syn::parse::{Parse, ParseStream};
 /// The `entrait` invocation
 ///
 pub struct EntraitAttr {
+    pub trait_visibility: syn::Visibility,
     pub trait_ident: syn::Ident,
     pub impl_target_type: Option<syn::Type>,
     pub debug: Option<Span>,
@@ -52,6 +53,8 @@ pub struct InputFn {
 
 impl Parse for EntraitAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let trait_visibility: syn::Visibility = input.parse()?;
+
         let trait_ident = input.parse()?;
 
         let impl_target_type = if input.peek(syn::token::For) {
@@ -81,6 +84,7 @@ impl Parse for EntraitAttr {
         }
 
         Ok(EntraitAttr {
+            trait_visibility,
             trait_ident,
             impl_target_type,
             debug,
