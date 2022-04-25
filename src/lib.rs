@@ -29,24 +29,22 @@
 //! struct App;
 //!
 //! #[entrait::entrait(MyFunction for App)]
-//! fn my_function<D>(deps: &D) {
-//! }
-//!
-//! // Generated:
-//! // trait MyFunction {
-//! //     fn my_function(&self);
-//! // }
-//! //
-//! // impl MyFunction for App {
-//! //     fn my_function(&self) {
-//! //         my_function(self)
+//! fn my_function<D>(deps: &D) { // <------------.
+//! }                             //              |
+//!                               //              |
+//! // Generated:                                 |
+//! // trait MyFunction {                         |
+//! //     fn my_function(&self);                 |
+//! // }                                          |
+//! //                                            |
+//! // impl MyFunction for App {                  |
+//! //     fn my_function(&self) {                |
+//! //         my_function(self) // calls this! --´
 //! //     }
 //! // }
 //!
-//! fn main() {
-//!     let app = App;
-//!     app.my_function();
-//! }
+//! let app = App;
+//! app.my_function();
 //! ```
 //!
 //! The advantage of this pattern comes into play when a function declares its dependencies, as _trait bounds_:
@@ -56,8 +54,7 @@
 //! # use entrait::entrait;
 //! # struct App;
 //! #[entrait(Foo for App)]
-//! fn foo(deps: &(impl Bar))
-//! {
+//! fn foo(deps: &impl Bar) {
 //!     deps.bar();
 //! }
 //!
@@ -125,10 +122,14 @@
 //! # Mock support
 //!
 //!
-//! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/) as these two crates have been explicitly designed to work well together.
+//! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been desined from the start with the other in mind.
 //!
-//! Entrait exports a single mock struct which can be passed in as parameter to every function that accept a `deps` parameter
+//! Unimock exports a single mock struct which can be passed in as parameter to every function that accept a `deps` parameter
 //! (given that entrait is used with unimock support everywhere).
+//! To enable mocking of entraited functions, they get reified and defined as a type called
+//! `Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
+//!
+//! Unimock is enabled by importing entrait from the path `entrait::unimock::*`.
 //!
 //! ```rust
 //! # #![feature(generic_associated_types)]
@@ -148,14 +149,12 @@
 //!     deps.foo() + deps.bar()
 //! }
 //!
-//! fn main() {
-//!     let deps = mock([
-//!         foo::Fn::each_call(matching!()).returns(40).in_any_order(),
-//!         bar::Fn::each_call(matching!()).returns(2).in_any_order(),
-//!     ]);
+//! let mocked_deps = mock([
+//!     foo::Fn::each_call(matching!()).returns(40).in_any_order(),
+//!     bar::Fn::each_call(matching!()).returns(2).in_any_order(),
+//! ]);
 //!
-//!     assert_eq!(42, my_func(&deps));
-//! }
+//! assert_eq!(42, my_func(&mocked_deps));
 //! ```
 //!
 //! Entrait with unimock supports _unmocking_. This means that the test environment can be _partially mocked!_
@@ -167,34 +166,35 @@
 //! use std::any::Any;
 //!
 //! #[entrait(SayHello)]
-//! fn say_hello(deps: &impl GetPlace, planet_id: u32) -> String {
-//!     format!("Hello {}!", deps.get_place(planet_id))
+//! fn say_hello(deps: &impl FetchPlanetName, planet_id: u32) -> Result<String, ()> {
+//!     Ok(format!("Hello {}!", deps.fetch_planet_name(planet_id)?))
 //! }
 //!
-//! #[entrait(GetPlace)]
-//! fn get_place(deps: &impl FetchPlanet, planet_id: u32) -> String {
-//!     match deps.fetch_planet(planet_id) {
-//!         Planet::Earth => "World".to_string(),
-//!         Planet::Mars => "Mars".to_string(),
-//!     }
+//! #[entrait(FetchPlanetName)]
+//! fn fetch_planet_name(deps: &impl FetchPlanet, planet_id: u32) -> Result<String, ()> {
+//!     let planet = deps.fetch_planet(planet_id)?;
+//!     Ok(planet.name)
 //! }
 //!
-//! pub enum Planet {
-//!     Earth,
-//!     Mars
+//! pub struct Planet {
+//!     name: String
 //! }
 //!
 //! #[entrait(FetchPlanet)]
-//! fn fetch_planet(deps: &impl Any, planet_id: u32) -> Planet {
-//!     unimplemented!("This doc test has no access to a database")
+//! fn fetch_planet(deps: &impl Any, planet_id: u32) -> Result<Planet, ()> {
+//!     unimplemented!("This doc test has no access to a database :(")
 //! }
 //!
 //! let hello_string = say_hello(
 //!     &spy([
-//!         fetch_planet::Fn::next_call(matching!(_)).answers(|_| Planet::Earth).once().in_order()
+//!         fetch_planet::Fn::each_call(matching!(_))
+//!             .answers(|_| Ok(Planet {
+//!                 name: "World".to_string(),
+//!             }))
+//!             .in_any_order(),
 //!     ]),
 //!     123456,
-//! );
+//! ).unwrap();
 //!
 //! assert_eq!("Hello World!", hello_string);
 //! ```
@@ -203,7 +203,7 @@
 //! ## mockall
 //! If you instead wish to use a more established mocking crate, there is also support for [mockall](https://docs.rs/mockall/latest/mockall/).
 //!
-//! Just import entrait from `entrait::mockall:*` to have those the mock structs autogenerated:
+//! Just import entrait from `entrait::mockall:*` to have those mock structs autogenerated:
 //!
 //! ```rust
 //! use entrait::mockall::*;
