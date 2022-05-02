@@ -1,25 +1,25 @@
 #![feature(generic_associated_types)]
 
 use entrait::entrait;
+use implementation::*;
 use unimock::*;
 
-struct App(u32);
+struct State(u32);
 
-#[entrait(Foo for App, async_trait=true)]
+#[entrait(Foo, async_trait = true)]
 async fn foo<A: Bar>(a: &A) -> u32 {
     a.bar().await
 }
 
-#[entrait(Bar for App, async_trait=true, unimock=true, unmock=false)]
-async fn bar(app: &App) -> u32 {
-    app.0
+#[entrait(Bar, async_trait = true, unimock = true, unmock = false)]
+async fn bar(state: &State) -> u32 {
+    state.0
 }
 
 #[tokio::test]
 async fn test() {
-    let app = App(42);
-
-    let result = app.foo().await;
+    let state = State(42);
+    let result = state.borrow_impl().foo().await;
 
     assert_eq!(42, result);
 }
@@ -34,4 +34,10 @@ async fn test_mock() {
     .await;
 
     assert_eq!(84, result);
+}
+
+#[tokio::test]
+async fn test_impl() {
+    let state = State(42);
+    assert_eq!(42, state.borrow_impl().foo().await);
 }

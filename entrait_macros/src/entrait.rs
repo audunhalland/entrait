@@ -7,6 +7,7 @@ use quote::quote;
 use quote::quote_spanned;
 use syn::spanned::Spanned;
 
+use crate::deps::Deps;
 use crate::input::*;
 
 pub fn invoke(
@@ -37,6 +38,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
         Some(impl_target_type) => Some(gen_impl_block(impl_target_type, attr, &input_fn)?),
         None => None,
     };
+    let entrait_impl_block = gen_entrait_impl_block(attr, &input_fn)?;
 
     let InputFn {
         fn_attrs,
@@ -50,6 +52,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
         #(#fn_attrs)* #fn_vis #fn_sig #fn_body
         #trait_def
         #impl_block
+        #entrait_impl_block
     })
 }
 
@@ -115,7 +118,7 @@ fn gen_impl_block(
     let opt_dot_await = input_fn.opt_dot_await(span);
     let opt_async = input_fn.opt_async(span);
     let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
-    let call_param_list = input_fn.call_param_list(span)?;
+    let call_param_list = input_fn.call_param_list(span, SelfImplParam::OuterImplT)?;
 
     Ok(quote_spanned! { span=>
         #async_trait_attribute
@@ -125,6 +128,82 @@ fn gen_impl_block(
             }
         }
     })
+}
+
+///
+/// Generate code like
+///
+/// ```no_compile
+/// impl<__T: ::entrait::Impl + Deps> Trait for __T {
+///     fn the_func(&self, args...) {
+///         the_func(self, args)
+///     }
+/// }
+/// ```
+///
+fn gen_entrait_impl_block(
+    attr: &EntraitAttr,
+    input_fn: &InputFn,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let EntraitAttr { trait_ident, .. } = attr;
+    let InputFn { fn_sig, .. } = input_fn;
+
+    let span = trait_ident.span();
+
+    let mut input_fn_ident = fn_sig.ident.clone();
+    input_fn_ident.set_span(span);
+
+    // TODO: set span for output
+    let fn_output = &fn_sig.output;
+
+    let deps = crate::deps::analyze_deps(input_fn)?;
+
+    let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
+    let opt_dot_await = input_fn.opt_dot_await(span);
+    let opt_async = input_fn.opt_async(span);
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
+
+    let output = match deps {
+        Deps::Bounds(bounds) => {
+            let call_param_list = input_fn.call_param_list(span, SelfImplParam::OuterImplT)?;
+
+            let impl_bounds = if bounds.is_empty() {
+                None
+            } else {
+                Some(quote! {
+                    ::implementation::Impl<&'entrait0 EntraitT>: #(#bounds)+*,
+                })
+            };
+
+            quote_spanned! { span=>
+                #async_trait_attribute
+                impl<'entrait0, EntraitT> #trait_ident for ::implementation::Impl<&'entrait0 EntraitT>
+                    // TODO: Is it correct to always use Sync here?
+                    // It must be for Async at least?
+                    where #impl_bounds EntraitT: Sync
+
+                {
+                    #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
+                        #input_fn_ident(#call_param_list) #opt_dot_await
+                    }
+                }
+            }
+        }
+        Deps::Concrete(path) => {
+            let call_param_list = input_fn.call_param_list(span, SelfImplParam::InnerRefT)?;
+
+            quote_spanned! { span=>
+                #async_trait_attribute
+                impl<'entrait0> #trait_ident for ::implementation::Impl<&'entrait0 #path> {
+                    #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
+                        #input_fn_ident(#call_param_list) #opt_dot_await
+                    }
+                }
+            }
+        }
+    };
+
+    Ok(output)
 }
 
 impl EntraitAttr {
@@ -166,6 +245,11 @@ impl EntraitAttr {
             None => None,
         }
     }
+}
+
+enum SelfImplParam {
+    OuterImplT,
+    InnerRefT,
 }
 
 impl InputFn {
@@ -210,7 +294,11 @@ impl InputFn {
         })
     }
 
-    fn call_param_list(&self, span: Span) -> syn::Result<proc_macro2::TokenStream> {
+    fn call_param_list(
+        &self,
+        span: Span,
+        self_impl_param: SelfImplParam,
+    ) -> syn::Result<proc_macro2::TokenStream> {
         let params = self
             .fn_sig
             .inputs
@@ -218,7 +306,10 @@ impl InputFn {
             .enumerate()
             .map(|(index, arg)| {
                 if index == 0 {
-                    Ok(quote_spanned! { span=> self })
+                    Ok(match self_impl_param {
+                        SelfImplParam::OuterImplT => quote_spanned! { span=> self },
+                        SelfImplParam::InnerRefT => quote_spanned! { span=> &self },
+                    })
                 } else {
                     match arg {
                         syn::FnArg::Receiver(_) => {

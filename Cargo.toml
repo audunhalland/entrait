@@ -16,3 +16,4 @@ tokio = { version = "1", features = ["macros", "rt"] }
 async-trait = "0.1"
 unimock = { git = "https://github.com/audunhalland/unimock", branch = "gat-mock" }
 mockall = "0.11"
+implementation = { git = "https://github.com/audunhalland/implementation", branch = "main" }

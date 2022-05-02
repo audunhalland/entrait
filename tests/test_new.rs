@@ -1,10 +1,8 @@
 #![feature(generic_associated_types)]
 
 use entrait::unimock::*;
-use std::any::Any;
+use implementation::*;
 use unimock::*;
-
-struct Runtime;
 
 type Error = ();
 
@@ -14,17 +12,13 @@ pub struct User {
     hash: String,
 }
 
-async fn _wire_everything() -> Result<String, Error> {
-    let runtime = Runtime;
-    get_username(&runtime, 42, "password").await
-}
-
+#[entrait(GetUsername, async_trait = true)]
 async fn get_username(rt: &impl Authenticate, id: u32, password: &str) -> Result<String, Error> {
     let user = rt.authenticate(id, password).await?;
     Ok(user.username)
 }
 
-#[entrait(Authenticate for Runtime, async_trait=true)]
+#[entrait(Authenticate, async_trait = true)]
 async fn authenticate(
     deps: &(impl FetchUser + VerifyPassword),
     id: u32,
@@ -38,16 +32,16 @@ async fn authenticate(
     }
 }
 
-#[entrait(FetchUser for Runtime)]
-fn fetch_user(_: &impl Any, _id: u32) -> Option<User> {
+#[entrait(FetchUser)]
+fn fetch_user<T>(_: &T, _id: u32) -> Option<User> {
     Some(User {
         username: "name".into(),
         hash: "h4sh".into(),
     })
 }
 
-#[entrait(VerifyPassword for Runtime)]
-fn verify_password(_: &impl Any, _password: &str, _hash: &str) -> bool {
+#[entrait(VerifyPassword)]
+fn verify_password<T>(_: &T, _password: &str, _hash: &str) -> bool {
     true
 }
 
@@ -96,5 +90,13 @@ mod tests {
         let user = authenticate(&spy(None), 42, "pw").await.unwrap();
 
         assert_eq!("name", user.username);
+    }
+
+    #[tokio::test]
+    async fn test_impl() {
+        assert_eq!(
+            "name",
+            ().borrow_impl().get_username(42, "password").await.unwrap()
+        );
     }
 }
