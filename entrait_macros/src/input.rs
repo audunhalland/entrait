@@ -14,7 +14,6 @@ pub struct EntraitAttr {
     pub debug: Option<Span>,
     pub async_trait: Option<Span>,
     pub unimock: Option<(EnabledValue, Span)>,
-    pub disable_unmock: Option<Span>,
     pub mockall: Option<(EnabledValue, Span)>,
 }
 
@@ -25,7 +24,6 @@ pub enum Extension {
     Debug(Span),
     AsyncTrait(Span),
     Unimock(EnabledValue, Span),
-    DisableUnmock(Span),
     Mockall(EnabledValue, Span),
 }
 
@@ -59,7 +57,6 @@ impl Parse for EntraitAttr {
         let mut debug = None;
         let mut async_trait = None;
         let mut unimock = None;
-        let mut disable_unmock = None;
         let mut mockall = None;
 
         while input.peek(syn::token::Comma) {
@@ -69,7 +66,6 @@ impl Parse for EntraitAttr {
                 Maybe::Some(Extension::Debug(span)) => debug = Some(span),
                 Maybe::Some(Extension::AsyncTrait(span)) => async_trait = Some(span),
                 Maybe::Some(Extension::Unimock(enabled, span)) => unimock = Some((enabled, span)),
-                Maybe::Some(Extension::DisableUnmock(span)) => disable_unmock = Some(span),
                 Maybe::Some(Extension::Mockall(enabled, span)) => mockall = Some((enabled, span)),
                 _ => {}
             };
@@ -81,7 +77,6 @@ impl Parse for EntraitAttr {
             debug,
             async_trait,
             unimock,
-            disable_unmock,
             mockall,
         })
     }
@@ -115,11 +110,6 @@ impl Parse for Maybe<Extension> {
                 Maybe::Some(Extension::Unimock(EnabledValue::TestOnly, span))
             } else {
                 Maybe::None
-            }),
-            "unmock" => Ok(if input.parse::<syn::LitBool>()?.value {
-                Maybe::None
-            } else {
-                Maybe::Some(Extension::DisableUnmock(span))
             }),
             "mockall" => Ok(if let Maybe::Some(enabled) = input.parse()? {
                 Maybe::Some(Extension::Mockall(enabled, span))

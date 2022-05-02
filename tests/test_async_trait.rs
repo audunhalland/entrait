@@ -11,7 +11,7 @@ async fn foo<A: Bar>(a: &A) -> u32 {
     a.bar().await
 }
 
-#[entrait(Bar, async_trait = true, unimock = true, unmock = false)]
+#[entrait(Bar, async_trait = true, unimock = true)]
 async fn bar(state: &State) -> u32 {
     state.0
 }

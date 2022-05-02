@@ -7,7 +7,7 @@ use quote::quote;
 use quote::quote_spanned;
 use syn::spanned::Spanned;
 
-use crate::deps::Deps;
+use crate::deps;
 use crate::input::*;
 
 pub fn invoke(
@@ -33,8 +33,9 @@ pub fn invoke(
 }
 
 fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
-    let trait_def = gen_trait_def(attr, &input_fn)?;
-    let implementation_impl_block = gen_implementation_impl_block(attr, &input_fn)?;
+    let deps = deps::analyze_deps(&input_fn)?;
+    let trait_def = gen_trait_def(attr, &input_fn, &deps)?;
+    let implementation_impl_block = gen_implementation_impl_block(attr, &input_fn, &deps)?;
 
     let InputFn {
         fn_attrs,
@@ -51,13 +52,17 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
     })
 }
 
-fn gen_trait_def(attr: &EntraitAttr, input_fn: &InputFn) -> syn::Result<proc_macro2::TokenStream> {
+fn gen_trait_def(
+    attr: &EntraitAttr,
+    input_fn: &InputFn,
+    deps: &deps::Deps,
+) -> syn::Result<proc_macro2::TokenStream> {
     let span = attr.trait_ident.span();
     let trait_def = gen_trait_def_no_mock(attr, input_fn)?;
 
     Ok(
         match (
-            attr.opt_unimock_attribute(input_fn),
+            attr.opt_unimock_attribute(input_fn, deps),
             attr.opt_mockall_automock_attribute(),
         ) {
             (None, None) => trait_def,
@@ -107,6 +112,7 @@ fn gen_trait_def_no_mock(
 fn gen_implementation_impl_block(
     attr: &EntraitAttr,
     input_fn: &InputFn,
+    deps: &deps::Deps,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let EntraitAttr { trait_ident, .. } = attr;
     let InputFn { fn_sig, .. } = input_fn;
@@ -119,15 +125,13 @@ fn gen_implementation_impl_block(
     // TODO: set span for output
     let fn_output = &fn_sig.output;
 
-    let deps = crate::deps::analyze_deps(input_fn)?;
-
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
     let opt_dot_await = input_fn.opt_dot_await(span);
     let opt_async = input_fn.opt_async(span);
     let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
 
     let output = match deps {
-        Deps::Bounds(bounds) => {
+        deps::Deps::Bounds(bounds) => {
             let call_param_list = input_fn.call_param_list(span, SelfImplParam::OuterImplT)?;
 
             let impl_bounds = if bounds.is_empty() {
@@ -152,7 +156,7 @@ fn gen_implementation_impl_block(
                 }
             }
         }
-        Deps::Concrete(path) => {
+        deps::Deps::Concrete(path) => {
             let call_param_list = input_fn.call_param_list(span, SelfImplParam::InnerRefT)?;
 
             quote_spanned! { span=>
@@ -170,15 +174,18 @@ fn gen_implementation_impl_block(
 }
 
 impl EntraitAttr {
-    pub fn opt_unimock_attribute(&self, input_fn: &InputFn) -> Option<proc_macro2::TokenStream> {
+    pub fn opt_unimock_attribute(
+        &self,
+        input_fn: &InputFn,
+        deps: &deps::Deps,
+    ) -> Option<proc_macro2::TokenStream> {
         match self.unimock {
             Some((ref enabled_value, span)) => {
                 let fn_ident = &input_fn.fn_sig.ident;
 
-                let unmocked = if self.disable_unmock.is_some() {
-                    quote! { _ }
-                } else {
-                    quote! { #fn_ident }
+                let unmocked = match deps {
+                    deps::Deps::Bounds(_) => quote! { #fn_ident },
+                    deps::Deps::Concrete(_) => quote! { _ },
                 };
 
                 let unimock_attr = quote_spanned! {span=>

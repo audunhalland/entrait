@@ -16,7 +16,7 @@ async fn foo(deps: &impl Bar) -> i32 {
     deps.bar().await
 }
 
-#[entrait(Bar, async_trait = true, unmock = false)]
+#[entrait(Bar, async_trait = true)]
 async fn bar(state: &OuterAppState) -> i32 {
     state.inner.borrow_impl().baz().await
 }
@@ -26,7 +26,7 @@ async fn baz(deps: &impl Qux) -> i32 {
     deps.qux().await
 }
 
-#[entrait(Qux, async_trait = true, unmock = false)]
+#[entrait(Qux, async_trait = true)]
 async fn qux(state: &InnerAppState) -> i32 {
     state.num
 }
