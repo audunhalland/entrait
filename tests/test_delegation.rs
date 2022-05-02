@@ -2,6 +2,7 @@
 
 use entrait::unimock::*;
 use implementation::*;
+use unimock::*;
 
 struct InnerAppState {
     num: i32,
@@ -37,6 +38,23 @@ async fn test_impl() {
         inner: InnerAppState { num: 42 },
     };
 
-    let num = state.borrow_impl().foo().await;
-    assert_eq!(42, num);
+    assert_eq!(42, state.borrow_impl().foo().await);
+}
+
+#[tokio::test]
+#[should_panic(expected = "Bar::bar cannot be unmocked as there is no function available to call.")]
+async fn test_spy_does_not_work_with_concrete_impl() {
+    foo(&spy(None)).await;
+}
+
+#[tokio::test]
+async fn test_spy_with_fallback() {
+    assert_eq!(
+        1337,
+        foo(&spy([bar::Fn::next_call(matching!(_))
+            .returns(1337)
+            .once()
+            .in_order()]))
+        .await
+    );
 }

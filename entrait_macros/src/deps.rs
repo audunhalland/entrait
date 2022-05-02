@@ -2,7 +2,7 @@ use crate::input::InputFn;
 use syn::spanned::Spanned;
 
 pub enum Deps<'f> {
-    Bounds(Vec<&'f syn::Path>),
+    Generic { trait_bounds: Vec<&'f syn::Path> },
     Concrete(&'f syn::Type),
 }
 
@@ -38,7 +38,9 @@ fn extract_deps_from_type<'f>(
     match ty {
         syn::Type::ImplTrait(type_impl_trait) => {
             // Simple case, bounds are actually inline, no lookup necessary
-            Ok(Deps::Bounds(extract_path_bounds(&type_impl_trait.bounds)))
+            Ok(Deps::Generic {
+                trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
+            })
         }
         syn::Type::Path(type_path) => {
             // Type path. Should be defined as a generic parameter.
@@ -93,7 +95,7 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
     };
 
     // Extract "direct" bounds, not from where clause
-    let mut paths = extract_path_bounds(&matching_type_param.bounds);
+    let mut trait_bounds = extract_trait_bounds(&matching_type_param.bounds);
 
     // Check the where clause too
     if let Some(where_clause) = &func.fn_sig.generics.where_clause {
@@ -110,9 +112,9 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
                         let first_segment = type_path.path.segments.first().unwrap();
 
                         if &first_segment.ident == generic_arg_ident {
-                            let where_paths = extract_path_bounds(&predicate_type.bounds);
+                            let where_paths = extract_trait_bounds(&predicate_type.bounds);
 
-                            paths.extend(where_paths);
+                            trait_bounds.extend(where_paths);
                         }
                     }
                     _ => {}
@@ -122,22 +124,17 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
         }
     }
 
-    Some(Deps::Bounds(paths))
+    Some(Deps::Generic { trait_bounds })
 }
 
-fn extract_path_bounds(
+fn extract_trait_bounds(
     bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
 ) -> Vec<&syn::Path> {
-    let mut paths: Vec<&syn::Path> = vec![];
-
-    for type_param_bound in bounds.iter() {
-        match type_param_bound {
-            syn::TypeParamBound::Trait(trait_bound) => {
-                paths.push(&trait_bound.path);
-            }
-            _ => {}
-        }
-    }
-
-    paths
+    bounds
+        .iter()
+        .filter_map(|bound| match bound {
+            syn::TypeParamBound::Trait(trait_bound) => Some(&trait_bound.path),
+            _ => None,
+        })
+        .collect()
 }

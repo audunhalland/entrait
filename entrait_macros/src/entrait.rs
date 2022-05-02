@@ -131,14 +131,14 @@ fn gen_implementation_impl_block(
     let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
 
     let output = match deps {
-        deps::Deps::Bounds(bounds) => {
+        deps::Deps::Generic { trait_bounds } => {
             let call_param_list = input_fn.call_param_list(span, SelfImplParam::OuterImplT)?;
 
-            let impl_bounds = if bounds.is_empty() {
+            let impl_trait_bounds = if trait_bounds.is_empty() {
                 None
             } else {
                 Some(quote! {
-                    ::implementation::Impl<&'entrait0 EntraitT>: #(#bounds)+*,
+                    ::implementation::Impl<&'entrait0 EntraitT>: #(#trait_bounds)+*,
                 })
             };
 
@@ -147,7 +147,7 @@ fn gen_implementation_impl_block(
                 impl<'entrait0, EntraitT> #trait_ident for ::implementation::Impl<&'entrait0 EntraitT>
                     // TODO: Is it correct to always use Sync here?
                     // It must be for Async at least?
-                    where #impl_bounds EntraitT: Sync
+                    where #impl_trait_bounds EntraitT: Sync
 
                 {
                     #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
@@ -184,7 +184,7 @@ impl EntraitAttr {
                 let fn_ident = &input_fn.fn_sig.ident;
 
                 let unmocked = match deps {
-                    deps::Deps::Bounds(_) => quote! { #fn_ident },
+                    deps::Deps::Generic { trait_bounds: _ } => quote! { #fn_ident },
                     deps::Deps::Concrete(_) => quote! { _ },
                 };
 
