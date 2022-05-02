@@ -34,11 +34,7 @@ pub fn invoke(
 
 fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
     let trait_def = gen_trait_def(attr, &input_fn)?;
-    let impl_block = match attr.impl_target_type.as_ref() {
-        Some(impl_target_type) => Some(gen_impl_block(impl_target_type, attr, &input_fn)?),
-        None => None,
-    };
-    let entrait_impl_block = gen_entrait_impl_block(attr, &input_fn)?;
+    let implementation_impl_block = gen_implementation_impl_block(attr, &input_fn)?;
 
     let InputFn {
         fn_attrs,
@@ -51,8 +47,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
     Ok(quote! {
         #(#fn_attrs)* #fn_vis #fn_sig #fn_body
         #trait_def
-        #impl_block
-        #entrait_impl_block
+        #implementation_impl_block
     })
 }
 
@@ -98,38 +93,6 @@ fn gen_trait_def_no_mock(
     })
 }
 
-fn gen_impl_block(
-    impl_target_type: &syn::Type,
-    attr: &EntraitAttr,
-    input_fn: &InputFn,
-) -> syn::Result<proc_macro2::TokenStream> {
-    let EntraitAttr { trait_ident, .. } = attr;
-    let InputFn { fn_sig, .. } = input_fn;
-
-    let span = impl_target_type.span();
-
-    let mut input_fn_ident = fn_sig.ident.clone();
-    input_fn_ident.set_span(span);
-
-    // TODO: set span for output
-    let fn_output = &fn_sig.output;
-
-    let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
-    let opt_dot_await = input_fn.opt_dot_await(span);
-    let opt_async = input_fn.opt_async(span);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
-    let call_param_list = input_fn.call_param_list(span, SelfImplParam::OuterImplT)?;
-
-    Ok(quote_spanned! { span=>
-        #async_trait_attribute
-        impl #trait_ident for #impl_target_type {
-            #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
-                #input_fn_ident(#call_param_list) #opt_dot_await
-            }
-        }
-    })
-}
-
 ///
 /// Generate code like
 ///
@@ -141,7 +104,7 @@ fn gen_impl_block(
 /// }
 /// ```
 ///
-fn gen_entrait_impl_block(
+fn gen_implementation_impl_block(
     attr: &EntraitAttr,
     input_fn: &InputFn,
 ) -> syn::Result<proc_macro2::TokenStream> {

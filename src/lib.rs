@@ -23,28 +23,30 @@
 //!
 //! `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
 //! This would correspond to the `self` parameter in the trait.
-//! But what is this type supposed to be? We can generate an implementation in the same go, using `for Type`:
+//! But what is this type supposed to be? The trait gets automatically implemented for
+//! [::implementation::Impl(&T)](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
 //!
 //! ```rust
+//! use implementation::BorrowImpl;
 //! struct App;
 //!
-//! #[entrait::entrait(MyFunction for App)]
-//! fn my_function<D>(deps: &D) { // <------------.
-//! }                             //              |
-//!                               //              |
-//! // Generated:                                 |
-//! // trait MyFunction {                         |
-//! //     fn my_function(&self);                 |
-//! // }                                          |
-//! //                                            |
-//! // impl MyFunction for App {                  |
-//! //     fn my_function(&self) {                |
-//! //         my_function(self) // calls this! --´
+//! #[entrait::entrait(MyFunction)]
+//! fn my_function<D>(deps: &D) { // <----------------------------.
+//! }                             //                              |
+//!                               //                              |
+//! // Generated:                                                 |
+//! // trait MyFunction {                                         |
+//! //     fn my_function(&self);                                 |
+//! // }                                                          |
+//! //                                                            |
+//! // impl<'a, T> MyFunction for ::implementation::Impl<&'a T> { |
+//! //     fn my_function(&self) {                                |
+//! //         my_function(self) // calls this! ------------------´
 //! //     }
 //! // }
 //!
 //! let app = App;
-//! app.my_function();
+//! app.borrow_impl().my_function();
 //! ```
 //!
 //! The advantage of this pattern comes into play when a function declares its dependencies, as _trait bounds_:
@@ -53,12 +55,12 @@
 //! ```rust
 //! # use entrait::entrait;
 //! # struct App;
-//! #[entrait(Foo for App)]
+//! #[entrait(Foo)]
 //! fn foo(deps: &impl Bar) {
 //!     deps.bar();
 //! }
 //!
-//! #[entrait(Bar for App)]
+//! #[entrait(Bar)]
 //! fn bar<D>(deps: &D) {
 //! }
 //! ```
@@ -69,18 +71,32 @@
 //!
 //! ```rust
 //! # use entrait::entrait;
-//! # struct App { some_thing: SomeType };
-//! # type SomeType = u32;
-//! #[entrait(ExtractSomething for App)]
-//! fn extract_something(app: &App) -> SomeType {
-//!     app.some_thing
+//! use implementation::BorrowImpl;
+//!
+//! struct App { something: SomeType };
+//! type SomeType = u32;
+//!
+//! #[entrait(Generic)]
+//! fn generic(deps: &impl Concrete) -> SomeType {
+//!     deps.concrete()
 //! }
+//!
+//! #[entrait(Concrete)]
+//! fn concrete(app: &App) -> SomeType {
+//!     app.something
+//! }
+//!
+//! let app = App { something: 42 };
+//! assert_eq!(42, app.borrow_impl().generic());
 //! ```
 //!
 //! These kinds of functions may be considered "leaves" of a dependency tree.
 //!
 //! ## "Philosophy"
 //! The idea behind `entrait` is to explore a specific architectural pattern:
+//! * Abstract computations as single-method traits
+//! * Provide
+//!
 //! * Interfaces with _one_ runtime implementation
 //! * named traits as the interface of single functions
 //!

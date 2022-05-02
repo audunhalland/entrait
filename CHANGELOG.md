@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump unimock to next major version
 - Support explicit trait visibility, private/inherited by default
 
+### Removed
+- Support for `for T` syntax. The implementations are instead automatically registered with the `implementation` crate.
+
 ## [0.2.1] - 2022-03-13
 ### Added
 - `mockall=test` + `unimock=test` support

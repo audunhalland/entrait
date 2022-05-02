@@ -11,7 +11,6 @@ use syn::parse::{Parse, ParseStream};
 pub struct EntraitAttr {
     pub trait_visibility: syn::Visibility,
     pub trait_ident: syn::Ident,
-    pub impl_target_type: Option<syn::Type>,
     pub debug: Option<Span>,
     pub async_trait: Option<Span>,
     pub unimock: Option<(EnabledValue, Span)>,
@@ -57,13 +56,6 @@ impl Parse for EntraitAttr {
 
         let trait_ident = input.parse()?;
 
-        let impl_target_type = if input.peek(syn::token::For) {
-            input.parse::<syn::token::For>()?;
-            Some(input.parse()?)
-        } else {
-            None
-        };
-
         let mut debug = None;
         let mut async_trait = None;
         let mut unimock = None;
@@ -86,7 +78,6 @@ impl Parse for EntraitAttr {
         Ok(EntraitAttr {
             trait_visibility,
             trait_ident,
-            impl_target_type,
             debug,
             async_trait,
             unimock,
