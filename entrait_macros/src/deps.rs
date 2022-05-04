@@ -2,7 +2,9 @@ use crate::input::InputFn;
 use syn::spanned::Spanned;
 
 pub enum Deps<'f> {
-    Generic { trait_bounds: Vec<&'f syn::Path> },
+    Generic {
+        trait_bounds: Vec<&'f syn::TypeParamBound>,
+    },
     Concrete(&'f syn::Type),
 }
 
@@ -129,12 +131,6 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
 
 fn extract_trait_bounds(
     bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
-) -> Vec<&syn::Path> {
-    bounds
-        .iter()
-        .filter_map(|bound| match bound {
-            syn::TypeParamBound::Trait(trait_bound) => Some(&trait_bound.path),
-            _ => None,
-        })
-        .collect()
+) -> Vec<&syn::TypeParamBound> {
+    bounds.iter().collect()
 }

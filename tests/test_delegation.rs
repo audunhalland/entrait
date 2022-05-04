@@ -16,29 +16,29 @@ struct InnerAppState {
 // #[derive(entrait::Project)]
 struct OuterAppState {
     // #[project(ProjectInnerAppState: Baz, Baz2, Baz3, etc)]
-    inner: InnerAppState,
+    inner: Impl<InnerAppState>,
 }
 
 // Might create a derive macro for this:
-trait ProjectInnerAppState<'b> {
-    type Inner: Baz + Send + Sync + RefUnwindSafe + 'b;
+trait ProjectInnerAppState {
+    type Inner: Baz + Send + Sync + RefUnwindSafe;
 
-    fn project_inner(&self) -> Self::Inner;
+    fn project_inner(&self) -> &Self::Inner;
 }
 
-impl<'b> ProjectInnerAppState<'b> for implementation::Impl<&'b OuterAppState> {
-    type Inner = implementation::Impl<&'b InnerAppState>;
+impl ProjectInnerAppState for implementation::Impl<OuterAppState> {
+    type Inner = implementation::Impl<InnerAppState>;
 
-    fn project_inner(&self) -> Self::Inner {
-        self.inner.borrow_impl()
+    fn project_inner(&self) -> &Self::Inner {
+        &self.inner
     }
 }
 
-impl<'b> ProjectInnerAppState<'b> for Unimock {
+impl ProjectInnerAppState for Unimock {
     type Inner = Unimock;
 
-    fn project_inner(&self) -> Self::Inner {
-        self.clone()
+    fn project_inner(&self) -> &Self::Inner {
+        self
     }
 }
 
@@ -48,18 +48,9 @@ async fn foo(deps: &impl Bar) -> i32 {
 }
 
 #[entrait(Bar, async_trait = true)]
-async fn bar<'entrait>(deps: &(impl ProjectInnerAppState<'entrait> + Outer1)) -> i32 {
-    deps.outer1();
+async fn bar(deps: &impl ProjectInnerAppState) -> i32 {
     deps.project_inner().baz().await
 }
-
-#[entrait(Outer1)]
-fn outer1(deps: &impl Outer2) {
-    deps.outer2()
-}
-
-#[entrait(Outer2)]
-fn outer2(_: &OuterAppState) {}
 
 #[entrait(Baz, async_trait = true)]
 async fn baz(deps: &impl Qux) -> i32 {
@@ -73,11 +64,11 @@ async fn qux(state: &InnerAppState) -> i32 {
 
 #[tokio::test]
 async fn test_impl() {
-    let state = OuterAppState {
-        inner: InnerAppState { num: 42 },
-    };
+    let state = Impl::new(OuterAppState {
+        inner: Impl::new(InnerAppState { num: 42 }),
+    });
 
-    assert_eq!(42, state.borrow_impl().foo().await);
+    assert_eq!(42, state.foo().await);
 }
 
 #[tokio::test]

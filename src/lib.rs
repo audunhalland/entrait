@@ -24,29 +24,29 @@
 //! `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
 //! This would correspond to the `self` parameter in the trait.
 //! But what is this type supposed to be? The trait gets automatically implemented for
-//! [::implementation::Impl(&T)](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
+//! [::implementation::Impl(T)](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
 //!
 //! ```rust
-//! use implementation::BorrowImpl;
+//! use implementation::Impl;
 //! struct App;
 //!
 //! #[entrait::entrait(MyFunction)]
-//! fn my_function<D>(deps: &D) { // <----------------------------.
-//! }                             //                              |
-//!                               //                              |
-//! // Generated:                                                 |
-//! // trait MyFunction {                                         |
-//! //     fn my_function(&self);                                 |
-//! // }                                                          |
-//! //                                                            |
-//! // impl<'a, T> MyFunction for ::implementation::Impl<&'a T> { |
-//! //     fn my_function(&self) {                                |
-//! //         my_function(self) // calls this! ------------------´
+//! fn my_function<D>(deps: &D) { // <--------------------.
+//! }                             //                      |
+//!                               //                      |
+//! // Generated:                                         |
+//! // trait MyFunction {                                 |
+//! //     fn my_function(&self);                         |
+//! // }                                                  |
+//! //                                                    |
+//! // impl<T> MyFunction for ::implementation::Impl<T> { |
+//! //     fn my_function(&self) {                        |
+//! //         my_function(self) // calls this! ----------´
 //! //     }
 //! // }
 //!
-//! let app = App;
-//! app.borrow_impl().my_function();
+//! let app = Impl::new(App);
+//! app.my_function();
 //! ```
 //!
 //! The advantage of this pattern comes into play when a function declares its dependencies, as _trait bounds_:
@@ -71,7 +71,7 @@
 //!
 //! ```rust
 //! # use entrait::entrait;
-//! use implementation::BorrowImpl;
+//! use implementation::Impl;
 //!
 //! struct App { something: SomeType };
 //! type SomeType = u32;
@@ -86,8 +86,8 @@
 //!     app.something
 //! }
 //!
-//! let app = App { something: 42 };
-//! assert_eq!(42, app.borrow_impl().generic());
+//! let app = Impl::new(App { something: 42 });
+//! assert_eq!(42, app.generic());
 //! ```
 //!
 //! These kinds of functions may be considered "leaves" of a dependency tree.

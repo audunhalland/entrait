@@ -18,8 +18,8 @@ async fn bar(state: &State) -> u32 {
 
 #[tokio::test]
 async fn test() {
-    let state = State(42);
-    let result = state.borrow_impl().foo().await;
+    let state = Impl::new(State(42));
+    let result = state.foo().await;
 
     assert_eq!(42, result);
 }
@@ -38,6 +38,6 @@ async fn test_mock() {
 
 #[tokio::test]
 async fn test_impl() {
-    let state = State(42);
-    assert_eq!(42, state.borrow_impl().foo().await);
+    let state = Impl::new(State(42));
+    assert_eq!(42, state.foo().await);
 }

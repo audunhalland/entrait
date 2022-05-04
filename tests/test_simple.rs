@@ -50,15 +50,15 @@ fn baz(app: &app::State, from_where: &str) -> u32 {
 #[test]
 fn test_where_bounds() {
     use where_bounds::Foo;
-    let state = app::State { number: 42 };
-    let result = state.borrow_impl().foo();
+    let impl_state = Impl::new(app::State { number: 42 });
+    let result = impl_state.foo();
     assert_eq!(42, result);
 }
 
 #[test]
 fn test_impl_bounds() {
     use impl_bounds::Foo;
-    let state = app::State { number: 42 };
-    let result = state.borrow_impl().foo();
+    let impl_state = Impl::new(app::State { number: 42 });
+    let result = impl_state.foo();
     assert_eq!(42, result);
 }
