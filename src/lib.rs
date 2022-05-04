@@ -137,15 +137,15 @@
 //!
 //! # Mock support
 //!
-//!
-//! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been desined from the start with the other in mind.
+//! ## Unimock
+//! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been desined from the start with each other in mind.
 //!
 //! Unimock exports a single mock struct which can be passed in as parameter to every function that accept a `deps` parameter
 //! (given that entrait is used with unimock support everywhere).
 //! To enable mocking of entraited functions, they get reified and defined as a type called
 //! `Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
 //!
-//! Unimock is enabled by importing entrait from the path `entrait::unimock::*`.
+//! Unimock support is enabled by importing entrait from the path `entrait::unimock::*`.
 //!
 //! ```rust
 //! # #![feature(generic_associated_types)]
@@ -240,12 +240,23 @@
 //! }
 //! ```
 //!
-//! ### conditional mock implementations
+//! ## conditional mock implementations
 //! Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this configuration
 //! there are more alternative import paths:
 //!
 //! * `use entrait::unimock_test::*` puts unimock support inside `#[cfg_attr(test, ...)]`.
 //! * `use entrait::mockall_test::*` puts mockall support inside `#[cfg_attr(test, ...)]`.
+//!
+//! # Limitations
+//! This section lists known limitations of entrait:
+//!
+//! ## Cyclic dependency graphs
+//! Cyclic dependency graphs are impossible with entrait. In fact, this is not a limit of entrait itself, but with Rust's trait solver. It
+//! is not able to prove that a type implements a trait if it needs to prove that it does in order to prove it.
+//!
+//! While this is a limitation, it is not necessarily a bad one. One might say that a layered application architecture should never contain
+//! cycles. If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
+//!
 
 #![forbid(unsafe_code)]
 
