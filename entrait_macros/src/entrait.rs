@@ -138,13 +138,13 @@ fn gen_implementation_impl_block(
                 None
             } else {
                 Some(quote! {
-                    ::implementation::Impl<&'entrait0 EntraitT>: #(#trait_bounds)+*,
+                    ::implementation::Impl<&'entrait EntraitT>: #(#trait_bounds)+*,
                 })
             };
 
             quote_spanned! { span=>
                 #async_trait_attribute
-                impl<'entrait0, EntraitT> #trait_ident for ::implementation::Impl<&'entrait0 EntraitT>
+                impl<'entrait, EntraitT> #trait_ident for ::implementation::Impl<&'entrait EntraitT>
                     // TODO: Is it correct to always use Sync here?
                     // It must be for Async at least?
                     where #impl_trait_bounds EntraitT: Sync
@@ -161,7 +161,7 @@ fn gen_implementation_impl_block(
 
             quote_spanned! { span=>
                 #async_trait_attribute
-                impl<'entrait0> #trait_ident for ::implementation::Impl<&'entrait0 #path> {
+                impl<'entrait> #trait_ident for ::implementation::Impl<&'entrait #path> {
                     #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
                         #input_fn_ident(#call_param_list) #opt_dot_await
                     }

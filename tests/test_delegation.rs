@@ -1,15 +1,45 @@
 #![feature(generic_associated_types)]
 
+use std::panic::RefUnwindSafe;
+
 use entrait::unimock::*;
 use implementation::*;
 use unimock::*;
 
+// Upstream crate:
 struct InnerAppState {
     num: i32,
 }
 
+// Downstream crate:
+// TODO:
+// #[derive(entrait::Project)]
 struct OuterAppState {
+    // #[project(ProjectInnerAppState: Baz, Baz2, Baz3, etc)]
     inner: InnerAppState,
+}
+
+// Might create a derive macro for this:
+trait ProjectInnerAppState<'b> {
+    type Inner: Baz + Send + Sync + RefUnwindSafe + 'b;
+
+    fn project_inner(&self) -> Self::Inner;
+}
+
+impl<'b> ProjectInnerAppState<'b> for implementation::Impl<&'b OuterAppState> {
+    type Inner = implementation::Impl<&'b InnerAppState>;
+
+    fn project_inner(&self) -> Self::Inner {
+        self.inner.borrow_impl()
+    }
+}
+
+impl<'b> ProjectInnerAppState<'b> for Unimock {
+    type Inner = Unimock;
+
+    fn project_inner(&self) -> Self::Inner {
+        self.clone()
+    }
 }
 
 #[entrait(Foo, async_trait = true)]
@@ -18,9 +48,18 @@ async fn foo(deps: &impl Bar) -> i32 {
 }
 
 #[entrait(Bar, async_trait = true)]
-async fn bar(state: &OuterAppState) -> i32 {
-    state.inner.borrow_impl().baz().await
+async fn bar<'entrait>(deps: &(impl ProjectInnerAppState<'entrait> + Outer1)) -> i32 {
+    deps.outer1();
+    deps.project_inner().baz().await
 }
+
+#[entrait(Outer1)]
+fn outer1(deps: &impl Outer2) {
+    deps.outer2()
+}
+
+#[entrait(Outer2)]
+fn outer2(_: &OuterAppState) {}
 
 #[entrait(Baz, async_trait = true)]
 async fn baz(deps: &impl Qux) -> i32 {
@@ -42,16 +81,16 @@ async fn test_impl() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "Bar::bar cannot be unmocked as there is no function available to call.")]
+#[should_panic(expected = "Qux::qux cannot be unmocked as there is no function available to call.")]
 async fn test_spy_does_not_work_with_concrete_impl() {
     foo(&spy(None)).await;
 }
 
 #[tokio::test]
-async fn test_spy_with_fallback() {
+async fn test_spy_with_fallback_for_qux() {
     assert_eq!(
         1337,
-        foo(&spy([bar::Fn::next_call(matching!(_))
+        foo(&spy([qux::Fn::next_call(matching!(_))
             .returns(1337)
             .once()
             .in_order()]))
