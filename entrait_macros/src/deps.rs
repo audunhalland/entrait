@@ -2,7 +2,7 @@ use crate::input::InputFn;
 use syn::spanned::Spanned;
 
 pub enum Deps<'f> {
-    Generic {
+    GenericOrAbsent {
         trait_bounds: Vec<&'f syn::TypeParamBound>,
     },
     Concrete(&'f syn::Type),
@@ -12,10 +12,9 @@ pub fn analyze_deps<'f>(func: &'f InputFn) -> syn::Result<Deps<'f>> {
     let first_input = match func.fn_sig.inputs.first() {
         Some(fn_arg) => fn_arg,
         None => {
-            return Err(syn::Error::new(
-                func.fn_sig.inputs.span(),
-                "Cannot generate mock because function has no arguments",
-            ));
+            return Ok(Deps::GenericOrAbsent {
+                trait_bounds: vec![],
+            });
         }
     };
 
@@ -40,7 +39,7 @@ fn extract_deps_from_type<'f>(
     match ty {
         syn::Type::ImplTrait(type_impl_trait) => {
             // Simple case, bounds are actually inline, no lookup necessary
-            Ok(Deps::Generic {
+            Ok(Deps::GenericOrAbsent {
                 trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
             })
         }
@@ -126,7 +125,7 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
         }
     }
 
-    Some(Deps::Generic { trait_bounds })
+    Some(Deps::GenericOrAbsent { trait_bounds })
 }
 
 fn extract_trait_bounds(

@@ -88,7 +88,7 @@ fn gen_trait_def_no_mock(
 
     let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
     let opt_async = input_fn.opt_async(span);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span);
 
     Ok(quote_spanned! { span=>
         #opt_async_trait_attr
@@ -128,10 +128,10 @@ fn gen_implementation_impl_block(
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
     let opt_dot_await = input_fn.opt_dot_await(span);
     let opt_async = input_fn.opt_async(span);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span)?;
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span);
 
     let output = match deps {
-        deps::Deps::Generic { trait_bounds } => {
+        deps::Deps::GenericOrAbsent { trait_bounds } => {
             let call_param_list = input_fn.call_param_list(span, SelfImplParam::OuterImplT)?;
 
             let impl_trait_bounds = if trait_bounds.is_empty() {
@@ -148,7 +148,6 @@ fn gen_implementation_impl_block(
                     // TODO: Is it correct to always use Sync here?
                     // It must be for Async at least?
                     where #impl_trait_bounds EntraitT: Sync
-
                 {
                     #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
                         #input_fn_ident(#call_param_list) #opt_dot_await
@@ -184,7 +183,7 @@ impl EntraitAttr {
                 let fn_ident = &input_fn.fn_sig.ident;
 
                 let unmocked = match deps {
-                    deps::Deps::Generic { trait_bounds: _ } => quote! { #fn_ident },
+                    deps::Deps::GenericOrAbsent { trait_bounds: _ } => quote! { #fn_ident },
                     deps::Deps::Concrete(_) => quote! { _ },
                 };
 
@@ -246,22 +245,19 @@ impl InputFn {
         }
     }
 
-    fn trait_fn_inputs(&self, span: Span) -> syn::Result<proc_macro2::TokenStream> {
+    fn trait_fn_inputs(&self, span: Span) -> proc_macro2::TokenStream {
         let mut inputs = self.fn_sig.inputs.clone();
 
         if inputs.is_empty() {
-            return Err(syn::Error::new(
-                self.fn_sig.span(),
-                "Function must take at least one parameter",
-            ));
+            return quote! {};
         }
 
         let first_mut = inputs.first_mut().unwrap();
         *first_mut = syn::parse_quote_spanned! { span=> &self };
 
-        Ok(quote! {
+        quote! {
             #inputs
-        })
+        }
     }
 
     fn call_param_list(
