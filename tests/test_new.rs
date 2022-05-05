@@ -1,7 +1,7 @@
 #![feature(generic_associated_types)]
 
 use entrait::unimock::*;
-use implementation::*;
+use implementation::Impl;
 use unimock::*;
 
 type Error = ();
@@ -96,7 +96,7 @@ mod tests {
     async fn test_impl() {
         assert_eq!(
             "name",
-            ().borrow_impl().get_username(42, "password").await.unwrap()
+            Impl::new(()).get_username(42, "password").await.unwrap()
         );
     }
 }
