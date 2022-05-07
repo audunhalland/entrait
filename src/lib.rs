@@ -93,12 +93,14 @@
 //! These kinds of functions may be considered "leaves" of a dependency tree.
 //!
 //! ## "Philosophy"
-//! The idea behind `entrait` is to explore a specific architectural pattern:
-//! * Abstract computations as single-method traits
-//! * Provide
+//! The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
+//! The entrait pattern is simply a convenient way to achieve unit testing of business logic.
 //!
-//! * Interfaces with _one_ runtime implementation
-//! * named traits as the interface of single functions
+//! Entrait is not intended for achieving polymorphism. If you want that, you should instead hand-write
+//! a trait.
+//!
+//! _Entrait should only be used to define an abstract computation that has a single
+//! implementation in realase mode, but is mockable in test mode._
 //!
 //! `entrait` does not implement Dependency Injection (DI). DI is a strictly object-oriented concept that will often look awkward in Rust.
 //! The author thinks of DI as the "reification of code modules": In a DI-enabled programming environment, code modules are grouped together
