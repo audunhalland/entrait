@@ -24,43 +24,42 @@ trait MyFunction {
 
 `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
 This would correspond to the `self` parameter in the trait.
-But what is this type supposed to be? We can generate an implementation in the same go, using `for Type`:
+But what is this type supposed to be? The trait gets automatically implemented for
+[::implementation::Impl(T)](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
 
 ```rust
+use implementation::Impl;
 struct App;
 
-#[entrait::entrait(MyFunction for App)]
-fn my_function<D>(deps: &D) {
-}
-
-// Generated:
-// trait MyFunction {
-//     fn my_function(&self);
-// }
-//
-// impl MyFunction for App {
-//     fn my_function(&self) {
-//         my_function(self)
+#[entrait::entrait(MyFunction)]
+fn my_function<D>(deps: &D) { // <--------------------.
+}                             //                      |
+                              //                      |
+// Generated:                                         |
+// trait MyFunction {                                 |
+//     fn my_function(&self);                         |
+// }                                                  |
+//                                                    |
+// impl<T> MyFunction for ::implementation::Impl<T> { |
+//     fn my_function(&self) {                        |
+//         my_function(self) // calls this! ----------´
 //     }
 // }
 
-fn main() {
-    let app = App;
-    app.my_function();
-}
+let app = Impl::new(App);
+app.my_function();
 ```
 
 The advantage of this pattern comes into play when a function declares its dependencies, as _trait bounds_:
 
 
 ```rust
-#[entrait(Foo for App)]
-fn foo(deps: &(impl Bar))
-{
+#[entrait(Foo)]
+fn foo(deps: &impl Bar) {
     deps.bar();
 }
 
-#[entrait(Bar for App)]
+#[entrait(Bar)]
 fn bar<D>(deps: &D) {
 }
 ```
@@ -70,16 +69,32 @@ The functions may take any number of parameters, but the first one is always con
 Functions may also be non-generic, depending directly on the App:
 
 ```rust
-#[entrait(ExtractSomething for App)]
-fn extract_something(app: &App) -> SomeType {
-    app.some_thing
+use implementation::Impl;
+
+struct App { something: SomeType };
+type SomeType = u32;
+
+#[entrait(Generic)]
+fn generic(deps: &impl Concrete) -> SomeType {
+    deps.concrete()
 }
+
+#[entrait(Concrete)]
+fn concrete(app: &App) -> SomeType {
+    app.something
+}
+
+let app = Impl::new(App { something: 42 });
+assert_eq!(42, app.generic());
 ```
 
 These kinds of functions may be considered "leaves" of a dependency tree.
 
 ### "Philosophy"
 The idea behind `entrait` is to explore a specific architectural pattern:
+* Abstract computations as single-method traits
+* Provide
+
 * Interfaces with _one_ runtime implementation
 * named traits as the interface of single functions
 
@@ -106,18 +121,110 @@ async fn foo<D>(deps: &D) {
 This is designed to be forwards compatible with real async fn in traits. When that day comes, you should be able to just remove the `async_trait=true`
 to get a proper zero-cost future.
 
-### Mock support
-The macro supports autogenerating [mockall] mock structs:
-
-[mockall]: https://docs.rs/mockall/latest/mockall/
+### Trait visibility
+by default, entrait generates a trait that is module-private (no visibility keyword). To change this, just put a visibility
+specifier before the trait name:
 
 ```rust
-#[entrait(Foo, mockall=true)]
+use entrait::*;
+#[entrait(pub Foo)]   // <-- public trait
+fn foo<D>(deps: &D) { // <-- private function
+}
+```
+
+## Mock support
+
+### Unimock
+Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been desined from the start with each other in mind.
+
+Unimock exports a single mock struct which can be passed in as parameter to every function that accept a `deps` parameter
+(given that entrait is used with unimock support everywhere).
+To enable mocking of entraited functions, they get reified and defined as a type called
+`Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
+
+Unimock support is enabled by importing entrait from the path `entrait::unimock::*`.
+
+```rust
+use entrait::unimock::*;
+use unimock::*;
+
+#[entrait(Foo)]
+fn foo<D>(_: &D) -> i32 {
+    unimplemented!()
+}
+#[entrait(Bar)]
+fn bar<D>(_: &D) -> i32 {
+    unimplemented!()
+}
+
+fn my_func(deps: &(impl Foo + Bar)) -> i32 {
+    deps.foo() + deps.bar()
+}
+
+let mocked_deps = mock([
+    foo::Fn::each_call(matching!()).returns(40).in_any_order(),
+    bar::Fn::each_call(matching!()).returns(2).in_any_order(),
+]);
+
+assert_eq!(42, my_func(&mocked_deps));
+```
+
+Entrait with unimock supports _unmocking_. This means that the test environment can be _partially mocked!_
+
+```rust
+use entrait::unimock::*;
+use unimock::*;
+use std::any::Any;
+
+#[entrait(SayHello)]
+fn say_hello(deps: &impl FetchPlanetName, planet_id: u32) -> Result<String, ()> {
+    Ok(format!("Hello {}!", deps.fetch_planet_name(planet_id)?))
+}
+
+#[entrait(FetchPlanetName)]
+fn fetch_planet_name(deps: &impl FetchPlanet, planet_id: u32) -> Result<String, ()> {
+    let planet = deps.fetch_planet(planet_id)?;
+    Ok(planet.name)
+}
+
+pub struct Planet {
+    name: String
+}
+
+#[entrait(FetchPlanet)]
+fn fetch_planet(deps: &impl Any, planet_id: u32) -> Result<Planet, ()> {
+    unimplemented!("This doc test has no access to a database :(")
+}
+
+let hello_string = say_hello(
+    &spy([
+        fetch_planet::Fn::each_call(matching!(_))
+            .answers(|_| Ok(Planet {
+                name: "World".to_string(),
+            }))
+            .in_any_order(),
+    ]),
+    123456,
+).unwrap();
+
+assert_eq!("Hello World!", hello_string);
+```
+
+
+### mockall
+If you instead wish to use a more established mocking crate, there is also support for [mockall](https://docs.rs/mockall/latest/mockall/).
+
+Just import entrait from `entrait::mockall:*` to have those mock structs autogenerated:
+
+```rust
+use entrait::mockall::*;
+
+#[entrait(Foo)]
 fn foo<D>(_: &D) -> u32 {
     unimplemented!()
 }
 
-fn my_func(deps: &(impl Foo)) -> u32 {
+fn my_func(deps: &impl Foo) -> u32 {
     deps.foo()
 }
 
@@ -127,78 +234,23 @@ fn main() {
     assert_eq!(42, my_func(&deps));
 }
 ```
-Using `mockall` is easy enough when there is only one trait bound, because the generated trait need only be attributed with `mockall::automock`.
 
-#### multiple trait bounds with `unimock`
-With multiple trait bounds, this becomes a little harder: We need some concrete struct that implement all the given traits.
-This is easily solved by the crate [unimock], and using `unimock = true`:
+### conditional mock implementations
+Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this configuration
+there are more alternative import paths:
 
-[unimock]: https://docs.rs/unimock/latest/unimock/
+* `use entrait::unimock_test::*` puts unimock support inside `#[cfg_attr(test, ...)]`.
+* `use entrait::mockall_test::*` puts mockall support inside `#[cfg_attr(test, ...)]`.
 
-```rust
-use unimock::Unimock;
+## Limitations
+This section lists known limitations of entrait:
 
-#[entrait(Foo, unimock=true)]
-fn foo<D>(_: &D) -> u32 {
-    unimplemented!()
-}
-#[entrait(Bar, unimock=true)]
-fn bar<D>(_: &D) -> u32 {
-    unimplemented!()
-}
+### Cyclic dependency graphs
+Cyclic dependency graphs are impossible with entrait. In fact, this is not a limit of entrait itself, but with Rust's trait solver. It
+is not able to prove that a type implements a trait if it needs to prove that it does in order to prove it.
 
-fn my_func(deps: &(impl Foo + Bar)) -> u32 {
-    deps.foo() + deps.bar()
-}
-
-fn main() {
-    let deps = Unimock::new()
-        .mock(|foo: &mut MockFoo| {
-            foo.expect_foo().returning(|| 40);
-        })
-        .mock(|bar: &mut MockBar| {
-            bar.expect_bar().returning(|| 2);
-        });
-
-    assert_eq!(42, my_func(&deps));
-}
-```
-
-`unimock = true` implies `mockall = true`.
-
-#### conditional mock implementations
-Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this, there are the `test` variants:
-
-* `mockall = test`
-* `unimock = test`
-
-which puts the corresponding attributes in `#[cfg_attr(test, ...)]`:
-
-```rust
-#[entrait(Foo, unimock=test)]
-fn foo<D>(_: &D) -> u32 {
-    unimplemented!()
-}
-
-fn takes_foo(foo: impl Foo) {}
-
-fn main() {
-    // we can still instantiate Unimock, but it's not useful,
-    // because now it doesn't implement `Foo`:
-    let mock = unimock::Unimock::new();
-    //takes_foo(mock);
-    //--------- ^^^^ the trait `Foo` is not implemented for `Unimock`
-}
-
-#[test]
-fn test() {
-    // this compiles!
-    let mock = unimock::Unimock::new();
-    takes_foo(mock);
-}
-```
-
-This is opt-in because there could be scenarios where this behaviour is not desired, e.g. when you write a library and want mocks exported for those.
+While this is a limitation, it is not necessarily a bad one. One might say that a layered application architecture should never contain
+cycles. If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
 
 
 License: MIT
