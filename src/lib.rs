@@ -140,7 +140,7 @@
 //! # Mock support
 //!
 //! ## Unimock
-//! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been desined from the start with each other in mind.
+//! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been designed from the start with each other in mind.
 //!
 //! Unimock exports a single mock struct which can be passed in as parameter to every function that accept a `deps` parameter
 //! (given that entrait is used with unimock support everywhere).
