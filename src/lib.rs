@@ -259,6 +259,17 @@
 //! While this is a limitation, it is not necessarily a bad one. One might say that a layered application architecture should never contain
 //! cycles. If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
 //!
+//! # Crate compatibility
+//! As `entrait` is just a macro, it does not pull in any dependencies besides the code needed to execute the macro.
+//! But in order to _compile_ the generated code, some additional dependencies will be needed alongside `entrait`.
+//! The following table shows compatible major versions:
+//!
+//! | `entrait` | `implementation` | `unimock` (optional) | `mockall` (optional) |
+//! | --------- | ---------------- | -------------------- | -------------------- |
+//! | `0.3`     | `0.1`            | `0.2`                | `0.11`               |
+//! | `0.2`     | `-`              | `0.1`                | `0.11`               |
+//! | `0.1`     | `-`              | `-`                  | `0.11`               |
+//!
 
 #![forbid(unsafe_code)]
 

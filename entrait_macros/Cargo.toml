@@ -1,6 +1,6 @@
 [package]
 name = "entrait_macros"
-version = "0.2.1"
+version = "0.3.0-beta.0"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
