@@ -1,5 +1,3 @@
-#![feature(generic_associated_types)]
-
 use entrait::unimock::*;
 use unimock::*;
 

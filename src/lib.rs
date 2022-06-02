@@ -150,7 +150,6 @@
 //! Unimock support is enabled by importing entrait from the path `entrait::unimock::*`.
 //!
 //! ```rust
-//! # #![feature(generic_associated_types)]
 //! use entrait::unimock::*;
 //! use unimock::*;
 //!
@@ -178,7 +177,6 @@
 //! Entrait with unimock supports _unmocking_. This means that the test environment can be _partially mocked!_
 //!
 //! ```rust
-//! # #![feature(generic_associated_types)]
 //! use entrait::unimock::*;
 //! use unimock::*;
 //! use std::any::Any;

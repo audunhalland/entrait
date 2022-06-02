@@ -1,5 +1,3 @@
-#![feature(generic_associated_types)]
-
 use entrait::entrait;
 use implementation::*;
 use unimock::*;

@@ -1,5 +1,3 @@
-#![feature(generic_associated_types)]
-
 use std::panic::RefUnwindSafe;
 
 use entrait::unimock::*;
