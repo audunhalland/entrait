@@ -1,0 +1,4 @@
+[intralinks]
+# cargo-rdme creates broken links in many cases, better to just leave it off.
+# users can just visit docs.rs.
+strip-links = true
