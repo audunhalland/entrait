@@ -33,7 +33,10 @@ pub fn invoke(
 }
 
 fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
-    let deps = deps::analyze_deps(&input_fn)?;
+    let deps = match attr.no_deps {
+        Some(_) => deps::Deps::NoDeps,
+        None => deps::analyze_deps(&input_fn)?,
+    };
     let trait_def = gen_trait_def(attr, &input_fn, &deps)?;
     let implementation_impl_block = gen_implementation_impl_block(attr, &input_fn, &deps)?;
 
@@ -58,7 +61,7 @@ fn gen_trait_def(
     deps: &deps::Deps,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let span = attr.trait_ident.span();
-    let trait_def = gen_trait_def_no_mock(attr, input_fn)?;
+    let trait_def = gen_trait_def_no_mock(attr, input_fn, deps)?;
 
     Ok(
         match (
@@ -78,6 +81,7 @@ fn gen_trait_def(
 fn gen_trait_def_no_mock(
     attr: &EntraitAttr,
     input_fn: &InputFn,
+    deps: &deps::Deps,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let InputFn { fn_sig, .. } = input_fn;
     let trait_visibility = &attr.trait_visibility;
@@ -88,7 +92,7 @@ fn gen_trait_def_no_mock(
 
     let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
     let opt_async = input_fn.opt_async(span);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span);
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps);
 
     Ok(quote_spanned! { span=>
         #opt_async_trait_attr
@@ -128,11 +132,12 @@ fn gen_implementation_impl_block(
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
     let opt_dot_await = input_fn.opt_dot_await(span);
     let opt_async = input_fn.opt_async(span);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span);
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps);
 
     let output = match deps {
         deps::Deps::GenericOrAbsent { trait_bounds } => {
-            let call_param_list = input_fn.call_param_list(span, SelfImplParam::OuterImplT)?;
+            let call_param_list =
+                input_fn.call_param_list(span, SelfImplParam::OuterImplT, deps)?;
 
             let impl_trait_bounds = if trait_bounds.is_empty() {
                 None
@@ -156,11 +161,25 @@ fn gen_implementation_impl_block(
             }
         }
         deps::Deps::Concrete(path) => {
-            let call_param_list = input_fn.call_param_list(span, SelfImplParam::InnerRefT)?;
+            let call_param_list = input_fn.call_param_list(span, SelfImplParam::InnerRefT, deps)?;
 
             quote_spanned! { span=>
                 #async_trait_attribute
                 impl #trait_ident for ::implementation::Impl<#path> {
+                    #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
+                        #input_fn_ident(#call_param_list) #opt_dot_await
+                    }
+                }
+            }
+        }
+        deps::Deps::NoDeps => {
+            let call_param_list = input_fn.call_param_list(span, SelfImplParam::InnerRefT, deps)?;
+
+            quote_spanned! { span=>
+                #async_trait_attribute
+                impl<EntraitT> #trait_ident for ::implementation::Impl<EntraitT>
+                    where EntraitT: Sync
+                {
                     #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
                         #input_fn_ident(#call_param_list) #opt_dot_await
                     }
@@ -185,6 +204,7 @@ impl EntraitAttr {
                 let unmocked = match deps {
                     deps::Deps::GenericOrAbsent { trait_bounds: _ } => quote! { #fn_ident },
                     deps::Deps::Concrete(_) => quote! { _ },
+                    deps::Deps::NoDeps => quote! { #fn_ident },
                 };
 
                 let unimock_attr = quote_spanned! {span=>
@@ -245,25 +265,33 @@ impl InputFn {
         }
     }
 
-    fn trait_fn_inputs(&self, span: Span) -> proc_macro2::TokenStream {
+    fn trait_fn_inputs(&self, span: Span, deps: &deps::Deps) -> proc_macro2::TokenStream {
         let mut inputs = self.fn_sig.inputs.clone();
 
-        if inputs.is_empty() {
-            return quote! {};
-        }
+        match deps {
+            deps::Deps::NoDeps => {
+                inputs.insert(0, syn::parse_quote_spanned! { span=> &self });
+            }
+            _ => {
+                if inputs.is_empty() {
+                    return quote! {};
+                }
 
-        let first_mut = inputs.first_mut().unwrap();
-        *first_mut = syn::parse_quote_spanned! { span=> &self };
+                let first_mut = inputs.first_mut().unwrap();
+                *first_mut = syn::parse_quote_spanned! { span=> &self };
+            }
+        }
 
         quote! {
             #inputs
         }
     }
 
-    fn call_param_list(
+    fn call_param_list<'d>(
         &self,
         span: Span,
         self_impl_param: SelfImplParam,
+        deps: &deps::Deps,
     ) -> syn::Result<proc_macro2::TokenStream> {
         let params = self
             .fn_sig
@@ -271,7 +299,7 @@ impl InputFn {
             .iter()
             .enumerate()
             .map(|(index, arg)| {
-                if index == 0 {
+                if deps.is_deps_param(index) {
                     Ok(match self_impl_param {
                         SelfImplParam::OuterImplT => quote_spanned! { span=> self },
                         SelfImplParam::InnerRefT => quote_spanned! { span=> &self },

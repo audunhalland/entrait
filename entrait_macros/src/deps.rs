@@ -6,6 +6,16 @@ pub enum Deps<'f> {
         trait_bounds: Vec<&'f syn::TypeParamBound>,
     },
     Concrete(&'f syn::Type),
+    NoDeps,
+}
+
+impl<'f> Deps<'f> {
+    pub fn is_deps_param(&self, index: usize) -> bool {
+        match self {
+            Self::NoDeps => false,
+            _ => index == 0,
+        }
+    }
 }
 
 pub fn analyze_deps<'f>(func: &'f InputFn) -> syn::Result<Deps<'f>> {

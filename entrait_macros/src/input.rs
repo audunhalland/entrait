@@ -11,6 +11,7 @@ use syn::parse::{Parse, ParseStream};
 pub struct EntraitAttr {
     pub trait_visibility: syn::Visibility,
     pub trait_ident: syn::Ident,
+    pub no_deps: Option<Span>,
     pub debug: Option<Span>,
     pub async_trait: Option<Span>,
     pub unimock: Option<(EnabledValue, Span)>,
@@ -21,6 +22,7 @@ pub struct EntraitAttr {
 /// "keyword args" to `entrait`.
 ///
 pub enum Extension {
+    NoDeps(Span),
     Debug(Span),
     AsyncTrait(Span),
     Unimock(EnabledValue, Span),
@@ -54,6 +56,7 @@ impl Parse for EntraitAttr {
 
         let trait_ident = input.parse()?;
 
+        let mut no_deps = None;
         let mut debug = None;
         let mut async_trait = None;
         let mut unimock = None;
@@ -63,6 +66,7 @@ impl Parse for EntraitAttr {
             input.parse::<syn::token::Comma>()?;
 
             match input.parse::<Maybe<Extension>>()? {
+                Maybe::Some(Extension::NoDeps(span)) => no_deps = Some(span),
                 Maybe::Some(Extension::Debug(span)) => debug = Some(span),
                 Maybe::Some(Extension::AsyncTrait(span)) => async_trait = Some(span),
                 Maybe::Some(Extension::Unimock(enabled, span)) => unimock = Some((enabled, span)),
@@ -72,6 +76,7 @@ impl Parse for EntraitAttr {
         }
 
         Ok(EntraitAttr {
+            no_deps,
             trait_visibility,
             trait_ident,
             debug,
@@ -88,45 +93,82 @@ impl Parse for Maybe<Extension> {
         let span = ident.span();
         let ident_string = ident.to_string();
 
-        input.parse::<syn::token::Eq>()?;
-
         match ident_string.as_str() {
-            "debug" => Ok(if input.parse::<syn::LitBool>()?.value() {
-                Maybe::Some(Extension::Debug(span))
-            } else {
-                Maybe::None
-            }),
-            "async_trait" => Ok(if input.parse::<syn::LitBool>()?.value() {
-                Maybe::Some(Extension::AsyncTrait(span))
-            } else {
-                Maybe::None
-            }),
-            "unimock" => Ok(if let Maybe::Some(enabled) = input.parse()? {
-                Maybe::Some(Extension::Unimock(enabled, span))
-            } else {
-                Maybe::None
-            }),
-            "test_unimock" => Ok(if input.parse::<syn::LitBool>()?.value {
-                Maybe::Some(Extension::Unimock(EnabledValue::TestOnly, span))
-            } else {
-                Maybe::None
-            }),
-            "mockall" => Ok(if let Maybe::Some(enabled) = input.parse()? {
-                Maybe::Some(Extension::Mockall(enabled, span))
-            } else {
-                Maybe::None
-            }),
-            "test_mockall" => Ok(if input.parse::<syn::LitBool>()?.value {
-                Maybe::Some(Extension::Mockall(EnabledValue::TestOnly, span))
-            } else {
-                Maybe::None
-            }),
+            "no_deps" => Ok(
+                if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
+                    Maybe::Some(Extension::NoDeps(span))
+                } else {
+                    Maybe::None
+                },
+            ),
+            "debug" => Ok(
+                if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
+                    Maybe::Some(Extension::Debug(span))
+                } else {
+                    Maybe::None
+                },
+            ),
+            "async_trait" => Ok(
+                if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
+                    Maybe::Some(Extension::AsyncTrait(span))
+                } else {
+                    Maybe::None
+                },
+            ),
+            "unimock" => Ok(
+                if let Maybe::Some(enabled) =
+                    parse_ext_default_val(input, Maybe::Some(EnabledValue::Always), |v| v)?
+                {
+                    Maybe::Some(Extension::Unimock(enabled, span))
+                } else {
+                    Maybe::None
+                },
+            ),
+            "test_unimock" => Ok(
+                if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
+                    Maybe::Some(Extension::Unimock(EnabledValue::TestOnly, span))
+                } else {
+                    Maybe::None
+                },
+            ),
+            "mockall" => Ok(
+                if let Maybe::Some(enabled) =
+                    parse_ext_default_val(input, Maybe::Some(EnabledValue::Always), |v| v)?
+                {
+                    Maybe::Some(Extension::Mockall(enabled, span))
+                } else {
+                    Maybe::None
+                },
+            ),
+            "test_mockall" => Ok(
+                if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
+                    Maybe::Some(Extension::Mockall(EnabledValue::TestOnly, span))
+                } else {
+                    Maybe::None
+                },
+            ),
             _ => Err(syn::Error::new(
                 span,
                 format!("Unkonwn entrait extension \"{ident_string}\""),
             )),
         }
     }
+}
+
+fn parse_ext_default_val<V, F, O>(input: ParseStream, default_value: O, mapper: F) -> syn::Result<O>
+where
+    V: syn::parse::Parse,
+    F: FnOnce(V) -> O,
+{
+    if !input.peek(syn::token::Eq) {
+        return Ok(default_value);
+    }
+
+    input.parse::<syn::token::Eq>()?;
+
+    let parsed = input.parse::<V>()?;
+
+    Ok(mapper(parsed))
 }
 
 impl Parse for Maybe<EnabledValue> {
