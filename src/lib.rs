@@ -24,7 +24,7 @@
 //! `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
 //! This would correspond to the `self` parameter in the trait.
 //! But what is this type supposed to be? The trait gets automatically implemented for
-//! [::implementation::Impl(T)](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
+//! [`Impl<T>`](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
 //!
 //! ```rust
 //! use implementation::Impl;
@@ -119,7 +119,7 @@
 //!
 //! ```rust
 //! # use entrait::entrait;
-//! #[entrait(Foo, async_trait=true)]
+//! #[entrait(Foo, async_trait)]
 //! async fn foo<D>(deps: &D) {
 //! }
 //! ```
@@ -276,7 +276,7 @@ pub use entrait_macros::entrait;
 
 /// Unimock shorthand
 pub mod unimock {
-    /// Re-export of `entrait` with `unimock = true` implied.
+    /// Re-export of `entrait` with `unimock` implied.
     ///
     /// # Example
     ///
@@ -299,7 +299,7 @@ pub mod unimock_test {
 
 /// Mockall shorthand
 pub mod mockall {
-    /// Re-export of `entrait` with `mockall = true` implied.
+    /// Re-export of `entrait` with `mockall` implied.
     ///
     /// # Example
     ///
