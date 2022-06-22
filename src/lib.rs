@@ -1,8 +1,7 @@
 //! A proc macro to ease development using _Inversion of Control_ patterns in Rust.
 //!
 //! `entrait` is used to generate a trait from the definition of a regular function.
-//! The main use case for this is that other functions may depend upon the trait
-//! instead of the concrete implementation, enabling better test isolation.
+//! The main use case for this is that other functions may depend upon the trait instead of the concrete implementation, enabling better test isolation.
 //!
 //! The macro looks like this:
 //!
@@ -23,15 +22,14 @@
 //!
 //! `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
 //! This would correspond to the `self` parameter in the trait.
-//! But what is this type supposed to be? The trait gets automatically implemented for
-//! [`Impl<T>`](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
+//! But what is this type supposed to be? The trait gets automatically implemented for [`Impl<T>`](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
 //!
 //! ```rust
 //! use implementation::Impl;
 //! struct App;
 //!
 //! #[entrait::entrait(MyFunction)]
-//! fn my_function<D>(deps: &D) { // <--------------------.
+//! fn my_function<D>(deps: &D) { // <--------------------+
 //! }                             //                      |
 //!                               //                      |
 //! // Generated:                                         |
@@ -41,7 +39,7 @@
 //! //                                                    |
 //! // impl<T> MyFunction for ::implementation::Impl<T> { |
 //! //     fn my_function(&self) {                        |
-//! //         my_function(self) // calls this! ----------´
+//! //         my_function(self) // calls this! ----------+
 //! //     }
 //! // }
 //!
@@ -96,26 +94,23 @@
 //! The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
 //! The entrait pattern is simply a convenient way to achieve unit testing of business logic.
 //!
-//! Entrait is not intended for achieving polymorphism. If you want that, you should instead hand-write
-//! a trait.
+//! Entrait is not intended for achieving polymorphism. If you want that, you should instead hand-write a trait.
 //!
-//! _Entrait should only be used to define an abstract computation that has a single
-//! implementation in realase mode, but is mockable in test mode._
+//! _Entrait should only be used to define an abstract computation that has a single implementation in realase mode, but is mockable in test mode._
 //!
 //! `entrait` does not implement Dependency Injection (DI). DI is a strictly object-oriented concept that will often look awkward in Rust.
-//! The author thinks of DI as the "reification of code modules": In a DI-enabled programming environment, code modules are grouped together
-//! as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
+//! The author thinks of DI as the "reification of code modules":
+//!   In a DI-enabled programming environment, code modules are grouped together as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
 //! When this pattern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
 //!
 //! `entrait` tries to turn this around by saying that the primary abstraction that is depended upon is a set of _functions_, not a set of code modules.
 //!
-//! An architectural consequence is that one ends up with _one ubiquitous type_ that represents a running application that implements all
-//! these function abstraction traits. But the point is that this is all loosely coupled: Most function definitions themselves do not refer
-//! to this god-like type, they only depend upon traits.
+//! An architectural consequence is that one ends up with _one ubiquitous type_ that represents a running application that implements all these function abstraction traits.
+//! But the point is that this is all loosely coupled:
+//!   Most function definitions themselves do not refer to this god-like type, they only depend upon traits.
 //!
 //! ## `async` support
-//! Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated
-//! for your trait:
+//! Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
 //!
 //! ```rust
 //! # use entrait::entrait;
@@ -123,12 +118,12 @@
 //! async fn foo<D>(deps: &D) {
 //! }
 //! ```
-//! This is designed to be forwards compatible with real async fn in traits. When that day comes, you should be able to just remove the `async_trait=true`
-//! to get a proper zero-cost future.
+//! This is designed to be forwards compatible with real async fn in traits.
+//! When that day comes, you should be able to just remove the `async_trait=true` to get a proper zero-cost future.
 //!
 //! ## Trait visibility
-//! by default, entrait generates a trait that is module-private (no visibility keyword). To change this, just put a visibility
-//! specifier before the trait name:
+//! by default, entrait generates a trait that is module-private (no visibility keyword).
+//! To change this, just put a visibility specifier before the trait name:
 //!
 //! ```rust
 //! use entrait::*;
@@ -137,15 +132,14 @@
 //! }
 //! ```
 //!
-//! # Mock support
+//! ## Mock support
 //!
-//! ## Unimock
+//! #### Unimock
 //! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been designed from the start with each other in mind.
 //!
 //! Unimock exports a single mock struct which can be passed in as parameter to every function that accept a `deps` parameter
-//! (given that entrait is used with unimock support everywhere).
-//! To enable mocking of entraited functions, they get reified and defined as a type called
-//! `Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
+//!   (given that entrait is used with unimock support everywhere).
+//! To enable mocking of entraited functions, they get reified and defined as a type called `Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
 //!
 //! Unimock support is enabled by importing entrait from the path `entrait::unimock::*`.
 //!
@@ -217,7 +211,7 @@
 //! ```
 //!
 //!
-//! ## mockall
+//! #### mockall
 //! If you instead wish to use a more established mocking crate, there is also support for [mockall](https://docs.rs/mockall/latest/mockall/).
 //!
 //! Just import entrait from `entrait::mockall:*` to have those mock structs autogenerated:
@@ -241,24 +235,26 @@
 //! }
 //! ```
 //!
-//! ## conditional mock implementations
-//! Most often, you will only need to generate mock implementations in test code, and skip this for production code. For this configuration
-//! there are more alternative import paths:
+//! #### conditional mock implementations
+//! Most often, you will only need to generate mock implementations in test code, and skip this for production code.
+//! For this configuration there are more alternative import paths:
 //!
 //! * `use entrait::unimock_test::*` puts unimock support inside `#[cfg_attr(test, ...)]`.
 //! * `use entrait::mockall_test::*` puts mockall support inside `#[cfg_attr(test, ...)]`.
 //!
-//! # Limitations
+//! ## Limitations
 //! This section lists known limitations of entrait:
 //!
-//! ## Cyclic dependency graphs
-//! Cyclic dependency graphs are impossible with entrait. In fact, this is not a limit of entrait itself, but with Rust's trait solver. It
-//! is not able to prove that a type implements a trait if it needs to prove that it does in order to prove it.
+//! #### Cyclic dependency graphs
+//! Cyclic dependency graphs are impossible with entrait.
+//! In fact, this is not a limit of entrait itself, but with Rust's trait solver.
+//! It is not able to prove that a type implements a trait if it needs to prove that it does in order to prove it.
 //!
-//! While this is a limitation, it is not necessarily a bad one. One might say that a layered application architecture should never contain
-//! cycles. If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
+//! While this is a limitation, it is not necessarily a bad one.
+//! One might say that a layered application architecture should never contain cycles.
+//! If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
 //!
-//! # Crate compatibility
+//! ## Crate compatibility
 //! As `entrait` is just a macro, it does not pull in any dependencies besides the code needed to execute the macro.
 //! But in order to _compile_ the generated code, some additional dependencies will be needed alongside `entrait`.
 //! The following table shows compatible major versions:
