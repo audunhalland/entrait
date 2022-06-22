@@ -167,8 +167,8 @@
 //! }
 //!
 //! let mocked_deps = mock([
-//!     foo::Fn::each_call(matching!()).returns(40).in_any_order(),
-//!     bar::Fn::each_call(matching!()).returns(2).in_any_order(),
+//!     foo::Fn.each_call(matching!()).returns(40).in_any_order(),
+//!     bar::Fn.each_call(matching!()).returns(2).in_any_order(),
 //! ]);
 //!
 //! assert_eq!(42, my_func(&mocked_deps));
@@ -203,7 +203,8 @@
 //!
 //! let hello_string = say_hello(
 //!     &spy([
-//!         fetch_planet::Fn::each_call(matching!(_))
+//!         fetch_planet::Fn
+//!             .each_call(matching!(_))
 //!             .answers(|_| Ok(Planet {
 //!                 name: "World".to_string(),
 //!             }))
@@ -264,7 +265,7 @@
 //!
 //! | `entrait` | `implementation` | `unimock` (optional) | `mockall` (optional) |
 //! | --------- | ---------------- | -------------------- | -------------------- |
-//! | `0.3`     | `0.1`            | `0.2`                | `0.11`               |
+//! | `0.3`     | `0.1`            | `0.2`, `0.3`         | `0.11`               |
 //! | `0.2`     | `-`              | `0.1`                | `0.11`               |
 //! | `0.1`     | `-`              | `-`                  | `0.11`               |
 //!

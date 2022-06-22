@@ -25,7 +25,8 @@ async fn test() {
 #[tokio::test]
 async fn test_mock() {
     let result = foo(&mock(Some(
-        bar::Fn::each_call(matching!())
+        bar::Fn
+            .each_call(matching!())
             .returns(84_u32)
             .in_any_order(),
     )))

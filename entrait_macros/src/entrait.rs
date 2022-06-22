@@ -204,7 +204,22 @@ impl EntraitAttr {
                 let unmocked = match deps {
                     deps::Deps::GenericOrAbsent { trait_bounds: _ } => quote! { #fn_ident },
                     deps::Deps::Concrete(_) => quote! { _ },
-                    deps::Deps::NoDeps => quote! { #fn_ident },
+                    deps::Deps::NoDeps => {
+                        let inputs =
+                            input_fn
+                                .fn_sig
+                                .inputs
+                                .iter()
+                                .filter_map(|fn_arg| match fn_arg {
+                                    syn::FnArg::Receiver(_) => None,
+                                    syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                                        syn::Pat::Ident(pat_ident) => Some(&pat_ident.ident),
+                                        _ => None,
+                                    },
+                                });
+
+                        quote! { #fn_ident(#(#inputs),*) }
+                    }
                 };
 
                 let unimock_attr = quote_spanned! {span=>
@@ -266,24 +281,36 @@ impl InputFn {
     }
 
     fn trait_fn_inputs(&self, span: Span, deps: &deps::Deps) -> proc_macro2::TokenStream {
-        let mut inputs = self.fn_sig.inputs.clone();
+        let mut input_args = self.fn_sig.inputs.clone();
+
+        // strip away attributes
+        for fn_arg in input_args.iter_mut() {
+            match fn_arg {
+                syn::FnArg::Receiver(receiver) => {
+                    receiver.attrs = vec![];
+                }
+                syn::FnArg::Typed(pat_type) => {
+                    pat_type.attrs = vec![];
+                }
+            }
+        }
 
         match deps {
             deps::Deps::NoDeps => {
-                inputs.insert(0, syn::parse_quote_spanned! { span=> &self });
+                input_args.insert(0, syn::parse_quote_spanned! { span=> &self });
             }
             _ => {
-                if inputs.is_empty() {
+                if input_args.is_empty() {
                     return quote! {};
                 }
 
-                let first_mut = inputs.first_mut().unwrap();
+                let first_mut = input_args.first_mut().unwrap();
                 *first_mut = syn::parse_quote_spanned! { span=> &self };
             }
         }
 
         quote! {
-            #inputs
+            #input_args
         }
     }
 

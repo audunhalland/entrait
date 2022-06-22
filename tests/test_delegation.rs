@@ -77,7 +77,8 @@ async fn test_spy_does_not_work_with_concrete_impl() {
 async fn test_spy_with_fallback_for_qux() {
     assert_eq!(
         1337,
-        foo(&spy([qux::Fn::next_call(matching!(_))
+        foo(&spy([qux::Fn
+            .next_call(matching!(_))
             .returns(1337)
             .once()
             .in_order()]))

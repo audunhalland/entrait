@@ -37,8 +37,8 @@ async fn test_spawning_spy() {
 #[tokio::test]
 async fn test_spawning_override_bar() {
     let result = spawning(&unimock::spy([
-        bar::Fn::next_call(matching!()).returns(1).once().in_order(),
-        bar::Fn::next_call(matching!()).returns(2).once().in_order(),
+        bar::Fn.next_call(matching!()).returns(1).once().in_order(),
+        bar::Fn.next_call(matching!()).returns(2).once().in_order(),
     ]))
     .await;
     assert_eq!(3, result);

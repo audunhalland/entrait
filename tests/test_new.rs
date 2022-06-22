@@ -50,7 +50,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_username() {
         let username = get_username(
-            &mock(Some(authenticate::Fn::stub(|each| {
+            &mock(Some(authenticate::Fn.stub(|each| {
                 each.call(matching!(_, _)).returns(Ok(User {
                     username: "foobar".into(),
                     hash: "h4sh".into(),
@@ -67,13 +67,15 @@ mod tests {
     #[tokio::test]
     async fn test_authenticate() {
         let mocks = mock([
-            fetch_user::Fn::each_call(matching!(42))
+            fetch_user::Fn
+                .each_call(matching!(42))
                 .returns(Some(User {
                     username: "foobar".into(),
                     hash: "h4sh".into(),
                 }))
                 .in_any_order(),
-            verify_password::Fn::each_call(matching!("pw", "h4sh"))
+            verify_password::Fn
+                .each_call(matching!("pw", "h4sh"))
                 .returns(true)
                 .once()
                 .in_any_order(),
