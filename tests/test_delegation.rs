@@ -1,5 +1,3 @@
-use std::panic::RefUnwindSafe;
-
 use entrait::unimock::*;
 use implementation::*;
 use unimock::*;
@@ -19,7 +17,7 @@ struct OuterAppState {
 
 // Might create a derive macro for this:
 trait ProjectInnerAppState {
-    type Inner: Baz + Send + Sync + RefUnwindSafe;
+    type Inner: Baz + Send + Sync;
 
     fn project_inner(&self) -> &Self::Inner;
 }
