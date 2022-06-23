@@ -109,6 +109,17 @@
 //! But the point is that this is all loosely coupled:
 //!   Most function definitions themselves do not refer to this god-like type, they only depend upon traits.
 //!
+//! ## Trait visibility
+//! by default, entrait generates a trait that is module-private (no visibility keyword).
+//! To change this, just put a visibility specifier before the trait name:
+//!
+//! ```rust
+//! use entrait::*;
+//! #[entrait(pub Foo)]   // <-- public trait
+//! fn foo<D>(deps: &D) { // <-- private function
+//! }
+//! ```
+//!
 //! ## `async` support
 //! Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
 //!
@@ -121,16 +132,22 @@
 //! This is designed to be forwards compatible with real async fn in traits.
 //! When that day comes, you should be able to just remove the `async_trait=true` to get a proper zero-cost future.
 //!
-//! ## Trait visibility
-//! by default, entrait generates a trait that is module-private (no visibility keyword).
-//! To change this, just put a visibility specifier before the trait name:
+//! ## Integrating with other `fn`-targeting macros, and `no_deps`
+//! Some macros are used to transform the body of a function, or generate a body from scratch.
+//! For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp/) to generate an HTTP client. Entrait will try as best as it
+//! can to co-exist with macros like these. Since `entrait` is a higher-level macro that does not touch fn bodies (it does not even try to parse them),
+//! entrait should be processed after, which means it should be placed _before_ lower level macros. Example:
 //!
 //! ```rust
-//! use entrait::*;
-//! #[entrait(pub Foo)]   // <-- public trait
-//! fn foo<D>(deps: &D) { // <-- private function
-//! }
+//! # use entrait::entrait;
+//! #[entrait(FetchThing, no_deps, async_trait)]
+//! #[feignhttp::get("https://my.api.org/api/{param}")]
+//! async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
 //! ```
+//!
+//! Here we had to use the `no_deps` entrait option.
+//! This is used to tell entrait that the function does not have a `deps` parameter as its first input.
+//! Instead, all the function's inputs get promoted to the generated trait method.
 //!
 //! ## Mock support
 //!
