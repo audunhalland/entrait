@@ -1,0 +1,20 @@
+[package]
+name = "example-axum"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum = "0.5"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+entrait = { path = "../../entrait" }
+unimock = "0.3"
+implementation = "0.1"
+async-trait = "0.1"
+
+[dev-dependencies]
+tower = "0.4"
+tower-http = { version = "0.3", features = ["trace"] }
+hyper = { version = "0.14", features = ["full"] }
+serde_json = "1"

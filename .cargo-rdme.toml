@@ -1,3 +1,9 @@
+readme-path = "README.md"
+# If you are using a workspace to hold multiple projects, use this to select the project from
+# which to extract the documentation from.  It can be useful to also set `readme-path` to create
+# the README file in the root of the project.
+workspace-project = "entrait"
+
 [intralinks]
 # cargo-rdme creates broken links in many cases, better to just leave it off.
 # users can just visit docs.rs.
