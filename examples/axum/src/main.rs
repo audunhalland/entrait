@@ -1,4 +1,4 @@
-use entrait::unimock::*;
+use entrait::unimock_test::*;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct Foo {

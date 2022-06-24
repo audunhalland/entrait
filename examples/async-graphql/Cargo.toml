@@ -1,16 +1,15 @@
 [package]
-name = "example-axum"
+name = "example-async-graphql"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [dependencies]
 entrait = { path = "../../entrait" }
-axum = "0.5"
+async-graphql = "4"
 tokio = { version = "1", features = ["full"] }
-serde = { version = "1", features = ["derive"] }
-implementation = "0.1"
 async-trait = "0.1"
+implementation = "0.1"
 
 [dev-dependencies]
 tower = "0.4"
