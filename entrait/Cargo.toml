@@ -4,9 +4,9 @@ version = "0.3.1"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
-description = "The entrait macro"
+description = "Entrait: Trait-based, zero cost Inversion of Control for applications"
 repository = "https://github.com/audunhalland/entrait/"
-keywords = ["ioc", "di", "procedural-macro", "macros"]
+keywords = ["ioc", "inversion-of-control", "di"]
 
 [dependencies]
 entrait_macros = { path = "../entrait_macros", version = "0.3.0" }
