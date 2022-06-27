@@ -1,6 +1,6 @@
 [package]
 name = "entrait"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
@@ -9,7 +9,7 @@ repository = "https://github.com/audunhalland/entrait/"
 keywords = ["ioc", "inversion-of-control", "di"]
 
 [dependencies]
-entrait_macros = { path = "../entrait_macros", version = "0.3.0" }
+entrait_macros = { path = "../entrait_macros", version = "0.3.2" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
