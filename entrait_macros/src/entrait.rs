@@ -94,7 +94,7 @@ fn gen_trait_def_no_mock(
     let opt_async = input_fn.opt_async(span);
     let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps, attr);
 
-    if let Some(_) = &attr.gat_future {
+    if attr.associated_future.is_some() {
         let output_ty = output_type_tokens(return_type);
 
         Ok(quote_spanned! { span=>
@@ -162,7 +162,7 @@ fn gen_implementation_impl_block(
             };
             // TODO: Is it correct to always use Sync here?
             // It must be for Async at least?
-            let standard_bounds = if attr.gat_future.is_some() {
+            let standard_bounds = if attr.associated_future.is_some() {
                 // Deps must be 'static for zero-cost futures to work
                 quote! { Sync + 'static }
             } else {
@@ -179,8 +179,8 @@ fn gen_implementation_impl_block(
         }),
     };
 
-    // Future type for 'gat_future' feature
-    let fut_type = if attr.gat_future.is_some() {
+    // Future type for 'associated_future' feature
+    let fut_type = if attr.associated_future.is_some() {
         let output_ty = output_type_tokens(return_type);
         Some(quote_spanned! { span=>
             type Fut<'entrait> = impl ::core::future::Future<Output = #output_ty>
@@ -201,7 +201,7 @@ fn gen_implementation_impl_block(
             deps,
         )?;
 
-        if attr.gat_future.is_some() {
+        if attr.associated_future.is_some() {
             quote_spanned! { span=>
                 fn #input_fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait> {
                     #input_fn_ident(#call_param_list)
@@ -347,7 +347,7 @@ impl InputFn {
             }
         }
 
-        let self_lifetime = if let Some(_) = attr.gat_future {
+        let self_lifetime = if attr.associated_future.is_some() {
             Some(quote! { 'entrait })
         } else {
             None
@@ -362,7 +362,7 @@ impl InputFn {
             }
             _ => {
                 if input_args.is_empty() {
-                    return if attr.gat_future.is_some() {
+                    return if attr.associated_future.is_some() {
                         quote! { & #self_lifetime self }
                     } else {
                         quote! {}

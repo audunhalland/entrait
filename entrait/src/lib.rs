@@ -132,6 +132,24 @@
 //! This is designed to be forwards compatible with real async fn in traits.
 //! When that day comes, you should be able to just remove the `async_trait=true` to get a proper zero-cost future.
 //!
+//! ### Zero-cost `async` inversion of control - preview mode
+//! Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
+//!
+//! The entrait feature is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
+//! This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
+//! the resulting type of the future:
+//!
+//! ```rust
+//! #![feature(generic_associated_types)]
+//! #![feature(type_alias_impl_trait)]
+//!
+//! use entrait::unimock::*;
+//!
+//! #[entrait(Foo, associated_future)]
+//! async fn foo<D>(deps: &D) {
+//! }
+//! ```
+//!
 //! ## Integrating with other `fn`-targeting macros, and `no_deps`
 //! Some macros are used to transform the body of a function, or generate a body from scratch.
 //! For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp/) to generate an HTTP client. Entrait will try as best as it
