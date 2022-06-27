@@ -3,6 +3,7 @@
 //! Procedural macros used by entrait.
 
 use proc_macro2::Span;
+use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
 use syn::spanned::Spanned;
@@ -88,18 +89,33 @@ fn gen_trait_def_no_mock(
     let trait_ident = &attr.trait_ident;
     let span = trait_ident.span();
     let input_fn_ident = &fn_sig.ident;
-    let fn_output = &fn_sig.output;
+    let return_type = &fn_sig.output;
 
-    let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
     let opt_async = input_fn.opt_async(span);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps);
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps, attr);
 
-    Ok(quote_spanned! { span=>
-        #opt_async_trait_attr
-        #trait_visibility trait #trait_ident {
-            #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output;
-        }
-    })
+    if let Some(_) = &attr.gat_future {
+        let output_ty = output_type_tokens(return_type);
+
+        Ok(quote_spanned! { span=>
+            #trait_visibility trait #trait_ident {
+                type Fut<'entrait>: ::core::future::Future<Output = #output_ty> + Send
+                where
+                    Self: 'entrait;
+
+                fn #input_fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait>;
+            }
+        })
+    } else {
+        let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
+
+        Ok(quote_spanned! { span=>
+            #opt_async_trait_attr
+            #trait_visibility trait #trait_ident {
+                #opt_async fn #input_fn_ident(#trait_fn_inputs) #return_type;
+            }
+        })
+    }
 }
 
 ///
@@ -127,18 +143,16 @@ fn gen_implementation_impl_block(
     input_fn_ident.set_span(span);
 
     // TODO: set span for output
-    let fn_output = &fn_sig.output;
+    let return_type = &fn_sig.output;
 
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
     let opt_dot_await = input_fn.opt_dot_await(span);
     let opt_async = input_fn.opt_async(span);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps);
+    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps, attr);
 
-    let output = match deps {
+    // Where bounds on the entire impl block
+    let impl_where_bounds = match deps {
         deps::Deps::GenericOrAbsent { trait_bounds } => {
-            let call_param_list =
-                input_fn.call_param_list(span, SelfImplParam::OuterImplT, deps)?;
-
             let impl_trait_bounds = if trait_bounds.is_empty() {
                 None
             } else {
@@ -146,49 +160,82 @@ fn gen_implementation_impl_block(
                     ::implementation::Impl<EntraitT>: #(#trait_bounds)+*,
                 })
             };
+            // TODO: Is it correct to always use Sync here?
+            // It must be for Async at least?
+            let standard_bounds = if attr.gat_future.is_some() {
+                // Deps must be 'static for zero-cost futures to work
+                quote! { Sync + 'static }
+            } else {
+                quote! { Sync }
+            };
 
+            Some(quote_spanned! { span=>
+                where #impl_trait_bounds EntraitT: #standard_bounds
+            })
+        }
+        deps::Deps::Concrete(_) => None,
+        deps::Deps::NoDeps => Some(quote_spanned! { span=>
+            where EntraitT: Sync
+        }),
+    };
+
+    // Future type for 'gat_future' feature
+    let fut_type = if attr.gat_future.is_some() {
+        let output_ty = output_type_tokens(return_type);
+        Some(quote_spanned! { span=>
+            type Fut<'entrait> = impl ::core::future::Future<Output = #output_ty>
+            where
+                Self: 'entrait;
+        })
+    } else {
+        None
+    };
+
+    let fn_def = {
+        let call_param_list = input_fn.call_param_list(
+            span,
+            match deps {
+                deps::Deps::GenericOrAbsent { trait_bounds: _ } => SelfImplParam::OuterImplT,
+                _ => SelfImplParam::InnerRefT,
+            },
+            deps,
+        )?;
+
+        if attr.gat_future.is_some() {
             quote_spanned! { span=>
-                #async_trait_attribute
-                impl<EntraitT> #trait_ident for ::implementation::Impl<EntraitT>
-                    // TODO: Is it correct to always use Sync here?
-                    // It must be for Async at least?
-                    where #impl_trait_bounds EntraitT: Sync
-                {
-                    #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
-                        #input_fn_ident(#call_param_list) #opt_dot_await
-                    }
+                fn #input_fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait> {
+                    #input_fn_ident(#call_param_list)
                 }
             }
-        }
-        deps::Deps::Concrete(path) => {
-            let call_param_list = input_fn.call_param_list(span, SelfImplParam::InnerRefT, deps)?;
-
+        } else {
             quote_spanned! { span=>
-                #async_trait_attribute
-                impl #trait_ident for ::implementation::Impl<#path> {
-                    #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
-                        #input_fn_ident(#call_param_list) #opt_dot_await
-                    }
-                }
-            }
-        }
-        deps::Deps::NoDeps => {
-            let call_param_list = input_fn.call_param_list(span, SelfImplParam::InnerRefT, deps)?;
-
-            quote_spanned! { span=>
-                #async_trait_attribute
-                impl<EntraitT> #trait_ident for ::implementation::Impl<EntraitT>
-                    where EntraitT: Sync
-                {
-                    #opt_async fn #input_fn_ident(#trait_fn_inputs) #fn_output {
-                        #input_fn_ident(#call_param_list) #opt_dot_await
-                    }
+                #opt_async fn #input_fn_ident(#trait_fn_inputs) #return_type {
+                    #input_fn_ident(#call_param_list) #opt_dot_await
                 }
             }
         }
     };
 
-    Ok(output)
+    Ok(match deps {
+        deps::Deps::Concrete(path) => {
+            quote_spanned! { span=>
+                #async_trait_attribute
+                impl #trait_ident for ::implementation::Impl<#path> #impl_where_bounds {
+                    #fut_type
+                    #fn_def
+                }
+            }
+        }
+        _ => {
+            quote_spanned! { span=>
+                #async_trait_attribute
+                impl<EntraitT> #trait_ident for ::implementation::Impl<EntraitT> #impl_where_bounds {
+                    #fut_type
+                    #fn_def
+                }
+            }
+        }
+    })
 }
 
 impl EntraitAttr {
@@ -280,7 +327,12 @@ impl InputFn {
         }
     }
 
-    fn trait_fn_inputs(&self, span: Span, deps: &deps::Deps) -> proc_macro2::TokenStream {
+    fn trait_fn_inputs(
+        &self,
+        span: Span,
+        deps: &deps::Deps,
+        attr: &EntraitAttr,
+    ) -> proc_macro2::TokenStream {
         let mut input_args = self.fn_sig.inputs.clone();
 
         // strip away attributes
@@ -295,17 +347,30 @@ impl InputFn {
             }
         }
 
+        let self_lifetime = if let Some(_) = attr.gat_future {
+            Some(quote! { 'entrait })
+        } else {
+            None
+        };
+
         match deps {
             deps::Deps::NoDeps => {
-                input_args.insert(0, syn::parse_quote_spanned! { span=> &self });
+                input_args.insert(
+                    0,
+                    syn::parse_quote_spanned! { span=> & #self_lifetime self },
+                );
             }
             _ => {
                 if input_args.is_empty() {
-                    return quote! {};
+                    return if attr.gat_future.is_some() {
+                        quote! { & #self_lifetime self }
+                    } else {
+                        quote! {}
+                    };
                 }
 
                 let first_mut = input_args.first_mut().unwrap();
-                *first_mut = syn::parse_quote_spanned! { span=> &self };
+                *first_mut = syn::parse_quote_spanned! { span=> & #self_lifetime self };
             }
         }
 
@@ -354,5 +419,12 @@ impl InputFn {
         Ok(quote_spanned! { span=>
             #(#params),*
         })
+    }
+}
+
+fn output_type_tokens(return_type: &syn::ReturnType) -> TokenStream {
+    match return_type {
+        syn::ReturnType::Default => quote! { () },
+        syn::ReturnType::Type(_, ty) => quote! { #ty },
     }
 }

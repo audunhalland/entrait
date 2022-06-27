@@ -14,6 +14,7 @@ pub struct EntraitAttr {
     pub no_deps: Option<Span>,
     pub debug: Option<Span>,
     pub async_trait: Option<Span>,
+    pub gat_future: Option<Span>,
     pub unimock: Option<(EnabledValue, Span)>,
     pub mockall: Option<(EnabledValue, Span)>,
 }
@@ -25,6 +26,7 @@ pub enum Extension {
     NoDeps(Span),
     Debug(Span),
     AsyncTrait(Span),
+    GatFuture(Span),
     Unimock(EnabledValue, Span),
     Mockall(EnabledValue, Span),
 }
@@ -59,6 +61,7 @@ impl Parse for EntraitAttr {
         let mut no_deps = None;
         let mut debug = None;
         let mut async_trait = None;
+        let mut gat_future = None;
         let mut unimock = None;
         let mut mockall = None;
 
@@ -69,6 +72,7 @@ impl Parse for EntraitAttr {
                 Maybe::Some(Extension::NoDeps(span)) => no_deps = Some(span),
                 Maybe::Some(Extension::Debug(span)) => debug = Some(span),
                 Maybe::Some(Extension::AsyncTrait(span)) => async_trait = Some(span),
+                Maybe::Some(Extension::GatFuture(span)) => gat_future = Some(span),
                 Maybe::Some(Extension::Unimock(enabled, span)) => unimock = Some((enabled, span)),
                 Maybe::Some(Extension::Mockall(enabled, span)) => mockall = Some((enabled, span)),
                 _ => {}
@@ -81,6 +85,7 @@ impl Parse for EntraitAttr {
             trait_ident,
             debug,
             async_trait,
+            gat_future,
             unimock,
             mockall,
         })
@@ -111,6 +116,13 @@ impl Parse for Maybe<Extension> {
             "async_trait" => Ok(
                 if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
                     Maybe::Some(Extension::AsyncTrait(span))
+                } else {
+                    Maybe::None
+                },
+            ),
+            "gat_future" => Ok(
+                if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
+                    Maybe::Some(Extension::GatFuture(span))
                 } else {
                     Maybe::None
                 },
