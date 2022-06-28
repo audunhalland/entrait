@@ -139,7 +139,7 @@
 //! This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
 //! the resulting type of the future:
 //!
-//! ```rust
+//! ```ignore
 //! #![feature(generic_associated_types)]
 //! #![feature(type_alias_impl_trait)]
 //!
