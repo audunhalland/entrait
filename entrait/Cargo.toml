@@ -8,6 +8,10 @@ description = "Entrait: Trait-based, zero cost Inversion of Control for applicat
 repository = "https://github.com/audunhalland/entrait/"
 keywords = ["ioc", "inversion-of-control", "di"]
 
+[features]
+default = []
+nightly-tests = []
+
 [dependencies]
 entrait_macros = { path = "../entrait_macros", version = "0.3.2" }
 
