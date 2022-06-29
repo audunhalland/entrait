@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Changed
+- The implementation of leaf/concrete dependencies now works a bit differently.
+  Instead of the trait being implemented for some concrete `T` in `Impl<T>`, `T` is made generic, but with a `T: Trait` bound.
+  Because of that, the trait gets implemented a second time: Directly for the concrete `T`.
+  This makes it much easier to seamlessly integrate modular apps divided into many crates.
 
 ## [0.3.2] - 2022-06-27
 ### Added

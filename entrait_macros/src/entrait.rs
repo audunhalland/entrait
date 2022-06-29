@@ -39,7 +39,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
         None => deps::analyze_deps(&input_fn)?,
     };
     let trait_def = gen_trait_def(attr, &input_fn, &deps)?;
-    let implementation_impl_block = gen_implementation_impl_block(attr, &input_fn, &deps)?;
+    let implementation_impl_block = gen_implementation_impl_blocks(attr, &input_fn, &deps)?;
 
     let InputFn {
         fn_attrs,
@@ -129,7 +129,7 @@ fn gen_trait_def_no_mock(
 /// }
 /// ```
 ///
-fn gen_implementation_impl_block(
+fn gen_implementation_impl_blocks(
     attr: &EntraitAttr,
     input_fn: &InputFn,
     deps: &deps::Deps,
@@ -146,11 +146,11 @@ fn gen_implementation_impl_block(
     let return_type = &fn_sig.output;
 
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
-    let opt_dot_await = input_fn.opt_dot_await(span);
-    let opt_async = input_fn.opt_async(span);
     let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps, attr);
 
-    // Where bounds on the entire impl block
+    // Where bounds on the entire impl block,
+    // TODO: Is it correct to always use `Sync` in here here?
+    // It must be for Async at least?
     let impl_where_bounds = match deps {
         deps::Deps::GenericOrAbsent { trait_bounds } => {
             let impl_trait_bounds = if trait_bounds.is_empty() {
@@ -160,8 +160,7 @@ fn gen_implementation_impl_block(
                     ::implementation::Impl<EntraitT>: #(#trait_bounds)+*,
                 })
             };
-            // TODO: Is it correct to always use Sync here?
-            // It must be for Async at least?
+
             let standard_bounds = if attr.associated_future.is_some() {
                 // Deps must be 'static for zero-cost futures to work
                 quote! { Sync + 'static }
@@ -169,14 +168,16 @@ fn gen_implementation_impl_block(
                 quote! { Sync }
             };
 
-            Some(quote_spanned! { span=>
+            quote_spanned! { span=>
                 where #impl_trait_bounds EntraitT: #standard_bounds
-            })
+            }
         }
-        deps::Deps::Concrete(_) => None,
-        deps::Deps::NoDeps => Some(quote_spanned! { span=>
+        deps::Deps::Concrete(_) => quote_spanned! { span=>
+            where EntraitT: #trait_ident + Sync
+        },
+        deps::Deps::NoDeps => quote_spanned! { span=>
             where EntraitT: Sync
-        }),
+        },
     };
 
     // Future type for 'associated_future' feature
@@ -191,48 +192,120 @@ fn gen_implementation_impl_block(
         None
     };
 
-    let fn_def = {
-        let call_param_list = input_fn.call_param_list(
-            span,
-            match deps {
-                deps::Deps::GenericOrAbsent { trait_bounds: _ } => SelfImplParam::OuterImplT,
-                _ => SelfImplParam::InnerRefT,
-            },
-            deps,
-        )?;
+    let generic_fn_def = gen_delegating_fn_item(
+        span,
+        input_fn,
+        &input_fn_ident,
+        &trait_fn_inputs,
+        match deps {
+            deps::Deps::GenericOrAbsent { trait_bounds: _ } => FnReceiverKind::SelfArg,
+            deps::Deps::Concrete(_) => FnReceiverKind::SelfAsRefReceiver,
+            deps::Deps::NoDeps => FnReceiverKind::RefSelfArg,
+        },
+        deps,
+        attr,
+    )?;
 
-        if attr.associated_future.is_some() {
-            quote_spanned! { span=>
-                fn #input_fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait> {
-                    #input_fn_ident(#call_param_list)
-                }
-            }
-        } else {
-            quote_spanned! { span=>
-                #opt_async fn #input_fn_ident(#trait_fn_inputs) #return_type {
-                    #input_fn_ident(#call_param_list) #opt_dot_await
-                }
-            }
+    let generic_impl_block = quote_spanned! { span=>
+        #async_trait_attribute
+        impl<EntraitT> #trait_ident for ::implementation::Impl<EntraitT> #impl_where_bounds {
+            #fut_type
+            #generic_fn_def
         }
     };
 
     Ok(match deps {
         deps::Deps::Concrete(path) => {
+            let concrete_fn_def = gen_delegating_fn_item(
+                span,
+                input_fn,
+                &input_fn_ident,
+                &trait_fn_inputs,
+                FnReceiverKind::SelfArg,
+                deps,
+                attr,
+            )?;
+
             quote_spanned! { span=>
+                #generic_impl_block
+
+                // Specific impl for the concrete type:
                 #async_trait_attribute
-                impl #trait_ident for ::implementation::Impl<#path> #impl_where_bounds {
+                impl #trait_ident for #path {
                     #fut_type
-                    #fn_def
+                    #concrete_fn_def
                 }
             }
         }
-        _ => {
-            quote_spanned! { span=>
-                #async_trait_attribute
-                impl<EntraitT> #trait_ident for ::implementation::Impl<EntraitT> #impl_where_bounds {
-                    #fut_type
-                    #fn_def
+        _ => generic_impl_block,
+    })
+}
+
+fn gen_delegating_fn_item(
+    span: Span,
+    input_fn: &InputFn,
+    fn_ident: &syn::Ident,
+    trait_fn_inputs: &TokenStream,
+    receiver_kind: FnReceiverKind,
+    deps: &deps::Deps,
+    attr: &EntraitAttr,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let opt_async = input_fn.opt_async(span);
+    let opt_dot_await = input_fn.opt_dot_await(span);
+    // TODO: set span for output
+    let return_type = &input_fn.fn_sig.output;
+
+    let params = input_fn
+        .fn_sig
+        .inputs
+        .iter()
+        .enumerate()
+        .filter_map(|(index, arg)| {
+            if deps.is_deps_param(index) {
+                match receiver_kind {
+                    FnReceiverKind::SelfArg => Some(Ok(quote_spanned! { span=> self })),
+                    FnReceiverKind::RefSelfArg => Some(Ok(quote_spanned! { span=> &self })),
+                    FnReceiverKind::SelfAsRefReceiver => None,
                 }
+            } else {
+                Some(match arg {
+                    syn::FnArg::Receiver(_) => {
+                        Err(syn::Error::new(arg.span(), "Unexpected receiver arg"))
+                    }
+                    syn::FnArg::Typed(pat_typed) => match pat_typed.pat.as_ref() {
+                        syn::Pat::Ident(pat_ident) => {
+                            let ident = &pat_ident.ident;
+                            Ok(quote_spanned! { span=> #ident })
+                        }
+                        _ => Err(syn::Error::new(
+                            arg.span(),
+                            "Expected ident for function argument",
+                        )),
+                    },
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let function_call = match receiver_kind {
+        FnReceiverKind::SelfAsRefReceiver => quote_spanned! { span=>
+            self.as_ref().#fn_ident(#(#params),*)
+        },
+        _ => quote_spanned! { span=>
+            #fn_ident(#(#params),*)
+        },
+    };
+
+    Ok(if attr.associated_future.is_some() {
+        quote_spanned! { span=>
+            fn #fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait> {
+                #function_call
+            }
+        }
+    } else {
+        quote_spanned! { span=>
+            #opt_async fn #fn_ident(#trait_fn_inputs) #return_type {
+                #function_call #opt_dot_await
             }
         }
     })
@@ -298,9 +371,13 @@ impl EntraitAttr {
     }
 }
 
-enum SelfImplParam {
-    OuterImplT,
-    InnerRefT,
+enum FnReceiverKind {
+    /// f(self, ..)
+    SelfArg,
+    /// f(&self, ..)
+    RefSelfArg,
+    /// self.as_ref().f(..)
+    SelfAsRefReceiver,
 }
 
 impl InputFn {
@@ -377,48 +454,6 @@ impl InputFn {
         quote! {
             #input_args
         }
-    }
-
-    fn call_param_list<'d>(
-        &self,
-        span: Span,
-        self_impl_param: SelfImplParam,
-        deps: &deps::Deps,
-    ) -> syn::Result<proc_macro2::TokenStream> {
-        let params = self
-            .fn_sig
-            .inputs
-            .iter()
-            .enumerate()
-            .map(|(index, arg)| {
-                if deps.is_deps_param(index) {
-                    Ok(match self_impl_param {
-                        SelfImplParam::OuterImplT => quote_spanned! { span=> self },
-                        SelfImplParam::InnerRefT => quote_spanned! { span=> &self },
-                    })
-                } else {
-                    match arg {
-                        syn::FnArg::Receiver(_) => {
-                            Err(syn::Error::new(arg.span(), "Unexpected receiver arg"))
-                        }
-                        syn::FnArg::Typed(pat_typed) => match pat_typed.pat.as_ref() {
-                            syn::Pat::Ident(pat_ident) => {
-                                let ident = &pat_ident.ident;
-                                Ok(quote_spanned! { span=> #ident })
-                            }
-                            _ => Err(syn::Error::new(
-                                arg.span(),
-                                "Expected ident for function argument",
-                            )),
-                        },
-                    }
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(quote_spanned! { span=>
-            #(#params),*
-        })
     }
 }
 

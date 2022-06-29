@@ -279,6 +279,112 @@
 //! * `use entrait::unimock_test::*` puts unimock support inside `#[cfg_attr(test, ...)]`.
 //! * `use entrait::mockall_test::*` puts mockall support inside `#[cfg_attr(test, ...)]`.
 //!
+//! ## Modular applications consisting of several crates
+//! A common technique for Rust application development is to divide them into multiple crates.
+//! Entrait does its best to provide great support for this kind of architecture.
+//! This would be very trivial to do and wouldn't even be worth mentioning here if it wasn't for _concrete deps_.
+//!
+//! Further up, concrete dependency was mentioned as leaves of a depdendency tree. Let's imagine we have
+//! an app built from two crates: A `main` which depends on a `lib`:
+//!
+//! ```rust
+//! mod lib {
+//!     //! lib.rs - pretend this is a separate crate
+//!     # use entrait::unimock::*;
+//!     pub struct LibConfig {
+//!         pub foo: String,
+//!     }
+//!
+//!     #[entrait(pub GetFoo)]
+//!     fn get_foo(config: &LibConfig) -> &str {
+//!         &config.foo
+//!     }
+//!
+//!     #[entrait(pub LibFunction)]
+//!     fn lib_function(deps: &impl GetFoo) {
+//!         let foo = deps.get_foo();
+//!     }
+//! }
+//!
+//! // main.rs
+//! use implementation::Impl;
+//!
+//! struct App {
+//!     lib_config: lib::LibConfig,
+//! }
+//! # impl lib::GetFoo for App {
+//! #     fn get_foo(&self) -> &str {
+//! #         self.lib_config.get_foo()
+//! #     }
+//! # }
+//!
+//! fn main() {
+//!     let app = Impl::new(App {
+//!         lib_config: lib::LibConfig {
+//!             foo: "value".to_string(),
+//!         }
+//!     });
+//!
+//!     use lib::LibFunction;
+//!     app.lib_function();
+//! }
+//! ```
+//!
+//! How can this be made to work at all? Let's deconstruct what is happening:
+//!
+//! 1. The library defines it's own configuration: `LibConfig`.
+//! 2. It defines a leaf dependency to get access to some property: `GetFoo`.
+//! 3. All things which implement `GetFoo` may call `LibFunction`.
+//! 4. The main crate defines an `App`, which contains `LibConfig`.
+//! 5. The app has the type `Impl<App>`, which means it can call entraited functions.
+//! 6. Calling `LibFunction` requires the caller to implement `GetFoo`.
+//! 7. `GetFoo` is somehow only implemented for `Impl<LibConfig>`, not `Impl<App>`.
+//!
+//! The way Entrait lets you get around this problem is how implementations are generated for concrete leafs:
+//!
+//! ```rust
+//! # use implementation::Impl;
+//! # trait GetFoo {
+//! #     fn get_foo(&self) -> &str;
+//! # }
+//! # struct LibConfig {
+//! #     pub foo: String,
+//! # }
+//! // desugared entrait:
+//! fn get_foo(config: &LibConfig) -> &str {
+//!     &config.foo // (3)
+//! }
+//!
+//! // generic:
+//! impl<T> GetFoo for Impl<T>
+//! where
+//!     T: GetFoo
+//! {
+//!     fn get_foo(&self) -> &str {
+//!         self.as_ref().get_foo() // calls `<LibConfig as GetFoo>::get_foo`
+//!     }
+//! }
+//!
+//! // concrete:
+//! impl GetFoo for LibConfig {
+//!     fn get_foo(&self) -> &str {
+//!         get_foo(self) // calls get_foo, the original function
+//!     }
+//! }
+//! ```
+//!
+//! We see that `GetFoo` is implemented for all `Impl<T>` where `T: GetFoo`.
+//! So the only thing we need to do to get our app working, is to manually implement `lib::GetFoo for App`, which would just delegate to `self.lib_config.get_foo()`.
+//!
+//! We end up with something that has to go through a number of calls to dig out the actual string:
+//!
+//! * `<Impl<T> as GetFoo>::get_foo` calls
+//! * `<App as GetFoo>::get_foo` calls
+//! * `<lib::LibConfig as GetFoo>::get_foo` calls
+//! * `lib::get_foo`.
+//!
+//! Optmized builds would likely inline a lot of these calls, because all types are fully known at every step.
+//!
 //! ## Limitations
 //! This section lists known limitations of entrait:
 //!
