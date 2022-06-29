@@ -13,7 +13,7 @@ default = []
 nightly-tests = []
 
 [dependencies]
-entrait_macros = { path = "../entrait_macros", version = "0.3.2" }
+entrait_macros = { path = "../entrait_macros", version = "0.3.3" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
