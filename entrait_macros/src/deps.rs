@@ -79,10 +79,7 @@ fn extract_deps_from_type<'f>(
             extract_deps_from_type(func, arg_pat, type_reference.elem.as_ref())
         }
         syn::Type::Paren(paren) => extract_deps_from_type(func, arg_pat, paren.elem.as_ref()),
-        _ => Err(syn::Error::new(
-            ty.span(),
-            format!("Cannot process this argument"),
-        )),
+        ty => Ok(Deps::Concrete(ty)),
     }
 }
 

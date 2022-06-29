@@ -43,6 +43,9 @@ fn verify_password<T>(_: &T, _password: &str, _hash: &str) -> bool {
     true
 }
 
+#[entrait(ConcreteReceiver2)]
+fn concrete_receiver1(_: &()) {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
