@@ -376,14 +376,17 @@
 //! We see that `GetFoo` is implemented for all `Impl<T>` where `T: GetFoo`.
 //! So the only thing we need to do to get our app working, is to manually implement `lib::GetFoo for App`, which would just delegate to `self.lib_config.get_foo()`.
 //!
-//! We end up with something that has to go through a number of calls to dig out the actual string:
+//! We end up with quite a dance to actually dig out the config string:
 //!
-//! * `<Impl<T> as GetFoo>::get_foo` calls
-//! * `<App as GetFoo>::get_foo` calls
-//! * `<lib::LibConfig as GetFoo>::get_foo` calls
-//! * `lib::get_foo`.
+//! ```text
+//! <Impl<App> as lib::LibFunction>::lib_function() lib.rs
+//! => <Impl<App> as lib::GetFoo>::get_foo() lib.rs
+//!   => <App as lib::GetFoo>::get_foo() main.rs: hand-written implementation
+//!     => <lib::LibConfig as lib::GetFoo>::get_foo() lib.rs
+//!       => lib::get_foo(config) lib.rs
+//! ```
 //!
-//! Optmized builds would likely inline a lot of these calls, because all types are fully known at every step.
+//! Optmized builds should inline a lot of these calls, because all types are fully known at every step.
 //!
 //! ## Limitations
 //! This section lists known limitations of entrait:
