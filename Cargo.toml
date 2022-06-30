@@ -6,7 +6,8 @@ edition = "2021"
 license = "MIT"
 description = "Entrait: Trait-based, zero cost Inversion of Control for applications"
 repository = "https://github.com/audunhalland/entrait/"
-keywords = ["ioc", "inversion-of-control", "di"]
+keywords = ["pattern", "ioc", "inversion-of-control", "di", "macro"]
+categories = ["rust-patterns", "development-tools::testing"]
 
 [features]
 default = []
