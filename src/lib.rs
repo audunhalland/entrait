@@ -418,47 +418,20 @@ pub use entrait_macros::entrait;
 
 /// Unimock shorthand
 pub mod unimock {
-    /// Re-export of `entrait` with `unimock` implied.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use entrait::unimock::*;
-    /// ```
     pub use entrait_macros::entrait_unimock as entrait;
 }
 
 /// Unimock cfg-test-only shorthand
 pub mod unimock_test {
-    /// Re-export of `entrait` with `unimock = test` implied.
-    /// # Example
-    ///
-    /// ```rust
-    /// use entrait::unimock_test::*;
-    /// ```
     pub use entrait_macros::entrait_unimock_test as entrait;
 }
 
 /// Mockall shorthand
 pub mod mockall {
-    /// Re-export of `entrait` with `mockall` implied.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use entrait::mockall::*;
-    /// ```
     pub use entrait_macros::entrait_mockall as entrait;
 }
 
 /// Mockall test-mode-only shorthand
 pub mod mockall_test {
-    /// Re-export of `entrait` with `mockall = test` implied.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use entrait::mockall_test::*;
-    /// ```
     pub use entrait_macros::entrait_mockall_test as entrait;
 }

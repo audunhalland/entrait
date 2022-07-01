@@ -21,7 +21,11 @@ pub fn entrait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream
 }
 
 ///
-/// Generate a trait definition from a regular function with entrait = true.
+/// Generate a trait definition from a regular function, with
+/// [Impl](https://docs.rs/implementation/latest/implementation/struct.Impl.html)
+/// and
+/// [Unimock](https://docs.rs/unimock/latest/unimock/struct.Unimock.html)
+/// implementations.
 ///
 #[proc_macro_attribute]
 pub fn entrait_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
@@ -31,7 +35,11 @@ pub fn entrait_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::Tok
 }
 
 ///
-/// Generate a trait definition from a regular function with entrait = test.
+/// Generate a trait definition from a regular function, with
+/// [Impl](https://docs.rs/implementation/latest/implementation/struct.Impl.html)
+/// and
+/// `cfg(test)`-gated [Unimock](https://docs.rs/unimock/latest/unimock/struct.Unimock.html)
+/// implementations.
 ///
 #[proc_macro_attribute]
 pub fn entrait_unimock_test(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
@@ -44,7 +52,9 @@ pub fn entrait_unimock_test(attr: TokenStream, input: TokenStream) -> proc_macro
 }
 
 ///
-/// Generate a trait definition from a regular function with mockall = true.
+/// Generate a trait definition from a regular function, with an implementation for
+/// [Impl](https://docs.rs/implementation/latest/implementation/struct.Impl.html),
+/// with [mockall](https://docs.rs/mockall/latest/mockall/) support.
 ///
 #[proc_macro_attribute]
 pub fn entrait_mockall(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
@@ -54,7 +64,9 @@ pub fn entrait_mockall(attr: TokenStream, input: TokenStream) -> proc_macro::Tok
 }
 
 ///
-/// Generate a trait definition from a regular function with mockall = test.
+/// Generate a trait definition from a regular function, with an implementation for
+/// [Impl](https://docs.rs/implementation/latest/implementation/struct.Impl.html),
+/// with `cfg(test)`-gated [mockall](https://docs.rs/mockall/latest/mockall/) support.
 ///
 #[proc_macro_attribute]
 pub fn entrait_mockall_test(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
