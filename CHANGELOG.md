@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
 - Add `implementation` as a dependency, to help users getting started.
-
 ### Changed
 - Restructure lib docs a bit.
+### Removed
+- Support for parameter-less functions without use of `no_deps`. This is technically 'breaking' but can also be seen as a bugfix.
 
 ## [0.3.4] - 2022-06-30
 ### Added

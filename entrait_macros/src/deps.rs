@@ -2,7 +2,7 @@ use crate::input::InputFn;
 use syn::spanned::Spanned;
 
 pub enum Deps<'f> {
-    GenericOrAbsent {
+    Generic {
         trait_bounds: Vec<&'f syn::TypeParamBound>,
     },
     Concrete(&'f syn::Type),
@@ -18,15 +18,22 @@ impl<'f> Deps<'f> {
     }
 }
 
-pub fn analyze_deps<'f>(func: &'f InputFn) -> syn::Result<Deps<'f>> {
-    let first_input = match func.fn_sig.inputs.first() {
-        Some(fn_arg) => fn_arg,
-        None => {
-            return Ok(Deps::GenericOrAbsent {
-                trait_bounds: vec![],
-            });
-        }
-    };
+pub fn analyze_deps<'f>(
+    func: &'f InputFn,
+    attr: &crate::input::EntraitAttr,
+) -> syn::Result<Deps<'f>> {
+    if let Some(_) = &attr.no_deps {
+        return Ok(Deps::NoDeps);
+    }
+
+    let first_input =
+        match func.fn_sig.inputs.first() {
+            Some(fn_arg) => fn_arg,
+            None => return Err(syn::Error::new(
+                func.fn_sig.ident.span(),
+                "Function must have a dependency 'receiver' as its first parameter, or use the `no_deps` option.",
+            )),
+        };
 
     let pat_type = match first_input {
         syn::FnArg::Typed(pat_type) => pat_type,
@@ -49,7 +56,7 @@ fn extract_deps_from_type<'f>(
     match ty {
         syn::Type::ImplTrait(type_impl_trait) => {
             // Simple case, bounds are actually inline, no lookup necessary
-            Ok(Deps::GenericOrAbsent {
+            Ok(Deps::Generic {
                 trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
             })
         }
@@ -132,7 +139,7 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
         }
     }
 
-    Some(Deps::GenericOrAbsent { trait_bounds })
+    Some(Deps::Generic { trait_bounds })
 }
 
 fn extract_trait_bounds(

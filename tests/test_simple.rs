@@ -61,6 +61,3 @@ fn test_impl_bounds() {
     let result = impl_state.foo();
     assert_eq!(42, result);
 }
-
-#[entrait(NoArgs)]
-fn no_args() {}

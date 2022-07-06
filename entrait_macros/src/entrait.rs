@@ -34,10 +34,7 @@ pub fn invoke(
 }
 
 fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
-    let deps = match attr.no_deps {
-        Some(_) => deps::Deps::NoDeps,
-        None => deps::analyze_deps(&input_fn)?,
-    };
+    let deps = deps::analyze_deps(&input_fn, attr)?;
     let trait_def = gen_trait_def(attr, &input_fn, &deps)?;
     let impl_blocks = gen_impl_blocks(attr, &input_fn, &deps)?;
 
@@ -152,7 +149,7 @@ fn gen_impl_blocks(
     // TODO: Is it correct to always use `Sync` in here here?
     // It must be for Async at least?
     let impl_where_bounds = match deps {
-        deps::Deps::GenericOrAbsent { trait_bounds } => {
+        deps::Deps::Generic { trait_bounds } => {
             let impl_trait_bounds = if trait_bounds.is_empty() {
                 None
             } else {
@@ -198,7 +195,7 @@ fn gen_impl_blocks(
         &input_fn_ident,
         &trait_fn_inputs,
         match deps {
-            deps::Deps::GenericOrAbsent { trait_bounds: _ } => FnReceiverKind::SelfArg,
+            deps::Deps::Generic { trait_bounds: _ } => FnReceiverKind::SelfArg,
             deps::Deps::Concrete(_) => FnReceiverKind::SelfAsRefReceiver,
             deps::Deps::NoDeps => FnReceiverKind::RefSelfArg,
         },
@@ -322,7 +319,7 @@ impl EntraitAttr {
                 let fn_ident = &input_fn.fn_sig.ident;
 
                 let unmocked = match deps {
-                    deps::Deps::GenericOrAbsent { trait_bounds: _ } => quote! { #fn_ident },
+                    deps::Deps::Generic { trait_bounds: _ } => quote! { #fn_ident },
                     deps::Deps::Concrete(_) => quote! { _ },
                     deps::Deps::NoDeps => {
                         let inputs =
