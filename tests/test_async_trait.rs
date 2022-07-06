@@ -1,5 +1,5 @@
 use entrait::entrait;
-use implementation::*;
+use entrait::Impl;
 use unimock::*;
 
 struct State(u32);

@@ -57,7 +57,7 @@ mod graphql {
     #[tokio::test]
     async fn integration_test_query() {
         use async_graphql::*;
-        use implementation::Impl;
+        use entrait::Impl;
 
         let app = Impl::new(());
         let response = async_graphql::Schema::build(

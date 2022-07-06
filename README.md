@@ -6,10 +6,10 @@
 
 <!-- cargo-rdme start -->
 
-A proc macro to ease development using _Inversion of Control_ patterns in Rust.
+A proc macro for designing loosely coupled Rust applications.
 
-`entrait` is used to generate a trait from the definition of a regular function.
-The main use case for this is that other functions may depend upon the trait instead of the concrete implementation, enabling better test isolation.
+`entrait` is used to generate an _implemented trait_ from the definition of a regular function.
+The main use case for this is that other functions may depend upon traits instead of concrete implementation, enabling loose coupling, inversion of control and test isolation.
 
 The macro looks like this:
 
@@ -29,10 +29,10 @@ trait MyFunction {
 
 `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
 This would correspond to the `self` parameter in the trait.
-But what is this type supposed to be? The trait gets automatically implemented for [`Impl<T>`](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
+But what is this type supposed to be? The trait gets automatically implemented for `Impl<T>`:
 
 ```rust
-use implementation::Impl;
+use entrait::*;
 struct App;
 
 #[entrait::entrait(MyFunction)]
@@ -44,7 +44,7 @@ fn my_function<D>(deps: &D) { // <--------------------+
 //     fn my_function(&self);                         |
 // }                                                  |
 //                                                    |
-// impl<T> MyFunction for ::implementation::Impl<T> { |
+// impl<T> MyFunction for ::entrait::Impl<T> {        |
 //     fn my_function(&self) {                        |
 //         my_function(self) // calls this! ----------+
 //     }
@@ -73,7 +73,6 @@ The functions may take any number of parameters, but the first one is always con
 Functions may also be non-generic, depending directly on the App:
 
 ```rust
-use implementation::Impl;
 
 struct App { something: SomeType };
 type SomeType = u32;
@@ -93,25 +92,6 @@ assert_eq!(42, app.generic());
 ```
 
 These kinds of functions may be considered "leaves" of a dependency tree.
-
-## "Philosophy"
-The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
-The entrait pattern is simply a convenient way to achieve unit testing of business logic.
-
-Entrait is not intended for achieving polymorphism. If you want that, you should instead hand-write a trait.
-
-_Entrait should only be used to define an abstract computation that has a single implementation in realase mode, but is mockable in test mode._
-
-`entrait` does not implement Dependency Injection (DI). DI is a strictly object-oriented concept that will often look awkward in Rust.
-The author thinks of DI as the "reification of code modules":
-  In a DI-enabled programming environment, code modules are grouped together as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
-When this pattern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
-
-`entrait` tries to turn this around by saying that the primary abstraction that is depended upon is a set of _functions_, not a set of code modules.
-
-An architectural consequence is that one ends up with _one ubiquitous type_ that represents a running application that implements all these function abstraction traits.
-But the point is that this is all loosely coupled:
-  Most function definitions themselves do not refer to this god-like type, they only depend upon traits.
 
 ## Trait visibility
 by default, entrait generates a trait that is module-private (no visibility keyword).
@@ -308,13 +288,13 @@ mod lib {
 }
 
 // main.rs
-use implementation::Impl;
-
 struct App {
     lib_config: lib::LibConfig,
 }
 
 fn main() {
+    use entrait::*;
+
     let app = Impl::new(App {
         lib_config: lib::LibConfig {
             foo: "value".to_string(),
@@ -377,6 +357,25 @@ We end up with quite a dance to actually dig out the config string:
 
 Optmized builds should inline a lot of these calls, because all types are fully known at every step.
 
+## "Philosophy"
+The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
+The entrait pattern is simply a convenient way to achieve unit testing of business logic.
+
+Entrait is not intended for achieving polymorphism. If you want that, you should instead hand-write a trait.
+
+_Entrait should only be used to define an abstract computation that has a single implementation in realase mode, but is mockable in test mode._
+
+`entrait` does not implement Dependency Injection (DI). DI is a strictly object-oriented concept that will often look awkward in Rust.
+The author thinks of DI as the "reification of code modules":
+  In a DI-enabled programming environment, code modules are grouped together as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
+When this pattern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
+
+`entrait` tries to turn this around by saying that the primary abstraction that is depended upon is a set of _functions_, not a set of code modules.
+
+An architectural consequence is that one ends up with _one ubiquitous type_ that represents a running application that implements all these function abstraction traits.
+But the point is that this is all loosely coupled:
+  Most function definitions themselves do not refer to this god-like type, they only depend upon traits.
+
 ## Limitations
 This section lists known limitations of entrait:
 
@@ -394,10 +393,10 @@ As `entrait` is just a macro, it does not pull in any dependencies besides the c
 But in order to _compile_ the generated code, some additional dependencies will be needed alongside `entrait`.
 The following table shows compatible major versions:
 
-| `entrait` | `implementation` | `unimock` (optional) | `mockall` (optional) |
-| --------- | ---------------- | -------------------- | -------------------- |
-| `0.3`     | `0.1`            | `0.2`, `0.3`         | `0.11`               |
-| `0.2`     | `-`              | `0.1`                | `0.11`               |
-| `0.1`     | `-`              | `-`                  | `0.11`               |
+| `entrait` | `unimock` (optional) | `mockall` (optional) |
+| --------- | -------------------- | -------------------- |
+| `0.3`     | `0.2`, `0.3`         | `0.11`               |
+| `0.2`     | `0.1`                | `0.11`               |
+| `0.1`     | `-`                  | `0.11`               |
 
 <!-- cargo-rdme end -->

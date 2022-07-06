@@ -15,13 +15,13 @@ nightly-tests = []
 
 [dependencies]
 entrait_macros = { path = "entrait_macros", version = "0.3.3" }
+implementation = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
 async-trait = "0.1"
 unimock = "0.3"
 mockall = "0.11"
-implementation = "0.1"
 feignhttp = "0.4"
 
 [workspace]

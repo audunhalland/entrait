@@ -39,7 +39,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
         None => deps::analyze_deps(&input_fn)?,
     };
     let trait_def = gen_trait_def(attr, &input_fn, &deps)?;
-    let implementation_impl_block = gen_implementation_impl_blocks(attr, &input_fn, &deps)?;
+    let impl_blocks = gen_impl_blocks(attr, &input_fn, &deps)?;
 
     let InputFn {
         fn_attrs,
@@ -52,7 +52,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
     Ok(quote! {
         #(#fn_attrs)* #fn_vis #fn_sig #fn_body
         #trait_def
-        #implementation_impl_block
+        #impl_blocks
     })
 }
 
@@ -129,7 +129,7 @@ fn gen_trait_def_no_mock(
 /// }
 /// ```
 ///
-fn gen_implementation_impl_blocks(
+fn gen_impl_blocks(
     attr: &EntraitAttr,
     input_fn: &InputFn,
     deps: &deps::Deps,
@@ -157,7 +157,7 @@ fn gen_implementation_impl_blocks(
                 None
             } else {
                 Some(quote! {
-                    ::implementation::Impl<EntraitT>: #(#trait_bounds)+*,
+                    ::entrait::Impl<EntraitT>: #(#trait_bounds)+*,
                 })
             };
 
@@ -208,7 +208,7 @@ fn gen_implementation_impl_blocks(
 
     let generic_impl_block = quote_spanned! { span=>
         #async_trait_attribute
-        impl<EntraitT> #trait_ident for ::implementation::Impl<EntraitT> #impl_where_bounds {
+        impl<EntraitT> #trait_ident for ::entrait::Impl<EntraitT> #impl_where_bounds {
             #fut_type
             #generic_fn_def
         }

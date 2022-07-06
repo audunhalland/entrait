@@ -29,7 +29,7 @@ async fn no_deps(arg: i32) -> i32 {
 
 #[tokio::test]
 async fn test_it() {
-    let app = ::implementation::Impl::new(App);
+    let app = ::entrait::Impl::new(App);
     let _ = app.foo().await;
 }
 

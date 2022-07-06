@@ -1,5 +1,4 @@
-use entrait::entrait;
-use implementation::*;
+use entrait::*;
 
 mod app {
     pub struct State {

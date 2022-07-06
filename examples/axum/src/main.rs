@@ -72,7 +72,7 @@ mod rest {
 #[tokio::main]
 async fn main() {
     use axum::extract::Extension;
-    use implementation::Impl;
+    use entrait::Impl;
     use std::net::SocketAddr;
 
     #[derive(Clone)]

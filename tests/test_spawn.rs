@@ -1,5 +1,4 @@
 use entrait::unimock::*;
-use implementation::Impl;
 use unimock::*;
 
 #[entrait(Spawning, async_trait = true)]
@@ -24,7 +23,7 @@ async fn bar<T>(_: T) -> i32 {
 
 #[tokio::test]
 async fn test_spawning_impl() {
-    let result = spawning(&Impl::new(())).await;
+    let result = spawning(&implementation::Impl::new(())).await;
     assert_eq!(2, result);
 }
 

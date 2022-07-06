@@ -1,5 +1,5 @@
-use entrait::unimock::*;
-use implementation::*;
+use entrait::unimock::entrait;
+use entrait::Impl;
 use unimock::*;
 
 // Upstream crate:
@@ -22,8 +22,8 @@ trait ProjectInnerAppState {
     fn project_inner(&self) -> &Self::Inner;
 }
 
-impl ProjectInnerAppState for implementation::Impl<OuterAppState> {
-    type Inner = implementation::Impl<InnerAppState>;
+impl ProjectInnerAppState for Impl<OuterAppState> {
+    type Inner = Impl<InnerAppState>;
 
     fn project_inner(&self) -> &Self::Inner {
         &self.inner

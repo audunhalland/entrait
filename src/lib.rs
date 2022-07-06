@@ -1,7 +1,7 @@
-//! A proc macro to ease development using **Inversion of Control** patterns in Rust.
+//! A proc macro for designing loosely coupled Rust applications.
 //!
 //! `entrait` is used to generate an _implemented trait_ from the definition of a regular function.
-//! The main use case for this is that other functions may depend upon traits instead of concrete implementation, enabling loose coupling and test isolation.
+//! The main use case for this is that other functions may depend upon traits instead of concrete implementation, enabling loose coupling, inversion of control and test isolation.
 //!
 //! The macro looks like this:
 //!
@@ -22,10 +22,10 @@
 //!
 //! `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
 //! This would correspond to the `self` parameter in the trait.
-//! But what is this type supposed to be? The trait gets automatically implemented for [`Impl<T>`](https://docs.rs/implementation/latest/implementation/struct.Impl.html):
+//! But what is this type supposed to be? The trait gets automatically implemented for [`Impl<T>`](crate::Impl):
 //!
 //! ```rust
-//! use implementation::Impl;
+//! use entrait::*;
 //! struct App;
 //!
 //! #[entrait::entrait(MyFunction)]
@@ -37,7 +37,7 @@
 //! //     fn my_function(&self);                         |
 //! // }                                                  |
 //! //                                                    |
-//! // impl<T> MyFunction for ::implementation::Impl<T> { |
+//! // impl<T> MyFunction for ::entrait::Impl<T> {        |
 //! //     fn my_function(&self) {                        |
 //! //         my_function(self) // calls this! ----------+
 //! //     }
@@ -68,8 +68,7 @@
 //! Functions may also be non-generic, depending directly on the App:
 //!
 //! ```rust
-//! # use entrait::entrait;
-//! use implementation::Impl;
+//! # use entrait::*;
 //!
 //! struct App { something: SomeType };
 //! type SomeType = u32;
@@ -288,8 +287,6 @@
 //! }
 //!
 //! // main.rs
-//! use implementation::Impl;
-//!
 //! struct App {
 //!     lib_config: lib::LibConfig,
 //! }
@@ -300,6 +297,8 @@
 //! # }
 //!
 //! fn main() {
+//!     use entrait::*;
+//!
 //!     let app = Impl::new(App {
 //!         lib_config: lib::LibConfig {
 //!             foo: "value".to_string(),
@@ -324,7 +323,7 @@
 //! The way Entrait lets you get around this problem is how implementations are generated for concrete leafs:
 //!
 //! ```rust
-//! # use implementation::Impl;
+//! # use entrait::Impl;
 //! # trait GetFoo {
 //! #     fn get_foo(&self) -> &str;
 //! # }
@@ -405,11 +404,11 @@
 //! But in order to _compile_ the generated code, some additional dependencies will be needed alongside `entrait`.
 //! The following table shows compatible major versions:
 //!
-//! | `entrait` | `implementation` | `unimock` (optional) | `mockall` (optional) |
-//! | --------- | ---------------- | -------------------- | -------------------- |
-//! | `0.3`     | `0.1`            | `0.2`, `0.3`         | `0.11`               |
-//! | `0.2`     | `-`              | `0.1`                | `0.11`               |
-//! | `0.1`     | `-`              | `-`                  | `0.11`               |
+//! | `entrait` | `unimock` (optional) | `mockall` (optional) |
+//! | --------- | -------------------- | -------------------- |
+//! | `0.3`     | `0.2`, `0.3`         | `0.11`               |
+//! | `0.2`     | `0.1`                | `0.11`               |
+//! | `0.1`     | `-`                  | `0.11`               |
 //!
 
 #![forbid(unsafe_code)]
@@ -435,3 +434,6 @@ pub mod mockall {
 pub mod mockall_test {
     pub use entrait_macros::entrait_mockall_test as entrait;
 }
+
+/// Re-exported from the `implementation` crate.
+pub use ::implementation::Impl;
