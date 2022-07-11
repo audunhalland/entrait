@@ -31,7 +31,7 @@ pub fn analyze_deps<'f>(
             Some(fn_arg) => fn_arg,
             None => return Err(syn::Error::new(
                 func.fn_sig.ident.span(),
-                "Function must have a dependency 'receiver' as its first parameter, or use the `no_deps` option.",
+                "Function must have a dependency 'receiver' as its first parameter. Pass `no_deps` to entrait to disable dependency injection.",
             )),
         };
 
