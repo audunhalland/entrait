@@ -1,4 +1,4 @@
-use entrait::unimock_test::*;
+use entrait::*;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct Foo {
@@ -9,7 +9,7 @@ pub struct Foo {
 mod business {
     use super::*;
 
-    #[entrait(pub GetFoo, no_deps, async_trait)]
+    #[entrait(pub GetFoo, no_deps, async_trait, mock=test)]
     async fn get_foo() -> Foo {
         Foo {
             value: "real".to_string(),

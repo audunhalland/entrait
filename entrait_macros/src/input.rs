@@ -15,8 +15,15 @@ pub struct EntraitAttr {
     pub debug: Option<Span>,
     pub async_trait: Option<Span>,
     pub associated_future: Option<Span>,
-    pub unimock: Option<(EnabledValue, Span)>,
-    pub mockall: Option<(EnabledValue, Span)>,
+
+    /// Mocking in general: None implies Always. This is a way to _constrain_ mock support.
+    pub mock: (FeatureCfg, Span),
+
+    /// Mocking with unimock
+    pub unimock: Option<(FeatureCfg, Span)>,
+
+    /// Mocking with mockall
+    pub mockall: Option<(FeatureCfg, Span)>,
 }
 
 ///
@@ -27,13 +34,34 @@ pub enum Extension {
     Debug(Span),
     AsyncTrait(Span),
     AssociatedFuture(Span),
-    Unimock(EnabledValue, Span),
-    Mockall(EnabledValue, Span),
+    Mock(FeatureCfg, Span),
+    Unimock(FeatureCfg, Span),
+    Mockall(FeatureCfg, Span),
 }
 
-pub enum EnabledValue {
-    Always,
+#[derive(Clone, Copy)]
+pub enum FeatureCfg {
+    Never,
     TestOnly,
+    Always,
+}
+
+impl FeatureCfg {
+    fn weight(self) -> u8 {
+        match self {
+            Self::Never => 0,
+            Self::TestOnly => 1,
+            Self::Always => 2,
+        }
+    }
+
+    pub fn constrain(self, with: FeatureCfg) -> FeatureCfg {
+        if self.weight() > with.weight() {
+            with
+        } else {
+            self
+        }
+    }
 }
 
 enum Maybe<T> {
@@ -62,6 +90,7 @@ impl Parse for EntraitAttr {
         let mut debug = None;
         let mut async_trait = None;
         let mut associated_future = None;
+        let mut mock = (FeatureCfg::Always, proc_macro2::Span::call_site());
         let mut unimock = None;
         let mut mockall = None;
 
@@ -73,8 +102,9 @@ impl Parse for EntraitAttr {
                 Maybe::Some(Extension::Debug(span)) => debug = Some(span),
                 Maybe::Some(Extension::AsyncTrait(span)) => async_trait = Some(span),
                 Maybe::Some(Extension::AssociatedFuture(span)) => associated_future = Some(span),
-                Maybe::Some(Extension::Unimock(enabled, span)) => unimock = Some((enabled, span)),
-                Maybe::Some(Extension::Mockall(enabled, span)) => mockall = Some((enabled, span)),
+                Maybe::Some(Extension::Mock(cfg, span)) => mock = (cfg, span),
+                Maybe::Some(Extension::Unimock(cfg, span)) => unimock = Some((cfg, span)),
+                Maybe::Some(Extension::Mockall(cfg, span)) => mockall = Some((cfg, span)),
                 _ => {}
             };
         }
@@ -86,6 +116,7 @@ impl Parse for EntraitAttr {
             debug,
             async_trait,
             associated_future,
+            mock,
             unimock,
             mockall,
         })
@@ -127,34 +158,46 @@ impl Parse for Maybe<Extension> {
                     Maybe::None
                 },
             ),
-            "unimock" => Ok(
-                if let Maybe::Some(enabled) =
-                    parse_ext_default_val(input, Maybe::Some(EnabledValue::Always), |v| v)?
+            "mock" => Ok(
+                if let Maybe::Some(cfg) =
+                    parse_ext_default_val(input, Maybe::Some(FeatureCfg::Always), |v| v)?
                 {
-                    Maybe::Some(Extension::Unimock(enabled, span))
+                    Maybe::Some(Extension::Mock(cfg, span))
+                } else {
+                    Maybe::Some(Extension::Mock(
+                        FeatureCfg::Always,
+                        proc_macro2::Span::call_site(),
+                    ))
+                },
+            ),
+            "unimock" => Ok(
+                if let Maybe::Some(cfg) =
+                    parse_ext_default_val(input, Maybe::Some(FeatureCfg::Always), |v| v)?
+                {
+                    Maybe::Some(Extension::Unimock(cfg, span))
                 } else {
                     Maybe::None
                 },
             ),
             "test_unimock" => Ok(
                 if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
-                    Maybe::Some(Extension::Unimock(EnabledValue::TestOnly, span))
+                    Maybe::Some(Extension::Unimock(FeatureCfg::TestOnly, span))
                 } else {
                     Maybe::None
                 },
             ),
             "mockall" => Ok(
-                if let Maybe::Some(enabled) =
-                    parse_ext_default_val(input, Maybe::Some(EnabledValue::Always), |v| v)?
+                if let Maybe::Some(cfg) =
+                    parse_ext_default_val(input, Maybe::Some(FeatureCfg::Always), |v| v)?
                 {
-                    Maybe::Some(Extension::Mockall(enabled, span))
+                    Maybe::Some(Extension::Mockall(cfg, span))
                 } else {
                     Maybe::None
                 },
             ),
             "test_mockall" => Ok(
                 if parse_ext_default_val(input, true, |b: syn::LitBool| b.value())? {
-                    Maybe::Some(Extension::Mockall(EnabledValue::TestOnly, span))
+                    Maybe::Some(Extension::Mockall(FeatureCfg::TestOnly, span))
                 } else {
                     Maybe::None
                 },
@@ -183,19 +226,19 @@ where
     Ok(mapper(parsed))
 }
 
-impl Parse for Maybe<EnabledValue> {
+impl Parse for Maybe<FeatureCfg> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(syn::Ident) {
             let ident: syn::Ident = input.parse()?;
             match ident.to_string().as_ref() {
-                "test" => Ok(Maybe::Some(EnabledValue::TestOnly)),
+                "test" => Ok(Maybe::Some(FeatureCfg::TestOnly)),
                 _ => Err(syn::Error::new(ident.span(), "unrecognized keyword")),
             }
         } else {
             if input.parse::<syn::LitBool>()?.value() {
-                Ok(Maybe::Some(EnabledValue::Always))
+                Ok(Maybe::Some(FeatureCfg::Always))
             } else {
-                Ok(Maybe::None)
+                Ok(Maybe::Some(FeatureCfg::Never))
             }
         }
     }

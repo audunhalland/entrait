@@ -315,7 +315,7 @@ impl EntraitAttr {
         deps: &deps::Deps,
     ) -> Option<proc_macro2::TokenStream> {
         match self.unimock {
-            Some((ref enabled_value, span)) => {
+            Some((cfg, span)) => {
                 let fn_ident = &input_fn.fn_sig.ident;
 
                 let unmocked = match deps {
@@ -342,11 +342,12 @@ impl EntraitAttr {
                 let unimock_attr = quote_spanned! {span=>
                     ::unimock::unimock(mod=#fn_ident, as=[Fn], unmocked=[#unmocked])
                 };
-                Some(match enabled_value {
-                    EnabledValue::Always => quote_spanned! {span=>
+                Some(match cfg.constrain(self.mock.0) {
+                    FeatureCfg::Never => quote! {},
+                    FeatureCfg::Always => quote_spanned! {span=>
                         #[#unimock_attr]
                     },
-                    EnabledValue::TestOnly => quote_spanned! {span=>
+                    FeatureCfg::TestOnly => quote_spanned! {span=>
                         #[cfg_attr(test, #unimock_attr)]
                     },
                 })
@@ -356,14 +357,16 @@ impl EntraitAttr {
     }
 
     pub fn opt_mockall_automock_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        match self.mockall {
-            Some((EnabledValue::Always, span)) => {
-                Some(quote_spanned! { span=> #[::mockall::automock] })
+        if let Some((cfg, span)) = self.mockall {
+            match cfg.constrain(self.mock.0) {
+                FeatureCfg::Always => Some(quote_spanned! { span=> #[::mockall::automock] }),
+                FeatureCfg::TestOnly => {
+                    Some(quote_spanned! { span=> #[cfg_attr(test, ::mockall::automock)] })
+                }
+                FeatureCfg::Never => None,
             }
-            Some((EnabledValue::TestOnly, span)) => {
-                Some(quote_spanned! { span=> #[cfg_attr(test, ::mockall::automock)] })
-            }
-            None => None,
+        } else {
+            None
         }
     }
 }

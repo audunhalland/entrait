@@ -17,7 +17,14 @@ mod input;
 ///
 #[proc_macro_attribute]
 pub fn entrait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |_| {})
+    entrait::invoke(attr, input, |attr| {
+        if cfg!(feature = "unimock") {
+            attr.unimock = Some((input::FeatureCfg::Always, proc_macro2::Span::call_site()));
+        }
+        if cfg!(feature = "mockall") {
+            attr.mockall = Some((input::FeatureCfg::Always, proc_macro2::Span::call_site()));
+        }
+    })
 }
 
 ///
@@ -30,7 +37,7 @@ pub fn entrait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream
 #[proc_macro_attribute]
 pub fn entrait_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
     entrait::invoke(attr, input, |attr| {
-        attr.unimock = Some((input::EnabledValue::Always, proc_macro2::Span::call_site()));
+        attr.unimock = Some((input::FeatureCfg::Always, proc_macro2::Span::call_site()));
     })
 }
 
@@ -44,10 +51,7 @@ pub fn entrait_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::Tok
 #[proc_macro_attribute]
 pub fn entrait_unimock_test(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
     entrait::invoke(attr, input, |attr| {
-        attr.unimock = Some((
-            input::EnabledValue::TestOnly,
-            proc_macro2::Span::call_site(),
-        ));
+        attr.unimock = Some((input::FeatureCfg::TestOnly, proc_macro2::Span::call_site()));
     })
 }
 
@@ -59,7 +63,7 @@ pub fn entrait_unimock_test(attr: TokenStream, input: TokenStream) -> proc_macro
 #[proc_macro_attribute]
 pub fn entrait_mockall(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
     entrait::invoke(attr, input, |attr| {
-        attr.mockall = Some((input::EnabledValue::Always, proc_macro2::Span::call_site()));
+        attr.mockall = Some((input::FeatureCfg::Always, proc_macro2::Span::call_site()));
     })
 }
 
@@ -71,9 +75,6 @@ pub fn entrait_mockall(attr: TokenStream, input: TokenStream) -> proc_macro::Tok
 #[proc_macro_attribute]
 pub fn entrait_mockall_test(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
     entrait::invoke(attr, input, |attr| {
-        attr.mockall = Some((
-            input::EnabledValue::TestOnly,
-            proc_macro2::Span::call_site(),
-        ));
+        attr.mockall = Some((input::FeatureCfg::TestOnly, proc_macro2::Span::call_site()));
     })
 }

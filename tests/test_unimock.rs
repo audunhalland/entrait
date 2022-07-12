@@ -1,5 +1,4 @@
-use entrait::unimock::*;
-use entrait::Impl;
+use entrait::*;
 use unimock::*;
 
 type Error = ();

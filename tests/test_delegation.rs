@@ -1,5 +1,4 @@
-use entrait::unimock::entrait;
-use entrait::Impl;
+use entrait::*;
 use unimock::*;
 
 // Upstream crate:

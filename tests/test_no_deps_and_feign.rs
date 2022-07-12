@@ -1,4 +1,4 @@
-use entrait::unimock::entrait;
+use entrait::entrait;
 
 use feignhttp::get;
 

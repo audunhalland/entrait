@@ -12,6 +12,8 @@ categories = ["rust-patterns", "development-tools::testing"]
 [features]
 default = []
 nightly-tests = []
+unimock = ["entrait_macros/unimock"]
+mockall = ["entrait_macros/mockall"]
 
 [dependencies]
 entrait_macros = { path = "entrait_macros", version = "0.3.3" }

@@ -1,4 +1,4 @@
-use entrait::unimock::*;
+use entrait::*;
 use unimock::*;
 
 #[entrait(Bar, async_trait = true)]

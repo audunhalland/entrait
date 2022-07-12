@@ -2,7 +2,7 @@
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 
-use entrait::unimock::*;
+use entrait::*;
 use unimock::*;
 
 struct App;

@@ -8,6 +8,11 @@ description = "Procedural macros reexported by entrait"
 repository = "https://github.com/audunhalland/entrait/"
 keywords = []
 
+[features]
+default = []
+unimock = []
+mockall = []
+
 [dependencies]
 syn = { version = "1.0.75", features = ["full"] }
 quote = "1"

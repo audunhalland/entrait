@@ -1,4 +1,4 @@
-use entrait::unimock::*;
+use entrait::*;
 use unimock::*;
 
 #[entrait(Spawning, async_trait = true)]
