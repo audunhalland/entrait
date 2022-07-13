@@ -1,5 +1,6 @@
 #![cfg(feature = "unimock")]
 
+#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
 mod auth {
     use entrait::*;
     use unimock::*;
@@ -12,7 +13,7 @@ mod auth {
         hash: String,
     }
 
-    #[entrait(GetUsername, async_trait = true)]
+    #[entrait(GetUsername)]
     async fn get_username(
         rt: &impl Authenticate,
         id: u32,
@@ -22,7 +23,7 @@ mod auth {
         Ok(user.username)
     }
 
-    #[entrait(Authenticate, async_trait = true)]
+    #[entrait(Authenticate)]
     async fn authenticate(
         deps: &(impl FetchUser + VerifyPassword),
         id: u32,
@@ -103,16 +104,17 @@ mod auth {
     }
 }
 
+#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
 mod multi_mock {
     use entrait::*;
     use unimock::*;
 
-    #[entrait(Bar, async_trait = true)]
+    #[entrait(Bar)]
     async fn bar<A>(_: &A) -> i32 {
         unimplemented!()
     }
 
-    #[entrait(Baz, async_trait = true)]
+    #[entrait(Baz)]
     async fn baz<A>(_: &A) -> i32 {
         unimplemented!()
     }
@@ -121,7 +123,7 @@ mod multi_mock {
         use super::*;
         use entrait::entrait;
 
-        #[entrait(Sum, async_trait = true)]
+        #[entrait(Sum)]
         async fn sum<A: Bar + Baz>(a: &A) -> i32 {
             a.bar().await + a.baz().await
         }
@@ -142,7 +144,7 @@ mod multi_mock {
     mod where_bounds {
         use super::*;
 
-        #[entrait(Sum, async_trait = true)]
+        #[entrait(Sum)]
         async fn sum<A>(a: &A) -> i32
         where
             A: Bar + Baz,
@@ -166,7 +168,7 @@ mod multi_mock {
     mod impl_trait_bounds {
         use super::*;
 
-        #[entrait(Sum, async_trait = true)]
+        #[entrait(Sum)]
         async fn sum(a: &(impl Bar + Baz)) -> i32 {
             a.bar().await + a.baz().await
         }
@@ -185,11 +187,12 @@ mod multi_mock {
     }
 }
 
+#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
 mod tokio_spawn {
     use entrait::*;
     use unimock::*;
 
-    #[entrait(Spawning, async_trait = true)]
+    #[entrait(Spawning)]
     async fn spawning(deps: &(impl Bar + Clone + Send + Sync + 'static)) -> i32 {
         let handles = [deps.clone(), deps.clone()]
             .into_iter()
@@ -204,7 +207,7 @@ mod tokio_spawn {
         result
     }
 
-    #[entrait(Bar, async_trait = true)]
+    #[entrait(Bar)]
     async fn bar<T>(_: T) -> i32 {
         1
     }
@@ -232,17 +235,18 @@ mod tokio_spawn {
     }
 }
 
-mod async_trait {
+#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+mod more_async {
     use entrait::*;
     use unimock::*;
     struct State(u32);
 
-    #[entrait(Foo, async_trait = true)]
+    #[entrait(Foo)]
     async fn foo<A: Bar>(a: &A) -> u32 {
         a.bar().await
     }
 
-    #[entrait(Bar, async_trait)]
+    #[entrait(Bar)]
     async fn bar(state: &State) -> u32 {
         state.0
     }

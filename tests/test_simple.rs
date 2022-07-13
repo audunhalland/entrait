@@ -64,6 +64,7 @@ mod bounds {
     }
 }
 
+#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
 mod no_deps_and_feign {
     use entrait::entrait;
 
@@ -72,7 +73,7 @@ mod no_deps_and_feign {
     #[entrait(NoDeps, no_deps)]
     fn no_deps(_a: i32, _b: i32) {}
 
-    #[entrait(CallMyApi, no_deps, async_trait)]
+    #[entrait(CallMyApi, no_deps)]
     #[get("https://my.api.org/api/{param}")]
     async fn call_my_api(#[path] param: String) -> feignhttp::Result<String> {}
 }

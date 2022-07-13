@@ -9,7 +9,6 @@ use quote::quote_spanned;
 use syn::spanned::Spanned;
 
 use crate::deps;
-use crate::input;
 use crate::input::*;
 
 pub fn invoke(
@@ -89,10 +88,10 @@ fn gen_trait_def_no_mock(
     let input_fn_ident = &fn_sig.ident;
     let return_type = &fn_sig.output;
 
-    let opt_async = input_fn.opt_async(span);
+    let opt_async = input_fn.opt_async();
     let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps, attr);
 
-    if attr.associated_future.is_some() {
+    if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
         let output_ty = output_type_tokens(return_type);
 
         Ok(quote_spanned! { span=>
@@ -159,7 +158,7 @@ fn gen_impl_blocks(
                 })
             };
 
-            let standard_bounds = if attr.associated_future.is_some() {
+            let standard_bounds = if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
                 // Deps must be 'static for zero-cost futures to work
                 quote! { Sync + 'static }
             } else {
@@ -179,7 +178,7 @@ fn gen_impl_blocks(
     };
 
     // Future type for 'associated_future' feature
-    let fut_type = if attr.associated_future.is_some() {
+    let fut_type = if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
         let output_ty = output_type_tokens(return_type);
         Some(quote_spanned! { span=>
             type Fut<'entrait> = impl ::core::future::Future<Output = #output_ty>
@@ -248,7 +247,7 @@ fn gen_delegating_fn_item(
     deps: &deps::Deps,
     attr: &EntraitAttr,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let opt_async = input_fn.opt_async(span);
+    let opt_async = input_fn.opt_async();
     let opt_dot_await = input_fn.opt_dot_await(span);
     // TODO: set span for output
     let return_type = &input_fn.fn_sig.output;
@@ -294,7 +293,7 @@ fn gen_delegating_fn_item(
         },
     };
 
-    Ok(if attr.associated_future.is_some() {
+    Ok(if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
         quote_spanned! { span=>
             fn #fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait> {
                 #function_call
@@ -341,7 +340,7 @@ impl EntraitAttr {
                 };
 
                 Some(self.gated_mock_attr(span, quote_spanned! {span=>
-                    ::entrait::__m::unimock::unimock(prefix=::entrait::__m::unimock, mod=#fn_ident, as=[Fn], unmocked=[#unmocked])
+                    ::entrait::__unimock::unimock(prefix=::entrait::__unimock, mod=#fn_ident, as=[Fn], unmocked=[#unmocked])
                 }))
             }
             _ => None,
@@ -367,13 +366,6 @@ impl EntraitAttr {
             },
         }
     }
-
-    fn default_option<T>(&self, option: Option<SpanOpt<T>>, default: T) -> input::SpanOpt<T> {
-        match option {
-            Some(option) => option,
-            None => SpanOpt(default, self.trait_ident.span()),
-        }
-    }
 }
 
 enum FnReceiverKind {
@@ -386,16 +378,16 @@ enum FnReceiverKind {
 }
 
 impl InputFn {
-    fn opt_async(&self, span: Span) -> Option<proc_macro2::TokenStream> {
-        if self.fn_sig.asyncness.is_some() {
-            Some(quote_spanned! { span=> async })
+    fn opt_async(&self) -> Option<proc_macro2::TokenStream> {
+        if let Some(async_) = self.fn_sig.asyncness {
+            Some(quote! { #async_ })
         } else {
             None
         }
     }
 
     fn opt_dot_await(&self, span: Span) -> Option<proc_macro2::TokenStream> {
-        if self.fn_sig.asyncness.is_some() {
+        if let Some(_) = self.fn_sig.asyncness {
             Some(quote_spanned! { span=> .await })
         } else {
             None
@@ -403,9 +395,12 @@ impl InputFn {
     }
 
     fn opt_async_trait_attribute(&self, attr: &EntraitAttr) -> Option<proc_macro2::TokenStream> {
-        match (attr.async_trait, self.fn_sig.asyncness.is_some()) {
-            (Some(SpanOpt(_, span)), true) => {
-                Some(quote_spanned! { span=> #[::async_trait::async_trait] })
+        match (
+            attr.get_async_strategy(),
+            self.fn_sig.asyncness,
+        ) {
+            (SpanOpt(AsyncStrategy::AsyncTrait, span), Some(_async)) => {
+                Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })
             }
             _ => None,
         }
@@ -431,7 +426,7 @@ impl InputFn {
             }
         }
 
-        let self_lifetime = if attr.associated_future.is_some() {
+        let self_lifetime = if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
             Some(quote! { 'entrait })
         } else {
             None
@@ -446,7 +441,7 @@ impl InputFn {
             }
             _ => {
                 if input_args.is_empty() {
-                    return if attr.associated_future.is_some() {
+                    return if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
                         quote! { & #self_lifetime self }
                     } else {
                         quote! {}

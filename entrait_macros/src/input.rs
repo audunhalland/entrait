@@ -13,8 +13,7 @@ pub struct EntraitAttr {
     pub trait_ident: syn::Ident,
     pub no_deps: Option<SpanOpt<()>>,
     pub debug: Option<SpanOpt<()>>,
-    pub async_trait: Option<SpanOpt<()>>,
-    pub associated_future: Option<SpanOpt<()>>,
+    pub async_strategy: Option<SpanOpt<AsyncStrategy>>,
 
     /// Whether to export mocks (i.e. not gated with cfg(test))
     pub export: Option<SpanOpt<bool>>,
@@ -26,6 +25,23 @@ pub struct EntraitAttr {
     pub mockall: Option<SpanOpt<bool>>,
 }
 
+impl EntraitAttr {
+    pub fn set_fallback_async_strategy(&mut self, strategy: AsyncStrategy) {
+        self.async_strategy.get_or_insert(SpanOpt::of(strategy));
+    }
+
+    pub fn get_async_strategy(&self) -> SpanOpt<AsyncStrategy> {
+        self.default_option(self.async_strategy, AsyncStrategy::NoHack)
+    }
+
+    pub fn default_option<T>(&self, option: Option<SpanOpt<T>>, default: T) -> SpanOpt<T> {
+        match option {
+            Some(option) => option,
+            None => SpanOpt(default, self.trait_ident.span()),
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct SpanOpt<T>(pub T, pub Span);
 
@@ -33,6 +49,13 @@ impl<T> SpanOpt<T> {
     pub fn of(value: T) -> Self {
         Self(value, proc_macro2::Span::call_site())
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum AsyncStrategy {
+    NoHack,
+    AsyncTrait,
+    AssociatedFuture,
 }
 
 ///
@@ -82,8 +105,7 @@ impl Parse for EntraitAttr {
 
         let mut no_deps = None;
         let mut debug = None;
-        let mut async_trait = None;
-        let mut associated_future = None;
+        let mut async_strategy = None;
         let mut export = None;
         let mut unimock = None;
         let mut mockall = None;
@@ -92,14 +114,14 @@ impl Parse for EntraitAttr {
             input.parse::<syn::token::Comma>()?;
 
             match input.parse::<Maybe<EntraitOpt>>()? {
-                Maybe::Some(EntraitOpt::NoDeps(span)) => no_deps = Some(span),
-                Maybe::Some(EntraitOpt::Debug(span)) => debug = Some(span),
-                Maybe::Some(EntraitOpt::AsyncTrait(span)) => async_trait = Some(span),
-                Maybe::Some(EntraitOpt::AssociatedFuture(span)) => associated_future = Some(span),
-                Maybe::Some(EntraitOpt::Export(span)) => export = Some(span),
-                Maybe::Some(EntraitOpt::Unimock(span)) => unimock = Some(span),
-                Maybe::Some(EntraitOpt::Mockall(span)) => mockall = Some(span),
-                _ => {}
+                Maybe::Some(EntraitOpt::NoDeps(opt)) => no_deps = Some(opt),
+                Maybe::Some(EntraitOpt::Debug(opt)) => debug = Some(opt),
+                Maybe::Some(EntraitOpt::AsyncTrait(opt)) => async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, opt.1)),
+                Maybe::Some(EntraitOpt::AssociatedFuture(opt)) => async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1)),
+                Maybe::Some(EntraitOpt::Export(opt)) => export = Some(opt),
+                Maybe::Some(EntraitOpt::Unimock(opt)) => unimock = Some(opt),
+                Maybe::Some(EntraitOpt::Mockall(opt)) => mockall = Some(opt),
+                Maybe::None => {}
             };
         }
 
@@ -108,8 +130,7 @@ impl Parse for EntraitAttr {
             trait_visibility,
             trait_ident,
             debug,
-            async_trait,
-            associated_future,
+            async_strategy,
             export,
             unimock,
             mockall,

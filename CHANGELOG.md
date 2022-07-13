@@ -6,9 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- `implementation` as a dependency, to help users getting started.
 - `unimock` feature. Enabling the features downstream will generate mocks upstream.
 - `entrait_export` macro and `export` option, for exporting optional mocks from libraries.
-- `implementation` as a dependency, to help users getting started.
+- `async-trait` feature for adding a re-export of the async-trait crate.
+- `use-async-trait` and `use-associated-future` features for global selection of async strategy.
 ### Changed
 - Restructure lib docs a bit.
 ### Removed
