@@ -1,3 +1,5 @@
+#![cfg(feature = "unimock")]
+
 use entrait::*;
 use unimock::*;
 

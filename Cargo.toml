@@ -11,20 +11,23 @@ categories = ["rust-patterns", "development-tools::testing"]
 
 [features]
 default = []
+unimock = ["dep:unimock"]
+mockall = ["dep:mockall"]
 nightly-tests = []
-unimock = ["entrait_macros/unimock"]
-mockall = ["entrait_macros/mockall"]
 
 [dependencies]
 entrait_macros = { path = "entrait_macros", version = "0.3.3" }
 implementation = "0.1"
+unimock = { version = "0.3", optional = true }
+mockall = { version = "0.11", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
 async-trait = "0.1"
-unimock = "0.3"
-mockall = "0.11"
 feignhttp = "0.4"
+
+[package.metadata.docs.rs]
+features = ["unimock", "mockall"]
 
 [workspace]
 members = [

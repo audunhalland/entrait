@@ -9,6 +9,7 @@ use quote::quote_spanned;
 use syn::spanned::Spanned;
 
 use crate::deps;
+use crate::input;
 use crate::input::*;
 
 pub fn invoke(
@@ -314,8 +315,8 @@ impl EntraitAttr {
         input_fn: &InputFn,
         deps: &deps::Deps,
     ) -> Option<proc_macro2::TokenStream> {
-        match self.unimock {
-            Some((cfg, span)) => {
+        match self.default_option(self.unimock, false) {
+            SpanOpt(true, span) => {
                 let fn_ident = &input_fn.fn_sig.ident;
 
                 let unmocked = match deps {
@@ -339,34 +340,39 @@ impl EntraitAttr {
                     }
                 };
 
-                let unimock_attr = quote_spanned! {span=>
-                    ::unimock::unimock(mod=#fn_ident, as=[Fn], unmocked=[#unmocked])
-                };
-                Some(match cfg.constrain(self.mock.0) {
-                    FeatureCfg::Never => quote! {},
-                    FeatureCfg::Always => quote_spanned! {span=>
-                        #[#unimock_attr]
-                    },
-                    FeatureCfg::TestOnly => quote_spanned! {span=>
-                        #[cfg_attr(test, #unimock_attr)]
-                    },
-                })
+                Some(self.gated_mock_attr(span, quote_spanned! {span=>
+                    ::entrait::__m::unimock::unimock(prefix=::entrait::__m::unimock, mod=#fn_ident, as=[Fn], unmocked=[#unmocked])
+                }))
             }
-            None => None,
+            _ => None,
         }
     }
 
     pub fn opt_mockall_automock_attribute(&self) -> Option<proc_macro2::TokenStream> {
-        if let Some((cfg, span)) = self.mockall {
-            match cfg.constrain(self.mock.0) {
-                FeatureCfg::Always => Some(quote_spanned! { span=> #[::mockall::automock] }),
-                FeatureCfg::TestOnly => {
-                    Some(quote_spanned! { span=> #[cfg_attr(test, ::mockall::automock)] })
-                }
-                FeatureCfg::Never => None,
-            }
-        } else {
-            None
+        match self.default_option(self.mockall, false) {
+            SpanOpt(true, span) => Some(self.gated_mock_attr(
+                span,
+                quote_spanned! { span=> ::entrait::__m::mockall::automock },
+            )),
+            _ => None,
+        }
+    }
+
+    fn gated_mock_attr(&self, span: Span, attr: TokenStream) -> TokenStream {
+        match self.default_option(self.export, false).0 {
+            true => quote_spanned! {span=>
+                #[#attr]
+            },
+            false => quote_spanned! {span=>
+                #[cfg_attr(test, #attr)]
+            },
+        }
+    }
+
+    fn default_option<T>(&self, option: Option<SpanOpt<T>>, default: T) -> input::SpanOpt<T> {
+        match option {
+            Some(option) => option,
+            None => SpanOpt(default, self.trait_ident.span()),
         }
     }
 }
@@ -399,7 +405,9 @@ impl InputFn {
 
     fn opt_async_trait_attribute(&self, attr: &EntraitAttr) -> Option<proc_macro2::TokenStream> {
         match (attr.async_trait, self.fn_sig.asyncness.is_some()) {
-            (Some(span), true) => Some(quote_spanned! { span=> #[::async_trait::async_trait] }),
+            (Some(SpanOpt(_, span)), true) => {
+                Some(quote_spanned! { span=> #[::async_trait::async_trait] })
+            }
             _ => None,
         }
     }

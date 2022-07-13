@@ -1,5 +1,6 @@
-use entrait::entrait;
-use entrait::Impl;
+#![cfg(feature = "unimock")]
+
+use entrait::*;
 use unimock::*;
 
 struct State(u32);
@@ -9,7 +10,7 @@ async fn foo<A: Bar>(a: &A) -> u32 {
     a.bar().await
 }
 
-#[entrait(Bar, async_trait, unimock)]
+#[entrait(Bar, async_trait)]
 async fn bar(state: &State) -> u32 {
     state.0
 }

@@ -9,7 +9,7 @@ pub struct Foo {
 mod business {
     use super::*;
 
-    #[entrait(pub GetFoo, no_deps, async_trait, mock=test)]
+    #[entrait(pub GetFoo, no_deps, async_trait)]
     async fn get_foo() -> Foo {
         Foo {
             value: "real".to_string(),
