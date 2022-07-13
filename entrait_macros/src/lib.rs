@@ -38,37 +38,6 @@ pub fn entrait_export_unimock(attr: TokenStream, input: TokenStream) -> proc_mac
     })
 }
 
-#[proc_macro_attribute]
-pub fn entrait_mockall(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        enable([&mut attr.mockall]);
-    })
-}
-
-#[proc_macro_attribute]
-pub fn entrait_export_mockall(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        enable([&mut attr.export, &mut attr.mockall]);
-    })
-}
-
-#[proc_macro_attribute]
-pub fn entrait_unimock_mockall(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        enable([&mut attr.unimock, &mut attr.mockall]);
-    })
-}
-
-#[proc_macro_attribute]
-pub fn entrait_export_unimock_mockall(
-    attr: TokenStream,
-    input: TokenStream,
-) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        enable([&mut attr.export, &mut attr.unimock, &mut attr.mockall]);
-    })
-}
-
 fn enable<const N: usize>(opts: [&mut Option<input::SpanOpt<bool>>; N]) {
     for opt in opts.into_iter() {
         opt.get_or_insert(input::SpanOpt::of(true));

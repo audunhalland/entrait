@@ -350,10 +350,9 @@ impl EntraitAttr {
 
     pub fn opt_mockall_automock_attribute(&self) -> Option<proc_macro2::TokenStream> {
         match self.default_option(self.mockall, false) {
-            SpanOpt(true, span) => Some(self.gated_mock_attr(
-                span,
-                quote_spanned! { span=> ::entrait::__m::mockall::automock },
-            )),
+            SpanOpt(true, span) => {
+                Some(self.gated_mock_attr(span, quote_spanned! { span=> ::mockall::automock }))
+            }
             _ => None,
         }
     }

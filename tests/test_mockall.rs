@@ -1,7 +1,6 @@
-#![cfg(feature = "mockall")]
 use entrait::*;
 
-#[entrait(Foo)]
+#[entrait(Foo, mockall)]
 fn foo(_deps: &(), arg: i32) -> i32 {
     arg
 }
