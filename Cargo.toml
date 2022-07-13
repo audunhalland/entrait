@@ -26,7 +26,7 @@ feignhttp = "0.4"
 mockall = "0.11"
 
 [package.metadata.docs.rs]
-features = ["unimock", "mockall"]
+features = ["unimock"]
 
 [workspace]
 members = [
