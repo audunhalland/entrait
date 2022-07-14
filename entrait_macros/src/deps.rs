@@ -23,7 +23,7 @@ pub fn analyze_deps<'f>(
     func: &'f InputFn,
     attr: &crate::input::EntraitAttr,
 ) -> syn::Result<Deps<'f>> {
-    if let Some(_) = &attr.no_deps {
+    if attr.no_deps_value() {
         return Ok(Deps::NoDeps);
     }
 

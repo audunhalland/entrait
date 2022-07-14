@@ -28,7 +28,7 @@ pub fn invoke(
         Err(err) => err.into_compile_error(),
     };
 
-    if attr.debug.is_some() {
+    if attr.debug_value() {
         println!("{}", output);
     }
 
@@ -331,7 +331,7 @@ impl EntraitAttr {
     }
 
     fn gated_mock_attr(&self, span: Span, attr: TokenStream) -> TokenStream {
-        match self.default_option(self.export, false).0 {
+        match self.export_value() {
             true => quote_spanned! {span=>
                 #[#attr]
             },
@@ -361,14 +361,14 @@ impl InputFn {
     }
 
     pub fn use_associated_future(&self, attr: &EntraitAttr) -> bool {
-        match (attr.get_async_strategy(), self.fn_sig.asyncness) {
+        match (attr.async_strategy(), self.fn_sig.asyncness) {
             (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async)) => true,
             _ => false,
         }
     }
 
     fn opt_async_trait_attribute(&self, attr: &EntraitAttr) -> Option<proc_macro2::TokenStream> {
-        match (attr.get_async_strategy(), self.fn_sig.asyncness) {
+        match (attr.async_strategy(), self.fn_sig.asyncness) {
             (SpanOpt(AsyncStrategy::AsyncTrait, span), Some(_async)) => {
                 Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })
             }
