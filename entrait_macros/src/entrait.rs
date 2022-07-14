@@ -10,6 +10,8 @@ use syn::spanned::Spanned;
 
 use crate::deps;
 use crate::input::*;
+use crate::signature;
+use crate::signature::EntraitSignature;
 
 pub fn invoke(
     attr: proc_macro::TokenStream,
@@ -35,8 +37,9 @@ pub fn invoke(
 
 fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
     let deps = deps::analyze_deps(&input_fn, attr)?;
-    let trait_def = gen_trait_def(attr, &input_fn, &deps)?;
-    let impl_blocks = gen_impl_blocks(attr, &input_fn, &deps)?;
+    let entrait_sig = signature::SignatureConverter::new(attr, &input_fn, &deps).convert();
+    let trait_def = gen_trait_def(attr, &input_fn, &entrait_sig, &deps)?;
+    let impl_blocks = gen_impl_blocks(attr, &input_fn, &entrait_sig, &deps)?;
 
     let InputFn {
         fn_attrs,
@@ -56,10 +59,11 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
 fn gen_trait_def(
     attr: &EntraitAttr,
     input_fn: &InputFn,
+    entrait_sig: &EntraitSignature,
     deps: &deps::Deps,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let span = attr.trait_ident.span();
-    let trait_def = gen_trait_def_no_mock(attr, input_fn, deps)?;
+    let trait_def = gen_trait_def_no_mock(attr, input_fn, entrait_sig)?;
 
     Ok(
         match (
@@ -79,40 +83,32 @@ fn gen_trait_def(
 fn gen_trait_def_no_mock(
     attr: &EntraitAttr,
     input_fn: &InputFn,
-    deps: &deps::Deps,
+    entrait_sig: &EntraitSignature,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let InputFn { fn_sig, .. } = input_fn;
     let trait_visibility = &attr.trait_visibility;
     let trait_ident = &attr.trait_ident;
     let span = trait_ident.span();
-    let input_fn_ident = &fn_sig.ident;
-    let return_type = &fn_sig.output;
+    let trait_fn_sig = &entrait_sig.sig;
 
-    let opt_async = input_fn.opt_async();
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps, attr);
-
-    if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
-        let output_ty = output_type_tokens(return_type);
-
-        Ok(quote_spanned! { span=>
-            #trait_visibility trait #trait_ident {
-                type Fut<'entrait>: ::core::future::Future<Output = #output_ty> + Send
-                where
-                    Self: 'entrait;
-
-                fn #input_fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait>;
+    Ok(
+        if let Some(associated_fut) = &entrait_sig.associated_fut_decl {
+            quote_spanned! { span=>
+                #trait_visibility trait #trait_ident {
+                    #associated_fut
+                    #trait_fn_sig;
+                }
             }
-        })
-    } else {
-        let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
+        } else {
+            let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
 
-        Ok(quote_spanned! { span=>
-            #opt_async_trait_attr
-            #trait_visibility trait #trait_ident {
-                #opt_async fn #input_fn_ident(#trait_fn_inputs) #return_type;
+            quote_spanned! { span=>
+                #opt_async_trait_attr
+                #trait_visibility trait #trait_ident {
+                    #trait_fn_sig;
+                }
             }
-        })
-    }
+        },
+    )
 }
 
 ///
@@ -129,6 +125,7 @@ fn gen_trait_def_no_mock(
 fn gen_impl_blocks(
     attr: &EntraitAttr,
     input_fn: &InputFn,
+    entrait_sig: &EntraitSignature,
     deps: &deps::Deps,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let EntraitAttr { trait_ident, .. } = attr;
@@ -139,17 +136,13 @@ fn gen_impl_blocks(
     let mut input_fn_ident = fn_sig.ident.clone();
     input_fn_ident.set_span(span);
 
-    // TODO: set span for output
-    let return_type = &fn_sig.output;
-
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
-    let trait_fn_inputs = input_fn.trait_fn_inputs(span, deps, attr);
 
     // Where bounds on the entire impl block,
     // TODO: Is it correct to always use `Sync` in here here?
     // It must be for Async at least?
     let impl_where_bounds = match deps {
-        deps::Deps::Generic { trait_bounds } => {
+        deps::Deps::Generic { trait_bounds, .. } => {
             let impl_trait_bounds = if trait_bounds.is_empty() {
                 None
             } else {
@@ -158,7 +151,7 @@ fn gen_impl_blocks(
                 })
             };
 
-            let standard_bounds = if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
+            let standard_bounds = if input_fn.use_associated_future(attr) {
                 // Deps must be 'static for zero-cost futures to work
                 quote! { Sync + 'static }
             } else {
@@ -177,36 +170,25 @@ fn gen_impl_blocks(
         },
     };
 
-    // Future type for 'associated_future' feature
-    let fut_type = if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
-        let output_ty = output_type_tokens(return_type);
-        Some(quote_spanned! { span=>
-            type Fut<'entrait> = impl ::core::future::Future<Output = #output_ty>
-            where
-                Self: 'entrait;
-        })
-    } else {
-        None
-    };
+    let associated_fut_impl = &entrait_sig.associated_fut_impl;
 
     let generic_fn_def = gen_delegating_fn_item(
         span,
         input_fn,
         &input_fn_ident,
-        &trait_fn_inputs,
+        entrait_sig,
         match deps {
-            deps::Deps::Generic { trait_bounds: _ } => FnReceiverKind::SelfArg,
+            deps::Deps::Generic { .. } => FnReceiverKind::SelfArg,
             deps::Deps::Concrete(_) => FnReceiverKind::SelfAsRefReceiver,
             deps::Deps::NoDeps => FnReceiverKind::RefSelfArg,
         },
         deps,
-        attr,
     )?;
 
     let generic_impl_block = quote_spanned! { span=>
         #async_trait_attribute
         impl<EntraitT> #trait_ident for ::entrait::Impl<EntraitT> #impl_where_bounds {
-            #fut_type
+            #associated_fut_impl
             #generic_fn_def
         }
     };
@@ -217,10 +199,9 @@ fn gen_impl_blocks(
                 span,
                 input_fn,
                 &input_fn_ident,
-                &trait_fn_inputs,
+                entrait_sig,
                 FnReceiverKind::SelfArg,
                 deps,
-                attr,
             )?;
 
             quote_spanned! { span=>
@@ -229,7 +210,7 @@ fn gen_impl_blocks(
                 // Specific impl for the concrete type:
                 #async_trait_attribute
                 impl #trait_ident for #path {
-                    #fut_type
+                    #associated_fut_impl
                     #concrete_fn_def
                 }
             }
@@ -242,17 +223,14 @@ fn gen_delegating_fn_item(
     span: Span,
     input_fn: &InputFn,
     fn_ident: &syn::Ident,
-    trait_fn_inputs: &TokenStream,
+    entrait_sig: &EntraitSignature,
     receiver_kind: FnReceiverKind,
     deps: &deps::Deps,
-    attr: &EntraitAttr,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let opt_async = input_fn.opt_async();
-    let opt_dot_await = input_fn.opt_dot_await(span);
-    // TODO: set span for output
-    let return_type = &input_fn.fn_sig.output;
+    let mut opt_dot_await = input_fn.opt_dot_await(span);
+    let trait_fn_sig = &entrait_sig.sig;
 
-    let params = input_fn
+    let arguments = input_fn
         .fn_sig
         .inputs
         .iter()
@@ -286,24 +264,20 @@ fn gen_delegating_fn_item(
 
     let function_call = match receiver_kind {
         FnReceiverKind::SelfAsRefReceiver => quote_spanned! { span=>
-            self.as_ref().#fn_ident(#(#params),*)
+            self.as_ref().#fn_ident(#(#arguments),*)
         },
         _ => quote_spanned! { span=>
-            #fn_ident(#(#params),*)
+            #fn_ident(#(#arguments),*)
         },
     };
 
-    Ok(if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
-        quote_spanned! { span=>
-            fn #fn_ident<'entrait>(#trait_fn_inputs) -> Self::Fut<'entrait> {
-                #function_call
-            }
-        }
-    } else {
-        quote_spanned! { span=>
-            #opt_async fn #fn_ident(#trait_fn_inputs) #return_type {
-                #function_call #opt_dot_await
-            }
+    if entrait_sig.associated_fut_decl.is_some() {
+        opt_dot_await = None;
+    }
+
+    Ok(quote_spanned! { span=>
+        #trait_fn_sig {
+            #function_call #opt_dot_await
         }
     })
 }
@@ -319,7 +293,7 @@ impl EntraitAttr {
                 let fn_ident = &input_fn.fn_sig.ident;
 
                 let unmocked = match deps {
-                    deps::Deps::Generic { trait_bounds: _ } => quote! { #fn_ident },
+                    deps::Deps::Generic { .. } => quote! { #fn_ident },
                     deps::Deps::Concrete(_) => quote! { _ },
                     deps::Deps::NoDeps => {
                         let inputs =
@@ -378,14 +352,6 @@ enum FnReceiverKind {
 }
 
 impl InputFn {
-    fn opt_async(&self) -> Option<proc_macro2::TokenStream> {
-        if let Some(async_) = self.fn_sig.asyncness {
-            Some(quote! { #async_ })
-        } else {
-            None
-        }
-    }
-
     fn opt_dot_await(&self, span: Span) -> Option<proc_macro2::TokenStream> {
         if let Some(_) = self.fn_sig.asyncness {
             Some(quote_spanned! { span=> .await })
@@ -394,74 +360,19 @@ impl InputFn {
         }
     }
 
+    pub fn use_associated_future(&self, attr: &EntraitAttr) -> bool {
+        match (attr.get_async_strategy(), self.fn_sig.asyncness) {
+            (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async)) => true,
+            _ => false,
+        }
+    }
+
     fn opt_async_trait_attribute(&self, attr: &EntraitAttr) -> Option<proc_macro2::TokenStream> {
-        match (
-            attr.get_async_strategy(),
-            self.fn_sig.asyncness,
-        ) {
+        match (attr.get_async_strategy(), self.fn_sig.asyncness) {
             (SpanOpt(AsyncStrategy::AsyncTrait, span), Some(_async)) => {
                 Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })
             }
             _ => None,
         }
-    }
-
-    fn trait_fn_inputs(
-        &self,
-        span: Span,
-        deps: &deps::Deps,
-        attr: &EntraitAttr,
-    ) -> proc_macro2::TokenStream {
-        let mut input_args = self.fn_sig.inputs.clone();
-
-        // strip away attributes
-        for fn_arg in input_args.iter_mut() {
-            match fn_arg {
-                syn::FnArg::Receiver(receiver) => {
-                    receiver.attrs = vec![];
-                }
-                syn::FnArg::Typed(pat_type) => {
-                    pat_type.attrs = vec![];
-                }
-            }
-        }
-
-        let self_lifetime = if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
-            Some(quote! { 'entrait })
-        } else {
-            None
-        };
-
-        match deps {
-            deps::Deps::NoDeps => {
-                input_args.insert(
-                    0,
-                    syn::parse_quote_spanned! { span=> & #self_lifetime self },
-                );
-            }
-            _ => {
-                if input_args.is_empty() {
-                    return if let AsyncStrategy::AssociatedFuture = attr.get_async_strategy().0 {
-                        quote! { & #self_lifetime self }
-                    } else {
-                        quote! {}
-                    };
-                }
-
-                let first_mut = input_args.first_mut().unwrap();
-                *first_mut = syn::parse_quote_spanned! { span=> & #self_lifetime self };
-            }
-        }
-
-        quote! {
-            #input_args
-        }
-    }
-}
-
-fn output_type_tokens(return_type: &syn::ReturnType) -> TokenStream {
-    match return_type {
-        syn::ReturnType::Default => quote! { () },
-        syn::ReturnType::Type(_, ty) => quote! { #ty },
     }
 }

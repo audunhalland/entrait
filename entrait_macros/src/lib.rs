@@ -11,6 +11,7 @@ use proc_macro::TokenStream;
 mod deps;
 mod entrait;
 mod input;
+mod signature;
 
 use input::AsyncStrategy;
 
@@ -27,14 +28,14 @@ pub fn entrait_export(attr: TokenStream, input: TokenStream) -> proc_macro::Toke
 }
 
 #[proc_macro_attribute]
-pub fn entrait_async_trait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
+pub fn entrait_use_async_trait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
     entrait::invoke(attr, input, |attr| {
         attr.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
     })
 }
 
 #[proc_macro_attribute]
-pub fn entrait_export_async_trait(
+pub fn entrait_export_use_async_trait(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {

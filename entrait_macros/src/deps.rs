@@ -3,6 +3,7 @@ use syn::spanned::Spanned;
 
 pub enum Deps<'f> {
     Generic {
+        generic_param: Option<syn::Ident>,
         trait_bounds: Vec<&'f syn::TypeParamBound>,
     },
     Concrete(&'f syn::Type),
@@ -57,6 +58,7 @@ fn extract_deps_from_type<'f>(
         syn::Type::ImplTrait(type_impl_trait) => {
             // Simple case, bounds are actually inline, no lookup necessary
             Ok(Deps::Generic {
+                generic_param: None,
                 trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
             })
         }
@@ -90,12 +92,15 @@ fn extract_deps_from_type<'f>(
     }
 }
 
-fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) -> Option<Deps<'f>> {
+fn find_generic_bounds<'f>(
+    func: &'f InputFn,
+    generic_param_ident: &syn::Ident,
+) -> Option<Deps<'f>> {
     let generic_params = &func.fn_sig.generics.params;
 
     let matching_type_param = generic_params.into_iter().find_map(|param| match param {
         syn::GenericParam::Type(type_param) => {
-            if &type_param.ident == generic_arg_ident {
+            if &type_param.ident == generic_param_ident {
                 Some(type_param)
             } else {
                 None
@@ -126,7 +131,7 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
                         }
                         let first_segment = type_path.path.segments.first().unwrap();
 
-                        if &first_segment.ident == generic_arg_ident {
+                        if &first_segment.ident == generic_param_ident {
                             let where_paths = extract_trait_bounds(&predicate_type.bounds);
 
                             trait_bounds.extend(where_paths);
@@ -139,7 +144,10 @@ fn find_generic_bounds<'f>(func: &'f InputFn, generic_arg_ident: &syn::Ident) ->
         }
     }
 
-    Some(Deps::Generic { trait_bounds })
+    Some(Deps::Generic {
+        generic_param: Some(generic_param_ident.clone()),
+        trait_bounds,
+    })
 }
 
 fn extract_trait_bounds(
