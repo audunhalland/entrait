@@ -296,7 +296,7 @@ impl EntraitAttr {
                     deps::Deps::Generic { .. } => quote! { #fn_ident },
                     deps::Deps::Concrete(_) => quote! { _ },
                     deps::Deps::NoDeps => {
-                        let inputs =
+                        let arguments =
                             input_fn
                                 .fn_sig
                                 .inputs
@@ -309,7 +309,7 @@ impl EntraitAttr {
                                     },
                                 });
 
-                        quote! { #fn_ident(#(#inputs),*) }
+                        quote! { #fn_ident(#(#arguments),*) }
                     }
                 };
 

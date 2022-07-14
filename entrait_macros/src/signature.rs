@@ -11,14 +11,14 @@ pub struct EntraitSignature {
     pub sig: syn::Signature,
     pub associated_fut_decl: Option<proc_macro2::TokenStream>,
     pub associated_fut_impl: Option<proc_macro2::TokenStream>,
-    pub fut_lifetimes: Vec<FutureLifetime>,
+    pub lifetimes: Vec<EntraitLifetime>,
 }
 
 /// Only used for associated future:
-pub struct FutureLifetime {
+pub struct EntraitLifetime {
     pub lifetime: syn::Lifetime,
     pub source: SigComponent,
-    pub explicit: ExplicitLifetime,
+    pub user_provided: UserProvidedLifetime,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -28,7 +28,7 @@ pub enum SigComponent {
     Output,
 }
 
-pub struct ExplicitLifetime(bool);
+pub struct UserProvidedLifetime(bool);
 
 pub struct SignatureConverter<'a> {
     attr: &'a EntraitAttr,
@@ -61,7 +61,7 @@ impl<'a> SignatureConverter<'a> {
             sig: self.input_fn.fn_sig.clone(),
             associated_fut_decl: None,
             associated_fut_impl: None,
-            fut_lifetimes: vec![],
+            lifetimes: vec![],
         };
 
         // strip away attributes
@@ -76,11 +76,11 @@ impl<'a> SignatureConverter<'a> {
             }
         }
 
+        let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
+        self.generate_receiver(&mut entrait_sig.sig, receiver_generation);
+
         if self.input_fn.use_associated_future(self.attr) {
-            self.convert_to_associated_future(&mut entrait_sig);
-        } else {
-            let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
-            self.generate_receiver(&mut entrait_sig.sig, receiver_generation);
+            self.convert_to_associated_future(&mut entrait_sig, receiver_generation);
         }
 
         self.remove_deps_generic_param(&mut entrait_sig.sig);
@@ -140,30 +140,24 @@ impl<'a> SignatureConverter<'a> {
         }
     }
 
-    fn convert_to_associated_future(&self, entrait_sig: &mut EntraitSignature) {
+    fn convert_to_associated_future(
+        &self,
+        entrait_sig: &mut EntraitSignature,
+        receiver_generation: ReceiverGeneration,
+    ) {
         let span = self.attr.trait_ident.span();
 
-        let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
-        self.generate_receiver(&mut entrait_sig.sig, receiver_generation);
-
-        let mut elision_detector = ElisionDetector::new(receiver_generation);
-        elision_detector.detect(&mut entrait_sig.sig);
-
-        make_all_lifetimes_explicit(
-            entrait_sig,
-            receiver_generation,
-            elision_detector.elided_inputs,
-        );
+        expand_lifetimes(entrait_sig, receiver_generation);
 
         let output_ty = output_type_tokens(&entrait_sig.sig.output);
 
         let fut_lifetimes = entrait_sig
-            .fut_lifetimes
+            .lifetimes
             .iter()
             .map(|ft| &ft.lifetime)
             .collect::<Vec<_>>();
         let self_lifetimes = entrait_sig
-            .fut_lifetimes
+            .lifetimes
             .iter()
             .filter(|ft| ft.source == SigComponent::Receiver)
             .map(|ft| &ft.lifetime)
@@ -176,22 +170,20 @@ impl<'a> SignatureConverter<'a> {
         generics.lt_token.get_or_insert(syn::parse_quote! { < });
         generics.gt_token.get_or_insert(syn::parse_quote! { > });
 
-        // insert non-explicit/generated lifetime params at the front
-        for (index, fut_lifetime) in entrait_sig
-            .fut_lifetimes
+        // insert generated/non-user-provided lifetimes
+        for fut_lifetime in entrait_sig
+            .lifetimes
             .iter()
-            .filter(|fut_lifetime| !fut_lifetime.explicit.0)
-            .enumerate()
+            .filter(|lt| !lt.user_provided.0)
         {
-            generics.params.insert(
-                index,
-                syn::GenericParam::Lifetime(syn::LifetimeDef {
+            generics
+                .params
+                .push(syn::GenericParam::Lifetime(syn::LifetimeDef {
                     attrs: vec![],
                     lifetime: fut_lifetime.lifetime.clone(),
                     colon_token: None,
                     bounds: syn::punctuated::Punctuated::new(),
-                }),
-            );
+                }));
         }
 
         entrait_sig.sig.output = syn::parse_quote_spanned! {span =>
@@ -289,79 +281,80 @@ fn tidy_generics(generics: &mut syn::Generics) {
     }
 }
 
-fn make_all_lifetimes_explicit(
-    entrait_sig: &mut EntraitSignature,
-    receiver_generation: ReceiverGeneration,
-    elided_inputs: HashSet<usize>,
-) {
-    let mut explicitor = Explicator {
-        current: SigComponent::Receiver,
-        elided_inputs,
-        lifetimes: vec![],
-    };
+fn expand_lifetimes(entrait_sig: &mut EntraitSignature, receiver_generation: ReceiverGeneration) {
+    let mut elision_detector = ElisionDetector::new(receiver_generation);
+    elision_detector.detect(&mut entrait_sig.sig);
+
+    let mut expander = LifetimeExpander::new(elision_detector.elided_params);
 
     match receiver_generation {
         ReceiverGeneration::None => {
             for (index, arg) in entrait_sig.sig.inputs.iter_mut().enumerate() {
-                explicitor.explicate_arg(index, arg);
+                expander.expand_param(index, arg);
             }
         }
-        _ => {
-            explicitor.explicate_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
+        ReceiverGeneration::Rewrite | ReceiverGeneration::Insert => {
+            expander.expand_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
 
             for (index, arg) in entrait_sig.sig.inputs.iter_mut().skip(1).enumerate() {
-                explicitor.explicate_arg(index, arg);
+                expander.expand_param(index, arg);
             }
         }
     }
 
-    explicitor.explicate_output(&mut entrait_sig.sig.output);
+    expander.expand_output(&mut entrait_sig.sig.output);
 
-    for future_lifetime in explicitor.lifetimes.into_iter() {
-        entrait_sig.fut_lifetimes.push(future_lifetime);
+    entrait_sig.lifetimes.append(&mut expander.lifetimes);
+}
+
+/// Looks at elided lifetimes and makes them explicit.
+/// Also collects all lifetimes into `lifetimes`.
+struct LifetimeExpander {
+    current_component: SigComponent,
+    elided_params: HashSet<usize>,
+    lifetimes: Vec<EntraitLifetime>,
+}
+
+impl LifetimeExpander {
+    fn new(elided_params: HashSet<usize>) -> Self {
+        Self {
+            current_component: SigComponent::Receiver,
+            elided_params,
+            lifetimes: vec![],
+        }
     }
-}
 
-struct Explicator {
-    current: SigComponent,
-    elided_inputs: HashSet<usize>,
-    lifetimes: Vec<FutureLifetime>,
-}
-
-impl Explicator {
-    fn explicate_receiver(&mut self, arg: &mut syn::FnArg) {
-        self.current = SigComponent::Receiver;
+    fn expand_receiver(&mut self, arg: &mut syn::FnArg) {
+        self.current_component = SigComponent::Receiver;
         self.visit_fn_arg_mut(arg);
     }
 
-    fn explicate_arg(&mut self, index: usize, arg: &mut syn::FnArg) {
-        self.current = SigComponent::Param(index);
+    fn expand_param(&mut self, index: usize, arg: &mut syn::FnArg) {
+        self.current_component = SigComponent::Param(index);
         self.visit_fn_arg_mut(arg);
     }
 
-    fn explicate_output(&mut self, output: &mut syn::ReturnType) {
-        self.current = SigComponent::Output;
+    fn expand_output(&mut self, output: &mut syn::ReturnType) {
+        self.current_component = SigComponent::Output;
         self.visit_return_type_mut(output);
     }
 
     fn make_lifetime_explicit(&mut self, lifetime: Option<syn::Lifetime>) -> syn::Lifetime {
-        match (self.current, lifetime) {
-            (SigComponent::Receiver | SigComponent::Param(_), Some(lifetime)) => {
-                self.register_lifetime(lifetime, ExplicitLifetime(true))
-            }
-            (SigComponent::Receiver | SigComponent::Param(_), None) => {
-                self.register_lifetime(self.new_lifetime(), ExplicitLifetime(false))
-            }
-            // Do not register explicit output lifetimes, should already be registered from inputs:
-            (SigComponent::Output, Some(lifetime)) => lifetime,
-            (SigComponent::Output, None) => match self.find_lifetime_for_output() {
-                Some(lifetime) => lifetime,
-                None => self.broken_lifetime(),
+        match self.current_component {
+            SigComponent::Receiver | SigComponent::Param(_) => match lifetime {
+                Some(lifetime) => self.register_user_lifetime(lifetime),
+                None => self.register_new_entrait_lifetime(),
             },
+            // Do not register user-provided output lifetimes, should already be registered from inputs:
+            SigComponent::Output => lifetime
+                // If lifetime was elided, try to find it:
+                .or_else(|| self.find_output_lifetime())
+                // If not, there must be some kind of compile error somewhere else
+                .unwrap_or_else(|| self.broken_lifetime()),
         }
     }
 
-    fn find_lifetime_for_output(&self) -> Option<syn::Lifetime> {
+    fn find_output_lifetime(&self) -> Option<syn::Lifetime> {
         let from_component = match self.only_elided_input() {
             // If only one input was elided, use that input:
             Some(elided_input) => SigComponent::Param(elided_input),
@@ -371,45 +364,50 @@ impl Explicator {
 
         self.lifetimes
             .iter()
-            .find(|generated| generated.source == from_component)
-            .map(|generated| generated.lifetime.clone())
+            .find(|lt| lt.source == from_component)
+            .map(|lt| lt.lifetime.clone())
     }
 
     fn only_elided_input(&self) -> Option<usize> {
-        if self.elided_inputs.len() == 1 {
-            self.elided_inputs.iter().next().map(|index| *index)
+        if self.elided_params.len() == 1 {
+            self.elided_params.iter().next().map(|index| *index)
         } else {
             None
         }
     }
 
-    fn new_lifetime(&self) -> syn::Lifetime {
+    fn register_user_lifetime(&mut self, lifetime: syn::Lifetime) -> syn::Lifetime {
+        self.register_lifetime(EntraitLifetime {
+            lifetime,
+            source: self.current_component,
+            user_provided: UserProvidedLifetime(true),
+        })
+    }
+
+    fn register_new_entrait_lifetime(&mut self) -> syn::Lifetime {
         let index = self.lifetimes.len();
-        syn::Lifetime::new(
-            &format!("'entrait{}", index),
-            proc_macro2::Span::call_site(),
-        )
+        self.register_lifetime(EntraitLifetime {
+            lifetime: syn::Lifetime::new(
+                &format!("'entrait{}", index),
+                proc_macro2::Span::call_site(),
+            ),
+            source: self.current_component,
+            user_provided: UserProvidedLifetime(false),
+        })
+    }
+
+    fn register_lifetime(&mut self, entrait_lifetime: EntraitLifetime) -> syn::Lifetime {
+        let lifetime = entrait_lifetime.lifetime.clone();
+        self.lifetimes.push(entrait_lifetime);
+        lifetime
     }
 
     fn broken_lifetime(&self) -> syn::Lifetime {
         syn::Lifetime::new("'entrait_broken", proc_macro2::Span::call_site())
     }
-
-    fn register_lifetime(
-        &mut self,
-        lifetime: syn::Lifetime,
-        explicit: ExplicitLifetime,
-    ) -> syn::Lifetime {
-        self.lifetimes.push(FutureLifetime {
-            lifetime: lifetime.clone(),
-            source: self.current,
-            explicit,
-        });
-        lifetime
-    }
 }
 
-impl<'s> syn::visit_mut::VisitMut for Explicator {
+impl<'s> syn::visit_mut::VisitMut for LifetimeExpander {
     fn visit_receiver_mut(&mut self, receiver: &mut syn::Receiver) {
         if let Some((_, lifetime)) = &mut receiver.reference {
             *lifetime = Some(self.make_lifetime_explicit(lifetime.clone()));
@@ -422,9 +420,9 @@ impl<'s> syn::visit_mut::VisitMut for Explicator {
         syn::visit_mut::visit_type_reference_mut(self, reference);
     }
 
-    fn visit_lifetime_mut(&mut self, i: &mut syn::Lifetime) {
-        if i.ident == "_" {
-            *i = self.make_lifetime_explicit(Some(i.clone()));
+    fn visit_lifetime_mut(&mut self, lifetime: &mut syn::Lifetime) {
+        if lifetime.ident == "_" {
+            *lifetime = self.make_lifetime_explicit(Some(lifetime.clone()));
         }
     }
 }
@@ -432,7 +430,7 @@ impl<'s> syn::visit_mut::VisitMut for Explicator {
 struct ElisionDetector {
     receiver_generation: ReceiverGeneration,
     current_input: usize,
-    elided_inputs: HashSet<usize>,
+    elided_params: HashSet<usize>,
 }
 
 impl ElisionDetector {
@@ -440,7 +438,7 @@ impl ElisionDetector {
         Self {
             receiver_generation,
             current_input: 0,
-            elided_inputs: Default::default(),
+            elided_params: Default::default(),
         }
     }
 
@@ -465,14 +463,14 @@ impl ElisionDetector {
 impl syn::visit_mut::VisitMut for ElisionDetector {
     fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
         if reference.lifetime.is_none() {
-            self.elided_inputs.insert(self.current_input);
+            self.elided_params.insert(self.current_input);
         }
         syn::visit_mut::visit_type_reference_mut(self, reference);
     }
 
     fn visit_lifetime_mut(&mut self, lifetime: &mut syn::Lifetime) {
         if lifetime.ident == "_" {
-            self.elided_inputs.insert(self.current_input);
+            self.elided_params.insert(self.current_input);
         }
     }
 }
