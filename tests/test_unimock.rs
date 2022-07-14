@@ -332,13 +332,10 @@ mod async_no_deps_etc {
         panic!()
     }
 
-    // BUG: will work if 'b: 'a ???
-    /*
     #[entrait(Borrow3)]
-    async fn borrow3<'a, 'b>(_: &'a impl Bar, arg: &'b i32) -> &'b i32 {
+    async fn borrow3<'a>(_: &impl Bar, arg: &'a i32) -> &'a i32 {
         arg
     }
-    */
 
     #[allow(unused)]
     struct Borrowing<'a>(&'a i32);
