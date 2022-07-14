@@ -338,19 +338,12 @@ mod async_no_deps_etc {
     }
 
     #[allow(unused)]
-    struct Borrowing<'a>(&'a i32);
+    pub struct Borrowing<'a>(&'a i32);
 
-    // BUG: Does not work in unimock, needs GAT design:
-    // ```
-    // type Output = Borrowing<'a>;
-    // ```
-    // Maybe it will never work for lifetimes other than self.
-    /*
     #[entrait(Borrow4)]
     async fn borrow4<'a>(_: &'a impl Bar, _arg: &i32) -> Borrowing<'a> {
         panic!()
     }
-    */
 
     #[tokio::test]
     async fn test_it() {
