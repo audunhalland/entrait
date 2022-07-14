@@ -288,22 +288,22 @@ mod async_no_deps_etc {
 
     struct App;
 
-    #[entrait(Foo, associated_future)]
+    #[entrait(Foo)]
     async fn foo(deps: &impl Bar) -> i32 {
         deps.bar().await
     }
 
-    #[entrait(Bar, associated_future)]
+    #[entrait(Bar)]
     async fn bar(deps: &impl Baz) -> i32 {
         deps.baz().await
     }
 
-    #[entrait(Baz, associated_future)]
+    #[entrait(Baz)]
     async fn baz(_: &App) -> i32 {
         42
     }
 
-    #[entrait(NoDeps, associated_future, no_deps)]
+    #[entrait(NoDeps, no_deps)]
     async fn no_deps(arg: i32) -> i32 {
         arg
     }
