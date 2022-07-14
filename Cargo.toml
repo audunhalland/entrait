@@ -15,7 +15,6 @@ unimock = ["dep:unimock"]
 use-async-trait = ["async-trait"]
 use-associated-future = []
 async-trait = ["dep:async-trait"]
-nightly-tests = []
 
 [dependencies]
 entrait_macros = { path = "entrait_macros", version = "0.3.3" }
