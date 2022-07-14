@@ -17,19 +17,30 @@ pub struct EntraitSignature {
 /// Only used for associated future:
 pub struct FutureLifetime {
     pub lifetime: syn::Lifetime,
-    pub kind: LifetimeKind,
+    pub source: SigComponent,
+    pub explicit: ExplicitLifetime,
 }
 
-#[derive(Eq, PartialEq)]
-pub enum LifetimeKind {
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum SigComponent {
     Receiver,
-    Other,
+    Param(usize),
+    Output,
 }
+
+pub struct ExplicitLifetime(bool);
 
 pub struct SignatureConverter<'a> {
     attr: &'a EntraitAttr,
     input_fn: &'a InputFn,
     deps: &'a Deps<'a>,
+}
+
+#[derive(Clone, Copy)]
+enum ReceiverGeneration {
+    Insert,
+    Rewrite,
+    None,
 }
 
 impl<'a> SignatureConverter<'a> {
@@ -68,7 +79,8 @@ impl<'a> SignatureConverter<'a> {
         if self.input_fn.use_associated_future(self.attr) {
             self.convert_to_associated_future(&mut entrait_sig);
         } else {
-            self.make_self_parameter(&mut entrait_sig.sig);
+            let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
+            self.generate_receiver(&mut entrait_sig.sig, receiver_generation);
         }
 
         self.remove_deps_generic_param(&mut entrait_sig.sig);
@@ -77,42 +89,71 @@ impl<'a> SignatureConverter<'a> {
         entrait_sig
     }
 
-    fn make_self_parameter(&self, sig: &mut syn::Signature) -> bool {
-        let span = self.attr.trait_ident.span();
+    fn detect_receiver_generation(&self, sig: &syn::Signature) -> ReceiverGeneration {
         match self.deps {
-            Deps::NoDeps => {
-                sig.inputs
-                    .insert(0, syn::parse_quote_spanned! { span=> &self });
-                true
-            }
+            Deps::NoDeps => ReceiverGeneration::Insert,
             _ => {
                 if sig.inputs.is_empty() {
                     if self.input_fn.use_associated_future(self.attr) {
-                        sig.inputs
-                            .insert(0, syn::parse_quote_spanned! { span=> &self });
-                        true
+                        ReceiverGeneration::Insert
                     } else {
-                        false
+                        ReceiverGeneration::None // bug?
                     }
                 } else {
-                    let first_mut = sig.inputs.first_mut().unwrap();
-                    *first_mut = syn::parse_quote_spanned! { span=> &self };
-                    true
+                    ReceiverGeneration::Rewrite
                 }
             }
+        }
+    }
+
+    fn generate_receiver(&self, sig: &mut syn::Signature, receiver_generation: ReceiverGeneration) {
+        let span = self.attr.trait_ident.span();
+        match receiver_generation {
+            ReceiverGeneration::Insert => {
+                sig.inputs
+                    .insert(0, syn::parse_quote_spanned! { span=> &self });
+            }
+            ReceiverGeneration::Rewrite => {
+                let input = sig.inputs.first_mut().unwrap();
+                match input {
+                    syn::FnArg::Typed(pat_type) => match pat_type.ty.as_ref() {
+                        syn::Type::Reference(type_reference) => {
+                            let and_token = type_reference.and_token.clone();
+                            let lifetime = type_reference.lifetime.clone();
+
+                            *input = syn::FnArg::Receiver(syn::Receiver {
+                                attrs: vec![],
+                                reference: Some((and_token, lifetime)),
+                                mutability: None,
+                                self_token: syn::parse_quote_spanned! { span=> self },
+                            });
+                        }
+                        _ => {
+                            let first_mut = sig.inputs.first_mut().unwrap();
+                            *first_mut = syn::parse_quote_spanned! { span=> &self };
+                        }
+                    },
+                    syn::FnArg::Receiver(_) => panic!(),
+                }
+            }
+            ReceiverGeneration::None => {}
         }
     }
 
     fn convert_to_associated_future(&self, entrait_sig: &mut EntraitSignature) {
         let span = self.attr.trait_ident.span();
 
-        let mut elision_detector: ElisionDetector = Default::default();
+        let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
+        self.generate_receiver(&mut entrait_sig.sig, receiver_generation);
+
+        let mut elision_detector = ElisionDetector::new(receiver_generation);
         elision_detector.detect(&mut entrait_sig.sig);
 
-        // make the self parameter after the elision detector has run, since it indexes parameters without a receiver
-        let has_receiver = self.make_self_parameter(&mut entrait_sig.sig);
-
-        make_all_lifetimes_explicit(entrait_sig, has_receiver, elision_detector.elided_inputs);
+        make_all_lifetimes_explicit(
+            entrait_sig,
+            receiver_generation,
+            elision_detector.elided_inputs,
+        );
 
         let output_ty = output_type_tokens(&entrait_sig.sig.output);
 
@@ -124,7 +165,7 @@ impl<'a> SignatureConverter<'a> {
         let self_lifetimes = entrait_sig
             .fut_lifetimes
             .iter()
-            .filter(|ft| ft.kind == LifetimeKind::Receiver)
+            .filter(|ft| ft.source == SigComponent::Receiver)
             .map(|ft| &ft.lifetime)
             .collect::<Vec<_>>();
 
@@ -135,13 +176,18 @@ impl<'a> SignatureConverter<'a> {
         generics.lt_token.get_or_insert(syn::parse_quote! { < });
         generics.gt_token.get_or_insert(syn::parse_quote! { > });
 
-        // insert lifetime params at the front
-        for (index, fut_lifetime) in fut_lifetimes.iter().enumerate() {
+        // insert non-explicit/generated lifetime params at the front
+        for (index, fut_lifetime) in entrait_sig
+            .fut_lifetimes
+            .iter()
+            .filter(|fut_lifetime| !fut_lifetime.explicit.0)
+            .enumerate()
+        {
             generics.params.insert(
                 index,
                 syn::GenericParam::Lifetime(syn::LifetimeDef {
                     attrs: vec![],
-                    lifetime: (*fut_lifetime).clone(),
+                    lifetime: fut_lifetime.lifetime.clone(),
                     colon_token: None,
                     bounds: syn::punctuated::Punctuated::new(),
                 }),
@@ -243,9 +289,9 @@ fn tidy_generics(generics: &mut syn::Generics) {
     }
 }
 
-pub fn make_all_lifetimes_explicit(
+fn make_all_lifetimes_explicit(
     entrait_sig: &mut EntraitSignature,
-    has_receiver: bool,
+    receiver_generation: ReceiverGeneration,
     elided_inputs: HashSet<usize>,
 ) {
     let mut explicitor = Explicator {
@@ -254,47 +300,32 @@ pub fn make_all_lifetimes_explicit(
         lifetimes: vec![],
     };
 
-    if has_receiver {
-        explicitor.explicate_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
-
-        for (index, arg) in entrait_sig.sig.inputs.iter_mut().skip(1).enumerate() {
-            explicitor.explicate_arg(index, arg);
+    match receiver_generation {
+        ReceiverGeneration::None => {
+            for (index, arg) in entrait_sig.sig.inputs.iter_mut().enumerate() {
+                explicitor.explicate_arg(index, arg);
+            }
         }
-    } else {
-        for (index, arg) in entrait_sig.sig.inputs.iter_mut().enumerate() {
-            explicitor.explicate_arg(index, arg);
+        _ => {
+            explicitor.explicate_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
+
+            for (index, arg) in entrait_sig.sig.inputs.iter_mut().skip(1).enumerate() {
+                explicitor.explicate_arg(index, arg);
+            }
         }
     }
 
     explicitor.explicate_output(&mut entrait_sig.sig.output);
 
-    for generated in explicitor.lifetimes.into_iter() {
-        entrait_sig.fut_lifetimes.push(FutureLifetime {
-            lifetime: generated.lifetime,
-            kind: match generated.source {
-                SigComponent::Receiver => LifetimeKind::Receiver,
-                _ => LifetimeKind::Other,
-            },
-        });
+    for future_lifetime in explicitor.lifetimes.into_iter() {
+        entrait_sig.fut_lifetimes.push(future_lifetime);
     }
-}
-
-#[derive(Copy, Clone, Eq, PartialEq)]
-enum SigComponent {
-    Receiver,
-    Indexed(usize),
-    Output,
-}
-
-struct GeneratedLifetime {
-    source: SigComponent,
-    lifetime: syn::Lifetime,
 }
 
 struct Explicator {
     current: SigComponent,
     elided_inputs: HashSet<usize>,
-    lifetimes: Vec<GeneratedLifetime>,
+    lifetimes: Vec<FutureLifetime>,
 }
 
 impl Explicator {
@@ -304,7 +335,7 @@ impl Explicator {
     }
 
     fn explicate_arg(&mut self, index: usize, arg: &mut syn::FnArg) {
-        self.current = SigComponent::Indexed(index);
+        self.current = SigComponent::Param(index);
         self.visit_fn_arg_mut(arg);
     }
 
@@ -314,23 +345,26 @@ impl Explicator {
     }
 
     fn make_lifetime_explicit(&mut self, lifetime: Option<syn::Lifetime>) -> syn::Lifetime {
-        let lifetime = lifetime.unwrap_or_else(|| self.generate_or_find());
-        self.register_lifetime(lifetime)
-    }
-
-    fn generate_or_find(&mut self) -> syn::Lifetime {
-        match self.current {
-            SigComponent::Output => self
-                .find_lifetime_for_output()
-                .unwrap_or_else(|| self.new_lifetime()),
-            _ => self.new_lifetime(),
+        match (self.current, lifetime) {
+            (SigComponent::Receiver | SigComponent::Param(_), Some(lifetime)) => {
+                self.register_lifetime(lifetime, ExplicitLifetime(true))
+            }
+            (SigComponent::Receiver | SigComponent::Param(_), None) => {
+                self.register_lifetime(self.new_lifetime(), ExplicitLifetime(false))
+            }
+            // Do not register explicit output lifetimes, should already be registered from inputs:
+            (SigComponent::Output, Some(lifetime)) => lifetime,
+            (SigComponent::Output, None) => match self.find_lifetime_for_output() {
+                Some(lifetime) => lifetime,
+                None => self.broken_lifetime(),
+            },
         }
     }
 
     fn find_lifetime_for_output(&self) -> Option<syn::Lifetime> {
         let from_component = match self.only_elided_input() {
             // If only one input was elided, use that input:
-            Some(elided_input) => SigComponent::Indexed(elided_input),
+            Some(elided_input) => SigComponent::Param(elided_input),
             // If not, use the receiver lifetime:
             None => SigComponent::Receiver,
         };
@@ -357,10 +391,19 @@ impl Explicator {
         )
     }
 
-    fn register_lifetime(&mut self, lifetime: syn::Lifetime) -> syn::Lifetime {
-        self.lifetimes.push(GeneratedLifetime {
-            source: self.current,
+    fn broken_lifetime(&self) -> syn::Lifetime {
+        syn::Lifetime::new("'entrait_broken", proc_macro2::Span::call_site())
+    }
+
+    fn register_lifetime(
+        &mut self,
+        lifetime: syn::Lifetime,
+        explicit: ExplicitLifetime,
+    ) -> syn::Lifetime {
+        self.lifetimes.push(FutureLifetime {
             lifetime: lifetime.clone(),
+            source: self.current,
+            explicit,
         });
         lifetime
     }
@@ -386,17 +429,35 @@ impl<'s> syn::visit_mut::VisitMut for Explicator {
     }
 }
 
-#[derive(Default)]
 struct ElisionDetector {
+    receiver_generation: ReceiverGeneration,
     current_input: usize,
     elided_inputs: HashSet<usize>,
 }
 
 impl ElisionDetector {
+    fn new(receiver_generation: ReceiverGeneration) -> Self {
+        Self {
+            receiver_generation,
+            current_input: 0,
+            elided_inputs: Default::default(),
+        }
+    }
+
     fn detect(&mut self, sig: &mut syn::Signature) {
         for (index, input) in sig.inputs.iter_mut().enumerate() {
-            self.current_input = index;
-            self.visit_fn_arg_mut(input);
+            match self.receiver_generation {
+                ReceiverGeneration::None => {
+                    self.current_input = index;
+                    self.visit_fn_arg_mut(input);
+                }
+                _ => {
+                    if index > 1 {
+                        self.current_input = index - 1;
+                        self.visit_fn_arg_mut(input);
+                    }
+                }
+            }
         }
     }
 }
@@ -409,8 +470,8 @@ impl syn::visit_mut::VisitMut for ElisionDetector {
         syn::visit_mut::visit_type_reference_mut(self, reference);
     }
 
-    fn visit_lifetime_mut(&mut self, i: &mut syn::Lifetime) {
-        if i.ident == "_" {
+    fn visit_lifetime_mut(&mut self, lifetime: &mut syn::Lifetime) {
+        if lifetime.ident == "_" {
             self.elided_inputs.insert(self.current_input);
         }
     }

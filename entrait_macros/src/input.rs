@@ -116,8 +116,12 @@ impl Parse for EntraitAttr {
             match input.parse::<Maybe<EntraitOpt>>()? {
                 Maybe::Some(EntraitOpt::NoDeps(opt)) => no_deps = Some(opt),
                 Maybe::Some(EntraitOpt::Debug(opt)) => debug = Some(opt),
-                Maybe::Some(EntraitOpt::AsyncTrait(opt)) => async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, opt.1)),
-                Maybe::Some(EntraitOpt::AssociatedFuture(opt)) => async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1)),
+                Maybe::Some(EntraitOpt::AsyncTrait(opt)) => {
+                    async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, opt.1))
+                }
+                Maybe::Some(EntraitOpt::AssociatedFuture(opt)) => {
+                    async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))
+                }
                 Maybe::Some(EntraitOpt::Export(opt)) => export = Some(opt),
                 Maybe::Some(EntraitOpt::Unimock(opt)) => unimock = Some(opt),
                 Maybe::Some(EntraitOpt::Mockall(opt)) => mockall = Some(opt),

@@ -2,6 +2,20 @@
 #![cfg_attr(feature = "use-associated-future", feature(generic_associated_types))]
 #![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
 
+mod sync {
+    use entrait::*;
+
+    #[entrait(Foo)]
+    fn foo(deps: &impl Bar) -> String {
+        deps.bar()
+    }
+
+    #[entrait(Bar)]
+    fn bar(_: &()) -> String {
+        "string".to_string()
+    }
+}
+
 #[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
 mod auth {
     use entrait::*;
@@ -307,6 +321,39 @@ mod async_no_deps_etc {
     async fn no_deps(arg: i32) -> i32 {
         arg
     }
+
+    #[entrait(Borrow1)]
+    async fn borrow1(_: &impl Bar) -> &i32 {
+        panic!()
+    }
+
+    #[entrait(Borrow2)]
+    async fn borrow2<'a, 'b>(_: &'a impl Bar, _arg: &'b i32) -> &'a i32 {
+        panic!()
+    }
+
+    // BUG: will work if 'b: 'a ???
+    /*
+    #[entrait(Borrow3)]
+    async fn borrow3<'a, 'b>(_: &'a impl Bar, arg: &'b i32) -> &'b i32 {
+        arg
+    }
+    */
+
+    #[allow(unused)]
+    struct Borrowing<'a>(&'a i32);
+
+    // BUG: Does not work in unimock, needs GAT design:
+    // ```
+    // type Output = Borrowing<'a>;
+    // ```
+    // Maybe it will never work for lifetimes other than self.
+    /*
+    #[entrait(Borrow4)]
+    async fn borrow4<'a>(_: &'a impl Bar, _arg: &i32) -> Borrowing<'a> {
+        panic!()
+    }
+    */
 
     #[tokio::test]
     async fn test_it() {
