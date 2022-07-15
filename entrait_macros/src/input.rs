@@ -86,17 +86,6 @@ pub enum EntraitOpt {
     Mockall(SpanOpt<bool>),
 }
 
-///
-/// The "body" that is decorated with entrait.
-///
-pub struct InputFn {
-    pub fn_attrs: Vec<syn::Attribute>,
-    pub fn_vis: syn::Visibility,
-    pub fn_sig: syn::Signature,
-    // don't try to parse fn_body, just pass through the tokens:
-    pub fn_body: proc_macro2::TokenStream,
-}
-
 impl Parse for EntraitAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let trait_visibility: syn::Visibility = input.parse()?;
@@ -149,31 +138,31 @@ impl Parse for EntraitOpt {
 
         match ident_string.as_str() {
             "no_deps" => Ok(EntraitOpt::NoDeps(SpanOpt(
-                parse_ext_bool_default_true(input)?,
+                parse_eq_bool_or_true(input)?,
                 span,
             ))),
             "debug" => Ok(EntraitOpt::Debug(SpanOpt(
-                parse_ext_bool_default_true(input)?,
+                parse_eq_bool_or_true(input)?,
                 span,
             ))),
             "async_trait" => Ok(EntraitOpt::AsyncTrait(SpanOpt(
-                parse_ext_bool_default_true(input)?,
+                parse_eq_bool_or_true(input)?,
                 span,
             ))),
             "associated_future" => Ok(EntraitOpt::AssociatedFuture(SpanOpt(
-                parse_ext_bool_default_true(input)?,
+                parse_eq_bool_or_true(input)?,
                 span,
             ))),
             "export" => Ok(EntraitOpt::Export(SpanOpt(
-                parse_ext_bool_default_true(input)?,
+                parse_eq_bool_or_true(input)?,
                 span,
             ))),
             "unimock" => Ok(EntraitOpt::Unimock(SpanOpt(
-                parse_ext_bool_default_true(input)?,
+                parse_eq_bool_or_true(input)?,
                 span,
             ))),
             "mockall" => Ok(EntraitOpt::Mockall(SpanOpt(
-                parse_ext_bool_default_true(input)?,
+                parse_eq_bool_or_true(input)?,
                 span,
             ))),
             _ => Err(syn::Error::new(
@@ -184,11 +173,15 @@ impl Parse for EntraitOpt {
     }
 }
 
-fn parse_ext_bool_default_true(input: ParseStream) -> syn::Result<bool> {
-    parse_ext_default_val(input, true, |b: syn::LitBool| b.value())
+fn parse_eq_bool_or_true(input: ParseStream) -> syn::Result<bool> {
+    parse_eq_value_or_default(input, true, |b: syn::LitBool| b.value())
 }
 
-fn parse_ext_default_val<V, F, O>(input: ParseStream, default_value: O, mapper: F) -> syn::Result<O>
+fn parse_eq_value_or_default<V, F, O>(
+    input: ParseStream,
+    default_value: O,
+    mapper: F,
+) -> syn::Result<O>
 where
     V: syn::parse::Parse,
     F: FnOnce(V) -> O,
@@ -202,6 +195,17 @@ where
     let parsed = input.parse::<V>()?;
 
     Ok(mapper(parsed))
+}
+
+///
+/// The "body" that is decorated with entrait.
+///
+pub struct InputFn {
+    pub fn_attrs: Vec<syn::Attribute>,
+    pub fn_vis: syn::Visibility,
+    pub fn_sig: syn::Signature,
+    // don't try to parse fn_body, just pass through the tokens:
+    pub fn_body: proc_macro2::TokenStream,
 }
 
 impl Parse for InputFn {
