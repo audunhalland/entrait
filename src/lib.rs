@@ -430,37 +430,47 @@ assert_eq!("Hello World!", hello_string);
 #[cfg(feature = "unimock")]
 mod macros {
     #[cfg(feature = "use-async-trait")]
-    pub use entrait_macros::entrait_export_unimock_use_async_trait as entrait_export;
-    #[cfg(feature = "use-async-trait")]
-    pub use entrait_macros::entrait_unimock_use_async_trait as entrait;
+    mod macros {
+        pub use entrait_macros::entrait_export_unimock_use_async_trait as entrait_export;
+        pub use entrait_macros::entrait_unimock_use_async_trait as entrait;
+    }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    pub use entrait_macros::entrait_export_unimock_use_associated_future as entrait_export;
-    #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    pub use entrait_macros::entrait_unimock_use_associated_future as entrait;
+    mod macros {
+        pub use entrait_macros::entrait_export_unimock_use_associated_future as entrait_export;
+        pub use entrait_macros::entrait_unimock_use_associated_future as entrait;
+    }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    pub use entrait_macros::entrait_export_unimock as entrait_export;
-    #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    pub use entrait_macros::entrait_unimock as entrait;
+    mod macros {
+        pub use entrait_macros::entrait_export_unimock as entrait_export;
+        pub use entrait_macros::entrait_unimock as entrait;
+    }
+
+    pub use macros::*;
 }
 
 #[cfg(not(feature = "unimock"))]
 mod macros {
     #[cfg(feature = "use-async-trait")]
-    pub use entrait_macros::entrait_export_use_async_trait as entrait_export;
-    #[cfg(feature = "use-async-trait")]
-    pub use entrait_macros::entrait_use_async_trait as entrait;
+    mod macros {
+        pub use entrait_macros::entrait_export_use_async_trait as entrait_export;
+        pub use entrait_macros::entrait_use_async_trait as entrait;
+    }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    pub use entrait_macros::entrait_export_use_associated_future as entrait_export;
-    #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    pub use entrait_macros::entrait_use_associated_future as entrait;
+    mod macros {
+        pub use entrait_macros::entrait_export_use_associated_future as entrait_export;
+        pub use entrait_macros::entrait_use_associated_future as entrait;
+    }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    pub use entrait_macros::entrait_export;
-    #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    pub use entrait_macros::entrait;
+    mod macros {
+        pub use entrait_macros::entrait;
+        pub use entrait_macros::entrait_export;
+    }
+
+    pub use macros::*;
 }
 
 /// The entrait macro.
