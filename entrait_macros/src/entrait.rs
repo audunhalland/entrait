@@ -39,7 +39,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
     let generics = generics::analyze_generics(&input_fn, attr)?;
     let entrait_sig = signature::SignatureConverter::new(attr, &input_fn, &generics.deps).convert();
     let trait_def = gen_trait_def(attr, &input_fn, &entrait_sig, &generics)?;
-    let impl_blocks = gen_impl_blocks(attr, &input_fn, &entrait_sig, &generics.deps)?;
+    let impl_blocks = gen_impl_blocks(attr, &input_fn, &entrait_sig, &generics)?;
 
     let InputFn {
         fn_attrs,
@@ -129,7 +129,7 @@ fn gen_impl_blocks(
     attr: &EntraitAttr,
     input_fn: &InputFn,
     entrait_sig: &EntraitSignature,
-    deps: &generics::Deps,
+    generics: &generics::Generics,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let EntraitAttr { trait_ident, .. } = attr;
     let InputFn { fn_sig, .. } = input_fn;
@@ -141,10 +141,13 @@ fn gen_impl_blocks(
 
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
 
+    let params_gen = generics.params_generator(generics::ImplementationGeneric(true));
+    let args_gen = generics.arguments_generator();
+
     // Where bounds on the entire impl block,
     // TODO: Is it correct to always use `Sync` in here here?
     // It must be for Async at least?
-    let impl_where_bounds = match deps {
+    let impl_where_bounds = match &generics.deps {
         generics::Deps::Generic { trait_bounds, .. } => {
             let impl_trait_bounds = if trait_bounds.is_empty() {
                 None
@@ -166,7 +169,7 @@ fn gen_impl_blocks(
             }
         }
         generics::Deps::Concrete(_) => quote_spanned! { span=>
-            where EntraitT: #trait_ident + Sync
+            where EntraitT: #trait_ident #args_gen + Sync
         },
         generics::Deps::NoDeps => quote_spanned! { span=>
             where EntraitT: Sync
@@ -180,23 +183,23 @@ fn gen_impl_blocks(
         input_fn,
         &input_fn_ident,
         entrait_sig,
-        match deps {
+        match &generics.deps {
             generics::Deps::Generic { .. } => FnReceiverKind::SelfArg,
             generics::Deps::Concrete(_) => FnReceiverKind::SelfAsRefReceiver,
             generics::Deps::NoDeps => FnReceiverKind::RefSelfArg,
         },
-        deps,
+        &generics.deps,
     )?;
 
     let generic_impl_block = quote_spanned! { span=>
         #async_trait_attribute
-        impl<EntraitT> #trait_ident for ::entrait::Impl<EntraitT> #impl_where_bounds {
+        impl #params_gen #trait_ident #args_gen for ::entrait::Impl<EntraitT> #impl_where_bounds {
             #associated_fut_impl
             #generic_fn_def
         }
     };
 
-    Ok(match deps {
+    Ok(match &generics.deps {
         generics::Deps::Concrete(path) => {
             let concrete_fn_def = gen_delegating_fn_item(
                 span,
@@ -204,15 +207,17 @@ fn gen_impl_blocks(
                 &input_fn_ident,
                 entrait_sig,
                 FnReceiverKind::SelfArg,
-                deps,
+                &generics.deps,
             )?;
+
+            let params_gen = generics.params_generator(generics::ImplementationGeneric(false));
 
             quote_spanned! { span=>
                 #generic_impl_block
 
                 // Specific impl for the concrete type:
                 #async_trait_attribute
-                impl #trait_ident for #path {
+                impl #params_gen #trait_ident #args_gen for #path {
                     #associated_fut_impl
                     #concrete_fn_def
                 }

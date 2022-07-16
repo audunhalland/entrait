@@ -7,6 +7,7 @@ use quote::quote_spanned;
 use std::collections::HashSet;
 use syn::visit_mut::VisitMut;
 
+/// The fn signature inside the trait
 pub struct EntraitSignature {
     pub sig: syn::Signature,
     pub associated_fut_decl: Option<proc_macro2::TokenStream>,

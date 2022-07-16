@@ -359,3 +359,13 @@ mod async_no_deps_etc {
         assert_eq!(42, answer);
     }
 }
+
+mod generics {
+    use entrait::*;
+    use unimock::*;
+
+    #[entrait(GenericReturn)]
+    fn generic_return<T: Default>(_: &()) -> T {
+        Default::default()
+    }
+}

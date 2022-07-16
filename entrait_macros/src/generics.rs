@@ -4,6 +4,32 @@ use syn::spanned::Spanned;
 pub struct Generics {
     pub deps: Deps,
     pub trait_generics: syn::Generics,
+    pub entrait_t: syn::Ident,
+}
+
+pub struct ImplementationGeneric(pub bool);
+
+impl Generics {
+    fn new(deps: Deps, trait_generics: syn::Generics) -> Self {
+        Self {
+            deps,
+            trait_generics,
+            entrait_t: syn::Ident::new("EntraitT", proc_macro2::Span::call_site()),
+        }
+    }
+
+    pub fn params_generator(&self, impl_generic: ImplementationGeneric) -> ParamsGenerator {
+        ParamsGenerator {
+            trait_generics: &self.trait_generics,
+            entrait_t: impl_generic.0.then_some(&self.entrait_t),
+        }
+    }
+
+    pub fn arguments_generator(&self) -> ArgumentsGenerator {
+        ArgumentsGenerator {
+            trait_generics: &self.trait_generics,
+        }
+    }
 }
 
 pub enum Deps {
@@ -29,10 +55,10 @@ pub fn analyze_generics<'f>(
     attr: &crate::input::EntraitAttr,
 ) -> syn::Result<Generics> {
     if attr.no_deps_value() {
-        return Ok(Generics {
-            deps: Deps::NoDeps,
-            trait_generics: clone_type_generics(&func.fn_sig.generics),
-        });
+        return Ok(Generics::new(
+            Deps::NoDeps,
+            clone_type_generics(&func.fn_sig.generics),
+        ));
     }
 
     let first_input =
@@ -65,13 +91,13 @@ fn extract_deps_from_type<'f>(
     match ty {
         syn::Type::ImplTrait(type_impl_trait) => {
             // Simple case, bounds are actually inline, no lookup necessary
-            Ok(Generics {
-                deps: Deps::Generic {
+            Ok(Generics::new(
+                Deps::Generic {
                     generic_param: None,
                     trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
                 },
-                trait_generics: clone_type_generics(&func.fn_sig.generics),
-            })
+                clone_type_generics(&func.fn_sig.generics),
+            ))
         }
         syn::Type::Path(type_path) => {
             // Type path. Should be defined as a generic parameter.
@@ -85,30 +111,30 @@ fn extract_deps_from_type<'f>(
                 ));
             }
             if type_path.path.segments.len() != 1 {
-                return Ok(Generics {
-                    deps: Deps::Concrete(ty.clone()),
-                    trait_generics: clone_type_generics(&func.fn_sig.generics),
-                });
+                return Ok(Generics::new(
+                    Deps::Concrete(ty.clone()),
+                    clone_type_generics(&func.fn_sig.generics),
+                ));
             }
 
             let first_segment = type_path.path.segments.first().unwrap();
 
             match find_deps_generic_bounds(func, &first_segment.ident) {
                 Some(generics) => Ok(generics),
-                None => Ok(Generics {
-                    deps: Deps::Concrete(ty.clone()),
-                    trait_generics: clone_type_generics(&func.fn_sig.generics),
-                }),
+                None => Ok(Generics::new(
+                    Deps::Concrete(ty.clone()),
+                    clone_type_generics(&func.fn_sig.generics),
+                )),
             }
         }
         syn::Type::Reference(type_reference) => {
             extract_deps_from_type(func, arg_pat, type_reference.elem.as_ref())
         }
         syn::Type::Paren(paren) => extract_deps_from_type(func, arg_pat, paren.elem.as_ref()),
-        ty => Ok(Generics {
-            deps: Deps::Concrete(ty.clone()),
-            trait_generics: clone_type_generics(&func.fn_sig.generics),
-        }),
+        ty => Ok(Generics::new(
+            Deps::Concrete(ty.clone()),
+            clone_type_generics(&func.fn_sig.generics),
+        )),
     }
 }
 
@@ -202,13 +228,13 @@ fn find_deps_generic_bounds<'f>(
         gt_token: generics.gt_token.clone().filter(|_| has_modified_generics),
     };
 
-    Some(Generics {
-        deps: Deps::Generic {
+    Some(Generics::new(
+        Deps::Generic {
             generic_param: Some(generic_param_ident.clone()),
             trait_bounds: deps_trait_bounds,
         },
-        trait_generics: modified_generics,
-    })
+        modified_generics,
+    ))
 }
 
 fn extract_trait_bounds(
@@ -234,4 +260,64 @@ fn clone_type_generics(generics: &syn::Generics) -> syn::Generics {
     }
 
     type_generics
+}
+
+// Params as in impl<..Param>
+pub struct ParamsGenerator<'g> {
+    trait_generics: &'g syn::Generics,
+    entrait_t: Option<&'g syn::Ident>,
+}
+
+impl<'g> quote::ToTokens for ParamsGenerator<'g> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let has_trait_generics = !self.trait_generics.params.is_empty();
+
+        if !has_trait_generics && self.entrait_t.is_none() {
+            return;
+        }
+
+        syn::token::Lt::default().to_tokens(tokens);
+        if let Some(entrait_t) = &self.entrait_t {
+            entrait_t.to_tokens(tokens);
+
+            if has_trait_generics {
+                syn::token::Comma::default().to_tokens(tokens);
+            }
+        }
+        self.trait_generics.params.to_tokens(tokens);
+        syn::token::Gt::default().to_tokens(tokens);
+    }
+}
+
+// Args as in impl<..Param> T for U<..Arg>
+pub struct ArgumentsGenerator<'g> {
+    trait_generics: &'g syn::Generics,
+}
+
+impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let has_trait_generics = !self.trait_generics.params.is_empty();
+
+        if !has_trait_generics {
+            return;
+        }
+
+        syn::token::Lt::default().to_tokens(tokens);
+        for pair in self.trait_generics.params.pairs() {
+            match pair.value() {
+                syn::GenericParam::Type(type_param) => {
+                    type_param.ident.to_tokens(tokens);
+                }
+                syn::GenericParam::Lifetime(lifetime_def) => {
+                    lifetime_def.lifetime.to_tokens(tokens);
+                }
+                syn::GenericParam::Const(const_param) => {
+                    const_param.ident.to_tokens(tokens);
+                }
+            }
+            pair.punct().to_tokens(tokens);
+        }
+
+        syn::token::Gt::default().to_tokens(tokens);
+    }
 }
