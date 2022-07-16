@@ -6,6 +6,7 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
+use syn::parse_quote;
 use syn::spanned::Spanned;
 
 use crate::generics;
@@ -143,37 +144,40 @@ fn gen_impl_blocks(
 
     let params_gen = generics.params_generator(generics::ImplementationGeneric(true));
     let args_gen = generics.arguments_generator();
+    let mut where_clause_gen = generics.where_clause_generator();
 
     // Where bounds on the entire impl block,
     // TODO: Is it correct to always use `Sync` in here here?
     // It must be for Async at least?
-    let impl_where_bounds = match &generics.deps {
+    match &generics.deps {
         generics::Deps::Generic { trait_bounds, .. } => {
-            let impl_trait_bounds = if trait_bounds.is_empty() {
-                None
-            } else {
-                Some(quote! {
-                    ::entrait::Impl<EntraitT>: #(#trait_bounds)+*,
-                })
-            };
+            if !trait_bounds.is_empty() {
+                where_clause_gen.push_impl_predicate(parse_quote! {
+                    ::entrait::Impl<EntraitT>: #(#trait_bounds)+*
+                });
+            }
 
-            let standard_bounds = if input_fn.use_associated_future(attr) {
+            if input_fn.use_associated_future(attr) {
                 // Deps must be 'static for zero-cost futures to work
-                quote! { Sync + 'static }
+                where_clause_gen.push_impl_predicate(parse_quote! {
+                    EntraitT: Sync + 'static
+                });
             } else {
-                quote! { Sync }
-            };
-
-            quote_spanned! { span=>
-                where #impl_trait_bounds EntraitT: #standard_bounds
+                where_clause_gen.push_impl_predicate(parse_quote! {
+                    EntraitT: Sync
+                });
             }
         }
-        generics::Deps::Concrete(_) => quote_spanned! { span=>
-            where EntraitT: #trait_ident #args_gen + Sync
-        },
-        generics::Deps::NoDeps => quote_spanned! { span=>
-            where EntraitT: Sync
-        },
+        generics::Deps::Concrete(_) => {
+            where_clause_gen.push_impl_predicate(parse_quote! {
+                EntraitT: #trait_ident #args_gen + Sync
+            });
+        }
+        generics::Deps::NoDeps => {
+            where_clause_gen.push_impl_predicate(parse_quote! {
+                EntraitT: Sync
+            });
+        }
     };
 
     let associated_fut_impl = &entrait_sig.associated_fut_impl;
@@ -193,7 +197,7 @@ fn gen_impl_blocks(
 
     let generic_impl_block = quote_spanned! { span=>
         #async_trait_attribute
-        impl #params_gen #trait_ident #args_gen for ::entrait::Impl<EntraitT> #impl_where_bounds {
+        impl #params_gen #trait_ident #args_gen for ::entrait::Impl<EntraitT> #where_clause_gen {
             #associated_fut_impl
             #generic_fn_def
         }
@@ -211,13 +215,14 @@ fn gen_impl_blocks(
             )?;
 
             let params_gen = generics.params_generator(generics::ImplementationGeneric(false));
+            let where_clause = &generics.trait_generics.where_clause;
 
             quote_spanned! { span=>
                 #generic_impl_block
 
                 // Specific impl for the concrete type:
                 #async_trait_attribute
-                impl #params_gen #trait_ident #args_gen for #path {
+                impl #params_gen #trait_ident #args_gen for #path #where_clause {
                     #associated_fut_impl
                     #concrete_fn_def
                 }

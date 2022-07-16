@@ -406,13 +406,19 @@ mod generics {
             .in_any_order();
     }
 
-    /*
-    #[entrait(GenericReturnWhere)]
-    fn generic_return_where<T>(_: &()) -> T
+    #[entrait(ConcreteDepsGenericReturnWhere)]
+    fn concrete_deps_generic_return_where<T>(_: &()) -> T
     where
         T: Default,
     {
         Default::default()
     }
-    */
+
+    #[entrait(GenericDepsGenericReturnWhere)]
+    fn generic_deps_generic_return_where<T>(_: &impl Any) -> T
+    where
+        T: Default,
+    {
+        Default::default()
+    }
 }
