@@ -8,7 +8,7 @@ use quote::quote;
 use quote::quote_spanned;
 use syn::spanned::Spanned;
 
-use crate::deps;
+use crate::generics;
 use crate::input::*;
 use crate::signature;
 use crate::signature::EntraitSignature;
@@ -36,10 +36,10 @@ pub fn invoke(
 }
 
 fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
-    let deps = deps::analyze_deps(&input_fn, attr)?;
-    let entrait_sig = signature::SignatureConverter::new(attr, &input_fn, &deps).convert();
-    let trait_def = gen_trait_def(attr, &input_fn, &entrait_sig, &deps)?;
-    let impl_blocks = gen_impl_blocks(attr, &input_fn, &entrait_sig, &deps)?;
+    let generics = generics::analyze_generics(&input_fn, attr)?;
+    let entrait_sig = signature::SignatureConverter::new(attr, &input_fn, &generics.deps).convert();
+    let trait_def = gen_trait_def(attr, &input_fn, &entrait_sig, &generics)?;
+    let impl_blocks = gen_impl_blocks(attr, &input_fn, &entrait_sig, &generics.deps)?;
 
     let InputFn {
         fn_attrs,
@@ -60,14 +60,14 @@ fn gen_trait_def(
     attr: &EntraitAttr,
     input_fn: &InputFn,
     entrait_sig: &EntraitSignature,
-    deps: &deps::Deps,
+    generics: &generics::Generics,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let span = attr.trait_ident.span();
-    let trait_def = gen_trait_def_no_mock(attr, input_fn, entrait_sig)?;
+    let trait_def = gen_trait_def_no_mock(attr, input_fn, entrait_sig, generics)?;
 
     Ok(
         match (
-            attr.opt_unimock_attribute(input_fn, deps),
+            attr.opt_unimock_attribute(input_fn, &generics.deps),
             attr.opt_mockall_automock_attribute(),
         ) {
             (None, None) => trait_def,
@@ -84,16 +84,19 @@ fn gen_trait_def_no_mock(
     attr: &EntraitAttr,
     input_fn: &InputFn,
     entrait_sig: &EntraitSignature,
+    generics: &generics::Generics,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let trait_visibility = &attr.trait_visibility;
     let trait_ident = &attr.trait_ident;
     let span = trait_ident.span();
     let trait_fn_sig = &entrait_sig.sig;
+    let where_clause = &generics.trait_generics.where_clause;
+    let generics = &generics.trait_generics;
 
     Ok(
         if let Some(associated_fut) = &entrait_sig.associated_fut_decl {
             quote_spanned! { span=>
-                #trait_visibility trait #trait_ident {
+                #trait_visibility trait #trait_ident #generics #where_clause {
                     #associated_fut
                     #trait_fn_sig;
                 }
@@ -103,7 +106,7 @@ fn gen_trait_def_no_mock(
 
             quote_spanned! { span=>
                 #opt_async_trait_attr
-                #trait_visibility trait #trait_ident {
+                #trait_visibility trait #trait_ident #generics #where_clause {
                     #trait_fn_sig;
                 }
             }
@@ -126,7 +129,7 @@ fn gen_impl_blocks(
     attr: &EntraitAttr,
     input_fn: &InputFn,
     entrait_sig: &EntraitSignature,
-    deps: &deps::Deps,
+    deps: &generics::Deps,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let EntraitAttr { trait_ident, .. } = attr;
     let InputFn { fn_sig, .. } = input_fn;
@@ -142,7 +145,7 @@ fn gen_impl_blocks(
     // TODO: Is it correct to always use `Sync` in here here?
     // It must be for Async at least?
     let impl_where_bounds = match deps {
-        deps::Deps::Generic { trait_bounds, .. } => {
+        generics::Deps::Generic { trait_bounds, .. } => {
             let impl_trait_bounds = if trait_bounds.is_empty() {
                 None
             } else {
@@ -162,10 +165,10 @@ fn gen_impl_blocks(
                 where #impl_trait_bounds EntraitT: #standard_bounds
             }
         }
-        deps::Deps::Concrete(_) => quote_spanned! { span=>
+        generics::Deps::Concrete(_) => quote_spanned! { span=>
             where EntraitT: #trait_ident + Sync
         },
-        deps::Deps::NoDeps => quote_spanned! { span=>
+        generics::Deps::NoDeps => quote_spanned! { span=>
             where EntraitT: Sync
         },
     };
@@ -178,9 +181,9 @@ fn gen_impl_blocks(
         &input_fn_ident,
         entrait_sig,
         match deps {
-            deps::Deps::Generic { .. } => FnReceiverKind::SelfArg,
-            deps::Deps::Concrete(_) => FnReceiverKind::SelfAsRefReceiver,
-            deps::Deps::NoDeps => FnReceiverKind::RefSelfArg,
+            generics::Deps::Generic { .. } => FnReceiverKind::SelfArg,
+            generics::Deps::Concrete(_) => FnReceiverKind::SelfAsRefReceiver,
+            generics::Deps::NoDeps => FnReceiverKind::RefSelfArg,
         },
         deps,
     )?;
@@ -194,7 +197,7 @@ fn gen_impl_blocks(
     };
 
     Ok(match deps {
-        deps::Deps::Concrete(path) => {
+        generics::Deps::Concrete(path) => {
             let concrete_fn_def = gen_delegating_fn_item(
                 span,
                 input_fn,
@@ -225,7 +228,7 @@ fn gen_delegating_fn_item(
     fn_ident: &syn::Ident,
     entrait_sig: &EntraitSignature,
     receiver_kind: FnReceiverKind,
-    deps: &deps::Deps,
+    deps: &generics::Deps,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let mut opt_dot_await = input_fn.opt_dot_await(span);
     let trait_fn_sig = &entrait_sig.sig;
@@ -286,16 +289,16 @@ impl EntraitAttr {
     pub fn opt_unimock_attribute(
         &self,
         input_fn: &InputFn,
-        deps: &deps::Deps,
+        deps: &generics::Deps,
     ) -> Option<proc_macro2::TokenStream> {
         match self.default_option(self.unimock, false) {
             SpanOpt(true, span) => {
                 let fn_ident = &input_fn.fn_sig.ident;
 
                 let unmocked = match deps {
-                    deps::Deps::Generic { .. } => quote! { #fn_ident },
-                    deps::Deps::Concrete(_) => quote! { _ },
-                    deps::Deps::NoDeps => {
+                    generics::Deps::Generic { .. } => quote! { #fn_ident },
+                    generics::Deps::Concrete(_) => quote! { _ },
+                    generics::Deps::NoDeps => {
                         let arguments =
                             input_fn
                                 .fn_sig

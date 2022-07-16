@@ -1,4 +1,4 @@
-use super::deps::Deps;
+use super::generics::Deps;
 use super::input::{EntraitAttr, InputFn};
 
 use proc_macro2::TokenStream;
@@ -33,7 +33,7 @@ pub struct UserProvidedLifetime(bool);
 pub struct SignatureConverter<'a> {
     attr: &'a EntraitAttr,
     input_fn: &'a InputFn,
-    deps: &'a Deps<'a>,
+    deps: &'a Deps,
 }
 
 #[derive(Clone, Copy)]
@@ -83,7 +83,8 @@ impl<'a> SignatureConverter<'a> {
             self.convert_to_associated_future(&mut entrait_sig, receiver_generation);
         }
 
-        self.remove_deps_generic_param(&mut entrait_sig.sig);
+        // self.remove_deps_generic_param(&mut entrait_sig.sig);
+        self.remove_generic_type_params(&mut entrait_sig.sig);
         tidy_generics(&mut entrait_sig.sig.generics);
 
         entrait_sig
@@ -203,48 +204,45 @@ impl<'a> SignatureConverter<'a> {
         });
     }
 
-    fn remove_deps_generic_param(&self, sig: &mut syn::Signature) {
-        match self.deps {
-            Deps::Generic {
-                generic_param: Some(ident),
-                ..
-            } => {
-                let generics = &mut sig.generics;
-                let mut params = syn::punctuated::Punctuated::new();
-                std::mem::swap(&mut params, &mut generics.params);
+    fn remove_generic_type_params(&self, sig: &mut syn::Signature) {
+        let deps_ident = match &self.deps {
+            Deps::Generic { generic_param, .. } => generic_param.as_ref(),
+            _ => None,
+        };
 
-                for param in params.into_iter() {
-                    match &param {
-                        syn::GenericParam::Type(type_param) => {
-                            if type_param.ident != *ident {
-                                generics.params.push(param);
-                            }
-                        }
-                        _ => {
-                            generics.params.push(param);
-                        }
-                    }
+        let generics = &mut sig.generics;
+        let mut params = syn::punctuated::Punctuated::new();
+        std::mem::swap(&mut params, &mut generics.params);
+
+        for param in params.into_iter() {
+            match &param {
+                syn::GenericParam::Type(_) => {}
+                _ => {
+                    generics.params.push(param);
                 }
+            }
+        }
 
-                if let Some(where_clause) = &mut generics.where_clause {
-                    let mut predicates = syn::punctuated::Punctuated::new();
-                    std::mem::swap(&mut predicates, &mut where_clause.predicates);
+        if let Some(where_clause) = &mut generics.where_clause {
+            let mut predicates = syn::punctuated::Punctuated::new();
+            std::mem::swap(&mut predicates, &mut where_clause.predicates);
 
-                    for predicate in predicates.into_iter() {
-                        match &predicate {
-                            syn::WherePredicate::Type(pred) => {
-                                if !is_type_eq_ident(&pred.bounded_ty, &ident) {
-                                    where_clause.predicates.push(predicate);
-                                }
-                            }
-                            _ => {
+            for predicate in predicates.into_iter() {
+                match &predicate {
+                    syn::WherePredicate::Type(pred) => {
+                        if let Some(deps_ident) = &deps_ident {
+                            if !is_type_eq_ident(&pred.bounded_ty, deps_ident) {
                                 where_clause.predicates.push(predicate);
                             }
+                        } else {
+                            where_clause.predicates.push(predicate);
                         }
+                    }
+                    _ => {
+                        where_clause.predicates.push(predicate);
                     }
                 }
             }
-            _ => {}
         }
     }
 }
