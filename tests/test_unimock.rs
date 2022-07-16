@@ -362,10 +362,57 @@ mod async_no_deps_etc {
 
 mod generics {
     use entrait::*;
+    use std::any::Any;
     use unimock::*;
 
-    #[entrait(GenericReturn)]
-    fn generic_return<T: Default>(_: &()) -> T {
+    #[entrait(GenericDepsGenericReturn)]
+    fn generic_deps_generic_return<T: Default>(_: &impl Any) -> T {
         Default::default()
     }
+
+    #[entrait(ConcreteDepsGenericReturn)]
+    fn concrete_deps_generic_return<T: Default>(_: &()) -> T {
+        Default::default()
+    }
+
+    #[entrait(GenericDepsGenericParam)]
+    fn generic_deps_generic_param<T>(_: &impl Any, _arg: T) -> i32 {
+        42
+    }
+
+    #[entrait(ConcreteDepsGenericParam)]
+    fn concrete_deps_generic_param<T>(_: &(), _arg: T) -> i32 {
+        42
+    }
+
+    #[test]
+    fn generic_mock_fns() {
+        let _ = generic_deps_generic_return::Fn
+            .with_types::<String>()
+            .each_call(matching!())
+            .returns("hey".to_string())
+            .in_any_order();
+
+        let _ = generic_deps_generic_param::Fn
+            .with_types::<String>()
+            .each_call(matching!("hey"))
+            .returns(42)
+            .in_any_order();
+
+        let _ = generic_deps_generic_param::Fn
+            .with_types::<i32>()
+            .each_call(matching!(1337))
+            .returns(42)
+            .in_any_order();
+    }
+
+    /*
+    #[entrait(GenericReturnWhere)]
+    fn generic_return_where<T>(_: &()) -> T
+    where
+        T: Default,
+    {
+        Default::default()
+    }
+    */
 }
