@@ -80,3 +80,23 @@ mod no_deps_and_feign {
     #[get("https://my.api.org/api/{param}")]
     async fn call_my_api(#[path] param: String) -> feignhttp::Result<String> {}
 }
+
+mod test_tracing_instrument {
+    use entrait::entrait;
+    use tracing::instrument;
+
+    #[entrait(IWantToDebug1)]
+    #[instrument(skip(deps))]
+    fn i_want_to_debug1(deps: &impl OtherFunc) {
+        deps.other_func(1337);
+    }
+
+    #[instrument(skip(deps))]
+    #[entrait(IWantToDebug2)]
+    fn i_want_to_debug2(deps: &impl OtherFunc) {
+        deps.other_func(1337);
+    }
+
+    #[entrait(OtherFunc, no_deps)]
+    fn other_func(_some_arg: i32) {}
+}
