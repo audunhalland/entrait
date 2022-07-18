@@ -8,7 +8,7 @@
 
 A proc macro for designing loosely coupled Rust applications.
 
-`entrait` is used to generate an _implemented trait_ from the definition of a regular function.
+[`entrait`](entrait) is used to generate an _implemented trait_ from the definition of a regular function.
 The emergent pattern that results from its use enable the following things:
 * Zero-cost loose coupling and inversion of control
 * Dependency graph as a compile time concept
@@ -88,33 +88,33 @@ assert_eq!(42, app.foo());
 ```
 
 `Impl` is generic, so we can put whatever type we want into it.
-Normally this would be some type that represents the global state of the running application.
+Normally this would be some type that represents the global state/configuration of the running application.
 But if dependencies can only be traits, and we always abstract away this type, how can this state ever be accessed?
 
 ### Concrete dependencies
-So far we have only seen generic dependencies with trait bounds, but the dependency can also be a _concrete type_:
+So far we have only seen generic trait-based dependencies, but the dependency can also be a _concrete type_:
 
 ```rust
-struct State(i32);
+struct Config(i32);
 
-#[entrait(UseTheState)]
-fn use_the_state(state: &State) -> i32 {
-    state.0
+#[entrait(UseTheConfig)]
+fn use_the_config(config: &Config) -> i32 {
+    config.0
 }
 
 #[entrait(DoubleIt)]
-fn double_it(deps: &impl UseTheState) -> i32 {
-    deps.use_the_state() * 2
+fn double_it(deps: &impl UseTheConfig) -> i32 {
+    deps.use_the_config() * 2
 }
 
-assert_eq!(42, Impl::new(State(21)).double_it());
+assert_eq!(42, Impl::new(Config(21)).double_it());
 ```
 
-The parameter of `use_the_state` is in the first position, so it represents the dependency.
+The parameter of `use_the_config` is in the first position, so it represents the dependency.
 
 We will notice two interesting things:
-* Functions that depend upon `UseTheState`, either directly or indirectly, now have only one valid dependency type: `Impl<State>`<sup>[1](#desugaring-of-concrete-deps)</sup>.
-* Inside `use_the_state`, we have a `&State` reference instead of `&Impl<State>`. This means we cannot call other entraited functions, because they are not implemented for `State`.
+* Functions that depend on `UseTheConfig`, either directly or indirectly, now have only one valid dependency type: `Impl<Config>`<sup>[1](#desugaring-of-concrete-deps)</sup>.
+* Inside `use_the_config`, we have a `&Config` reference instead of `&Impl<Config>`. This means we cannot call other entraited functions, because they are not implemented for `Config`.
 
 The last point means that a concrete dependency is the end of the line, a leaf in the dependency graph.
 
