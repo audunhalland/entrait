@@ -48,7 +48,7 @@
 //!
 //! ### Multiple dependencies
 //! Other frameworks might represent multiple dependencies by having one value for each one, but entrait represents all dependencies _within the same value_.
-//! When the dependency parameter is generic, its trait bounds specifies what methods we expect to be able to call within the function.
+//! When the dependency parameter is generic, its trait bounds specifiy what methods we expect to be callable inside the function.
 //!
 //! Multiple bounds can be expressed using the `&(impl A + B)` syntax.
 //!
@@ -61,7 +61,7 @@
 //! When we want to compile a working application, we need an actual type to inject into the various entrait entrypoints.
 //! Two things will be important:
 //!
-//! * The type needs to implement every trait mentioned in the dependency graph under each entrypoint, if not it will fail to compile.
+//! * All trait bounds used deeper in the graph will implicitly "bubble up" to the entrypoint level, so the type we eventually use will need to implement all those traits in order to type check.
 //! * The implementations of these traits need to do the correct thing: Actually call the entraited function, so that the dependency graph is turned into an actual _call graph_.
 //!
 //! Entrait generates _implemented traits_, and the type to use for linking it all together is [`Impl<T>`](crate::Impl):
@@ -78,11 +78,8 @@
 //!     42
 //! }
 //!
-//! #[test]
-//! fn dependency_graph_equals_call_graph() {
-//!     let app = Impl::new(());
-//!     assert_eq!(42, app.foo());
-//! }
+//! let app = Impl::new(());
+//! assert_eq!(42, app.foo());
 //! ```
 //!
 //! `Impl` is generic, so we can put whatever type we want into it.
@@ -106,16 +103,13 @@
 //!     deps.use_the_state() * 2
 //! }
 //!
-//! #[test]
-//! fn it_works() {
-//!     assert_eq!(42, Impl::new(State(21)).double_it());
-//! }
+//! assert_eq!(42, Impl::new(State(21)).double_it());
 //! ```
 //!
 //! The parameter of `use_the_state` is in the first position, so it represents the dependency.
 //!
 //! We will notice two interesting things:
-//! * Functions that depend upon `UseTheState`, either directly or indirectly, will _need_ to have an `Impl<State>` injected in order to type check.
+//! * Functions that depend upon `UseTheState`, either directly or indirectly, now have only one valid dependency type: `Impl<State>`<sup>[1](#desugaring-of-concrete-deps)</sup>.
 //! * Inside `use_the_state`, we have a `&State` reference instead of `&Impl<State>`. This means we cannot call other entraited functions, because they are not implemented for `State`.
 //!
 //! The last point means that a concrete dependency is the end of the line, a leaf in the dependency graph.
@@ -403,6 +397,7 @@ async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
 //! 6. Calling `LibFunction` requires the caller to implement `GetFoo`.
 //! 7. `GetFoo` is somehow only implemented for `Impl<LibConfig>`, not `Impl<App>`.
 //!
+//! #### Desugaring of concrete deps
 //! The way Entrait lets you get around this problem is how implementations are generated for concrete leafs:
 //!
 //! ```rust
