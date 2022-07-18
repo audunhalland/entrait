@@ -1,4 +1,5 @@
-use crate::input::InputFn;
+use super::input;
+use super::input::InputFn;
 use syn::spanned::Spanned;
 
 pub struct Generics {
@@ -57,10 +58,7 @@ impl Deps {
     }
 }
 
-pub fn analyze_generics<'f>(
-    func: &'f InputFn,
-    attr: &crate::input::EntraitAttr,
-) -> syn::Result<Generics> {
+pub fn analyze_generics<'f>(func: &'f InputFn, attr: &input::EntraitAttr) -> syn::Result<Generics> {
     if attr.no_deps_value() {
         return Ok(Generics::new(
             Deps::NoDeps,

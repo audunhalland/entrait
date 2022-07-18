@@ -1,6 +1,12 @@
 //! # entrait_macros
 //!
 //! Procedural macros used by entrait.
+//!
+
+pub mod input;
+
+mod generics;
+mod signature;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -9,10 +15,8 @@ use quote::quote_spanned;
 use syn::parse_quote;
 use syn::spanned::Spanned;
 
-use crate::generics;
-use crate::input::*;
-use crate::signature;
-use crate::signature::EntraitSignature;
+use input::*;
+use signature::EntraitSignature;
 
 pub fn invoke(
     attr: proc_macro::TokenStream,

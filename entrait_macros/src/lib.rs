@@ -9,11 +9,8 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 
 mod entrait;
-mod generics;
-mod input;
-mod signature;
 
-use input::AsyncStrategy;
+use entrait::input::AsyncStrategy;
 
 #[proc_macro_attribute]
 pub fn entrait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
@@ -124,8 +121,8 @@ pub fn entrait_export_unimock_use_associated_future(
     })
 }
 
-fn enable_bool<const N: usize>(opts: [&mut Option<input::SpanOpt<bool>>; N]) {
+fn enable_bool<const N: usize>(opts: [&mut Option<entrait::input::SpanOpt<bool>>; N]) {
     for opt in opts.into_iter() {
-        opt.get_or_insert(input::SpanOpt::of(true));
+        opt.get_or_insert(entrait::input::SpanOpt::of(true));
     }
 }
