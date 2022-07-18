@@ -137,10 +137,13 @@ To enable mocking of entraited functions, they get reified and defined as a type
 Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
 
 
+#### Deep integration testing with unimock
 Entrait with unimock supports _un-mocking_. This means that the test environment can be _partially mocked!_
 
 
 This example used [`unimock::spy`](unimock::spy) to create a mocker that works mostly like `Impl`, except that the call graph can be short-circuited at arbitrary, run-time configurable points.
+The example code goes through three layers (`say_hello => fetch_planet_name => fetch_planet`), and only the deepest one gets mocked out.
+
 
 ### Alternative mocking: Mockall
 If you instead wish to use a more established mocking crate, there is also support for [mockall](https://docs.rs/mockall/latest/mockall/).
