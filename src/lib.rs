@@ -1,7 +1,15 @@
 //! A proc macro for designing loosely coupled Rust applications.
 //!
 //! `entrait` is used to generate an _implemented trait_ from the definition of a regular function.
-//! The main use case for this is that other functions may depend upon traits instead of concrete implementation, enabling loose coupling, inversion of control and test isolation.
+//! The emergent pattern that results from its use enable the following things:
+//! * Zero-cost loose coupling and inversion of control
+//! * Dependency graph as a compile time concept
+//! * Mock library integrations
+//! * Clean, readable, boilerplate-free code
+//!
+//! The resulting pattern is referred to as [the entrait pattern](https://audunhalland.github.io/blog/entrait-pattern/) (see also: [philosophy](#philosophy)).
+//!
+//! # Introduction
 //!
 //! The macro looks like this:
 //!
@@ -20,151 +28,115 @@
 //! }
 //! ```
 //!
-//! `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`.
-//! This would correspond to the `self` parameter in the trait.
-//! But what is this type supposed to be? The trait gets automatically implemented for [`Impl<T>`](crate::Impl):
+//! `my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`, and represents dependencies injected into the function.
+//! The dependency parameter is always the first parameter, analogous to the `self` parameter of a method.
 //!
-//! ```rust
-//! use entrait::*;
-//! struct App;
-//!
-//! #[entrait::entrait(MyFunction)]
-//! fn my_function<D>(deps: &D) { // <--------------------+
-//! }                             //                      |
-//!                               //                      |
-//! // Generated:                                         |
-//! // trait MyFunction {                                 |
-//! //     fn my_function(&self);                         |
-//! // }                                                  |
-//! //                                                    |
-//! // impl<T> MyFunction for ::entrait::Impl<T> {        |
-//! //     fn my_function(&self) {                        |
-//! //         my_function(self) // calls this! ----------+
-//! //     }
-//! // }
-//!
-//! let app = Impl::new(App);
-//! app.my_function();
-//! ```
-//!
-//! The advantage of this pattern comes into play when a function declares its dependencies, as _trait bounds_:
-//!
+//! A dependency is just a trait bound, expressable as `impl Trait`. This is demonstrated by looking at one function calling another:
 //!
 //! ```rust
 //! # use entrait::entrait;
-//! # struct App;
 //! #[entrait(Foo)]
 //! fn foo(deps: &impl Bar) {
-//!     deps.bar();
+//!     println!("{}", deps.bar(42));
 //! }
 //!
 //! #[entrait(Bar)]
-//! fn bar<D>(deps: &D) {
+//! fn bar<D>(deps: &D, n: i32) -> String {
+//!     format!("You passed {n}")
 //! }
 //! ```
 //!
-//! The functions may take any number of parameters, but the first one is always considered specially as the "dependency parameter".
+//! ### Multiple dependencies
+//! Other frameworks might represent multiple dependencies by having one value for each one, but entrait represents all dependencies _within the same value_.
+//! When the dependency parameter is generic, its trait bounds specifies what methods we expect to be able to call within the function.
 //!
-//! Functions may also be non-generic, depending directly on the App:
+//! Multiple bounds can be expressed using the `&(impl A + B)` syntax.
+//!
+//! The single-value dependency design means that it is always the same reference that is passed around everywhere.
+//! But a reference to what, exactly?
+//! This is what we have managed to abstract away, which is the [whole point](#testing).
+//!
+//!
+//! ### Runtime and implementation
+//! When we want to compile a working application, we need an actual type to inject into the various entrait entrypoints.
+//! Two things will be important:
+//!
+//! * The type needs to implement every trait mentioned in the dependency graph under each entrypoint, if not it will fail to compile.
+//! * The implementations of these traits need to do the correct thing: Actually call the entraited function, so that the dependency graph is turned into an actual _call graph_.
+//!
+//! Entrait generates _implemented traits_, and the type to use for linking it all together is [`Impl<T>`](crate::Impl):
 //!
 //! ```rust
 //! # use entrait::*;
-//!
-//! struct App { something: i32 };
-//!
-//! #[entrait(Generic)]
-//! fn generic(deps: &impl Concrete) -> i32 {
-//!     deps.concrete()
+//! #[entrait(Foo)]
+//! fn foo(deps: &impl Bar) -> i32 {
+//!     deps.bar()
 //! }
 //!
-//! #[entrait(Concrete)]
-//! fn concrete(app: &App) -> i32 {
-//!     app.something
+//! #[entrait(Bar)]
+//! fn bar(_deps: &impl std::any::Any) -> i32 {
+//!     42
 //! }
 //!
-//! let app = Impl::new(App { something: 42 });
-//! assert_eq!(42, app.generic());
+//! #[test]
+//! fn dependency_graph_equals_call_graph() {
+//!     let app = Impl::new(());
+//!     assert_eq!(42, app.foo());
+//! }
 //! ```
 //!
-//! These kinds of functions may be considered "leaves" of a dependency tree.
+//! `Impl` is generic, so we can put whatever type we want into it.
+//! Normally this would be some type that represents the global state of the running application.
+//! But if dependencies can only be traits, and we always abstract away this type, how can this state ever be accessed?
 //!
-//! ## Trait visibility
-//! by default, entrait generates a trait that is module-private (no visibility keyword).
-//! To change this, just put a visibility specifier before the trait name:
+//! ### Concrete dependencies
+//! So far we have only seen generic dependencies with trait bounds, but the dependency can also be a _concrete type_:
 //!
 //! ```rust
-//! use entrait::*;
-//! #[entrait(pub Foo)]   // <-- public trait
-//! fn foo<D>(deps: &D) { // <-- private function
+//! # use entrait::*;
+//! struct State(i32);
+//!
+//! #[entrait(UseTheState)]
+//! fn use_the_state(state: &State) -> i32 {
+//!     state.0
+//! }
+//!
+//! #[entrait(DoubleIt)]
+//! fn double_it(deps: &impl UseTheState) -> i32 {
+//!     deps.use_the_state() * 2
+//! }
+//!
+//! #[test]
+//! fn it_works() {
+//!     assert_eq!(42, Impl::new(State(21)).double_it());
 //! }
 //! ```
 //!
-//! ## `async` support
-//! Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
+//! The parameter of `use_the_state` is in the first position, so it represents the dependency.
 //!
-#![cfg_attr(
-    feature = "async-trait",
-    doc = r##"
-```rust
-# use entrait::entrait;
-#[entrait(Foo, async_trait)]
-async fn foo<D>(deps: &D) {
-}
-```
-"##
-)]
-//! This is designed to be forwards compatible with real async fn in traits.
-//! When that day comes, you should be able to just remove the `async_trait=true` to get a proper zero-cost future.
+//! We will notice two interesting things:
+//! * Functions that depend upon `UseTheState`, either directly or indirectly, will _need_ to have an `Impl<State>` injected in order to type check.
+//! * Inside `use_the_state`, we have a `&State` reference instead of `&Impl<State>`. This means we cannot call other entraited functions, because they are not implemented for `State`.
 //!
-//! ### Zero-cost `async` inversion of control - preview mode
-//! Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
+//! The last point means that a concrete dependency is the end of the line, a leaf in the dependency graph.
 //!
-//! The entrait feature is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
-//! This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
-//! the resulting type of the future:
+//! Typically, functions with a concrete dependency should be kept small and avoid extensive business logic.
+//! They ideally function as accessors, providing a loosely coupled abstraction layer over concrete application state.
 //!
-//! ```ignore
-//! #![feature(generic_associated_types)]
-//! #![feature(type_alias_impl_trait)]
 //!
-//! use entrait::*;
+//! # Testing
+//! ## Trait mocking with `Unimock`
 //!
-//! #[entrait(Foo, associated_future)]
-//! async fn foo<D>(deps: &D) {
-//! }
-//! ```
-//!
-//! ## Integrating with other `fn`-targeting macros, and `no_deps`
-//! Some macros are used to transform the body of a function, or generate a body from scratch.
-//! For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp/) to generate an HTTP client. Entrait will try as best as it
-//! can to co-exist with macros like these. Since `entrait` is a higher-level macro that does not touch fn bodies (it does not even try to parse them),
-//! entrait should be processed after, which means it should be placed _before_ lower level macros. Example:
-//!
-#![cfg_attr(
-    feature = "use-async-trait",
-    doc = r##"
-```rust
-# use entrait::entrait;
-#[entrait(FetchThing, no_deps)]
-#[feignhttp::get("https://my.api.org/api/{param}")]
-async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
-```
-"##
-)]
-//!
-//! Here we had to use the `no_deps` entrait option.
-//! This is used to tell entrait that the function does not have a `deps` parameter as its first input.
-//! Instead, all the function's inputs get promoted to the generated trait method.
-//!
-//! ## Trait mocking with Unimock
+//! The whole point of entrait is to provide inversion of control, so that alternative dependency implementations can be used when unit testing function bodies.
+//! While test code can contain manual trait implementations, the most ergonomic way to test is to use a mocking library, which provides more features with less code.
 //!
 //! Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimock/), as these two crates have been designed from the start with each other in mind.
 //!
-//! Unimock exports a single mock struct which can be passed in as parameter to every function that accept a `deps` parameter
+//! Unimock exports a single mock struct which can be passed as argument to every function that accept a generic `deps` parameter
 //!   (given that entrait is used with unimock support everywhere).
 //! To enable mocking of entraited functions, they get reified and defined as a type called `Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
 //!
-//! Unimock support is enabled by importing entrait from the path `entrait::unimock::*`.
+//! Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
 //!
 #![cfg_attr(
     feature = "unimock",
@@ -240,13 +212,16 @@ assert_eq!("Hello World!", hello_string);
 "##
 )]
 //!
-//! ## Alternative mocking: Mockall
+//! This example used [`unimock::spy`](unimock::spy) to create a mocker that works mostly like `Impl`, except that the call graph can be short-circuited at arbitrary, run-time configurable points.
+//!
+//! ### Alternative mocking: Mockall
 //! If you instead wish to use a more established mocking crate, there is also support for [mockall](https://docs.rs/mockall/latest/mockall/).
 //! Note that mockall has some limitations.
 //! Multiple trait bounds are not supported, and deep tests will not work.
 //! Also, mockall tends to generate a lot of code, often an order of magnitude more than unimock.
 //!
-//! Just import entrait from `entrait::mockall:*` to have those mock structs autogenerated:
+//! Enabling mockall is done using the `mockall` entrait option.
+//! There is no cargo feature to turn this on implicitly, because mockall doesn't work well when it's re-exported through another crate.
 //!
 //! ```rust
 //! # use entrait::entrait_export as entrait;
@@ -266,14 +241,108 @@ assert_eq!("Hello World!", hello_string);
 //! }
 //! ```
 //!
-//! ## Conditional compilation of mocks
-//! Most often, you will only need to generate mock implementations in test code, and skip this for production code.
-//! For this configuration there are more alternative import paths:
 //!
-//! * `use entrait::unimock_test::*` puts unimock support inside `#[cfg_attr(test, ...)]`.
-//! * `use entrait::mockall_test::*` puts mockall support inside `#[cfg_attr(test, ...)]`.
+//! # Options and features
 //!
-//! ## Modular applications consisting of several crates
+//! #### Trait visibility
+//! by default, entrait generates a trait that is module-private (no visibility keyword).
+//! To change this, just put a visibility specifier before the trait name:
+//!
+//! ```rust
+//! use entrait::*;
+//! #[entrait(pub Foo)]   // <-- public trait
+//! fn foo<D>(deps: &D) { // <-- private function
+//! }
+//! ```
+//!
+//! #### `async` support
+//! Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
+//!
+#![cfg_attr(
+    feature = "async-trait",
+    doc = r##"
+```rust
+# use entrait::entrait;
+#[entrait(Foo, async_trait)]
+async fn foo<D>(deps: &D) {
+}
+```
+"##
+)]
+//! This is designed to be forwards compatible with real async fn in traits.
+//! When that day comes, you should be able to just remove the `async_trait` to get a proper zero-cost future.
+//!
+//! There is a feature to automatically turn on `async_trait` for every async entrait function: `use-async-trait`.
+//! This feature turns this on for all upstream crates that also exports entraited functions.
+//!
+//! #### Zero-cost async inversion of control - preview mode
+//! Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
+//!
+//! The entrait feature is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
+//! This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
+//! the resulting type of the future:
+//!
+//! ```ignore
+//! #![feature(generic_associated_types)]
+//! #![feature(type_alias_impl_trait)]
+//!
+//! use entrait::*;
+//!
+//! #[entrait(Foo, associated_future)]
+//! async fn foo<D>(deps: &D) {
+//! }
+//! ```
+//!
+//! There is a feature for turning this on everywhere: `use-associated-future`.
+//!
+//! #### Integrating with other `fn`-targeting macros, and `no_deps`
+//! Some macros are used to transform the body of a function, or generate a body from scratch.
+//! For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp/) to generate an HTTP client. Entrait will try as best as it
+//! can to co-exist with macros like these. Since `entrait` is a higher-level macro that does not touch fn bodies (it does not even try to parse them),
+//! entrait should be processed after, which means it should be placed _before_ lower level macros. Example:
+//!
+#![cfg_attr(
+    feature = "use-async-trait",
+    doc = r##"
+```rust
+# use entrait::entrait;
+#[entrait(FetchThing, no_deps)]
+#[feignhttp::get("https://my.api.org/api/{param}")]
+async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
+```
+"##
+)]
+//!
+//! Here we had to use the `no_deps` entrait option.
+//! This is used to tell entrait that the function does not have a `deps` parameter as its first input.
+//! Instead, all the function's inputs get promoted to the generated trait method.
+//!
+//! #### Conditional compilation of mocks
+//! Most often, you will only need to generate mock implementations for test code, and skip this for production code.
+//! A notable exception to this is when building libraries.
+//! When an application consists of several crates, downstream crates would likely want to mock out functionality from libraries.
+//!
+//! Entrait calls this _exporting_, and it unconditionally turns on autogeneration of mock implementations:
+//!
+//! ```
+//! # use entrait::*;
+//! #[entrait_export(pub Bar)]
+//! fn bar(deps: &()) {}
+//! ```
+//! or
+//! ```
+//! # use entrait::*;
+//! #[entrait(pub Foo, export)]
+//! fn foo(deps: &()) {}
+//! ```
+//!
+//! It is also possible to reduce noise by doing `use entrait::entrait_export as entrait`.
+//!
+//!
+//!
+//!
+//! # Modular applications consisting of several crates
+//!
 //! A common technique for Rust application development is to divide them into multiple crates.
 //! Entrait does its best to provide great support for this kind of architecture.
 //! This would be very trivial to do and wouldn't even be worth mentioning here if it wasn't for _concrete deps_.
@@ -289,12 +358,12 @@ assert_eq!("Hello World!", hello_string);
 //!         pub foo: String,
 //!     }
 //!
-//!     #[entrait(pub GetFoo)]
+//!     #[entrait_export(pub GetFoo)]
 //!     fn get_foo(config: &LibConfig) -> &str {
 //!         &config.foo
 //!     }
 //!
-//!     #[entrait(pub LibFunction)]
+//!     #[entrait_export(pub LibFunction)]
 //!     fn lib_function(deps: &impl GetFoo) {
 //!         let foo = deps.get_foo();
 //!     }
@@ -328,7 +397,7 @@ assert_eq!("Hello World!", hello_string);
 //!
 //! 1. The library defines it's own configuration: `LibConfig`.
 //! 2. It defines a leaf dependency to get access to some property: `GetFoo`.
-//! 3. All things which implement `GetFoo` may call `LibFunction`.
+//! 3. All things which implement `GetFoo` may call `lib_function`.
 //! 4. The main crate defines an `App`, which contains `LibConfig`.
 //! 5. The app has the type `Impl<App>`, which means it can call entraited functions.
 //! 6. Calling `LibFunction` requires the caller to implement `GetFoo`.
@@ -382,7 +451,7 @@ assert_eq!("Hello World!", hello_string);
 //!
 //! Optmized builds should inline a lot of these calls, because all types are fully known at every step.
 //!
-//! ## "Philosophy"
+//! # "Philosophy"
 //! The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
 //! The entrait pattern is simply a convenient way to achieve unit testing of business logic.
 //!
@@ -390,21 +459,18 @@ assert_eq!("Hello World!", hello_string);
 //!
 //! _Entrait should only be used to define an abstract computation that has a single implementation in realase mode, but is mockable in test mode._
 //!
-//! `entrait` does not implement Dependency Injection (DI). DI is a strictly object-oriented concept that will often look awkward in Rust.
+//! `entrait` does not implement Dependency Injection (DI) in the classical, Object Oriented sense.
+//! Classical DI is an object-oriented concept that will often look awkward in Rust.
 //! The author thinks of DI as the "reification of code modules":
 //!   In a DI-enabled programming environment, code modules are grouped together as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
 //! When this pattern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
 //!
 //! `entrait` tries to turn this around by saying that the primary abstraction that is depended upon is a set of _functions_, not a set of code modules.
 //!
-//! An architectural consequence is that one ends up with _one ubiquitous type_ that represents a running application that implements all these function abstraction traits.
-//! But the point is that this is all loosely coupled:
-//!   Most function definitions themselves do not refer to this god-like type, they only depend upon traits.
-//!
-//! ## Limitations
+//! # Limitations
 //! This section lists known limitations of entrait:
 //!
-//! #### Cyclic dependency graphs
+//! ### Cyclic dependency graphs
 //! Cyclic dependency graphs are impossible with entrait.
 //! In fact, this is not a limit of entrait itself, but with Rust's trait solver.
 //! It is not able to prove that a type implements a trait if it needs to prove that it does in order to prove it.
@@ -412,17 +478,6 @@ assert_eq!("Hello World!", hello_string);
 //! While this is a limitation, it is not necessarily a bad one.
 //! One might say that a layered application architecture should never contain cycles.
 //! If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
-//!
-//! ## Crate compatibility
-//! As `entrait` is just a macro, it does not pull in any dependencies besides the code needed to execute the macro.
-//! But in order to _compile_ the generated code, some additional dependencies will be needed alongside `entrait`.
-//! The following table shows compatible major versions:
-//!
-//! | `entrait` | `unimock` (optional) | `mockall` (optional) |
-//! | --------- | -------------------- | -------------------- |
-//! | `0.3`     | `0.2`, `0.3`         | `0.11`               |
-//! | `0.2`     | `0.1`                | `0.11`               |
-//! | `0.1`     | `-`                  | `0.11`               |
 //!
 
 #![forbid(unsafe_code)]
