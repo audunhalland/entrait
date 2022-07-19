@@ -1,5 +1,5 @@
-use super::generics::Deps;
 use super::input::{EntraitAttr, InputFn};
+use crate::util::generics::Deps;
 
 use proc_macro2::TokenStream;
 use quote::quote;

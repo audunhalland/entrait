@@ -5,8 +5,12 @@
 
 pub mod input;
 
-mod generics;
+mod analyze_generics;
 mod signature;
+
+use crate::util::generics;
+use input::*;
+use signature::EntraitSignature;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -14,9 +18,6 @@ use quote::quote;
 use quote::quote_spanned;
 use quote::ToTokens;
 use syn::parse_quote;
-
-use input::*;
-use signature::EntraitSignature;
 
 pub fn invoke(
     attr: proc_macro::TokenStream,
@@ -41,7 +42,7 @@ pub fn invoke(
 }
 
 fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
-    let generics = generics::analyze_generics(&input_fn, attr)?;
+    let generics = analyze_generics::analyze_generics(&input_fn, attr)?;
     let entrait_sig = signature::SignatureConverter::new(attr, &input_fn, &generics.deps).convert();
     let trait_def = gen_trait_def(attr, &input_fn, &entrait_sig, &generics)?;
     let impl_blocks = gen_impl_blocks(attr, &input_fn, &entrait_sig, &generics)?;
