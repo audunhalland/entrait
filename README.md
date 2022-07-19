@@ -27,18 +27,15 @@ fn my_function<D>(deps: &D) {
 }
 ```
 
-which generates the trait `MyFunction`:
+which generates a new single-method trait named `MyFunction`, with the method signature derived from the original function.
+Entrait is a pure append-only macro: It will never alter the syntax of your function.
+The new language items it generates will appear below the function.
 
-```rust
-trait MyFunction {
-    fn my_function(&self);
-}
-```
+In the first example, `my_function` has a single parameter called `deps` which is generic over a type `D`, and represents dependencies injected into the function.
+The dependency parameter is always the first parameter, which is analogous to the `&self` parameter of the generated trait method.
 
-`my_function`'s first and only parameter is `deps` which is generic over some unknown type `D`, and represents dependencies injected into the function.
-The dependency parameter is always the first parameter, analogous to the `self` parameter of a method.
-
-A dependency is just a trait bound, expressable as `impl Trait`. This is demonstrated by looking at one function calling another:
+To add a dependency, we just introduce a trait bound, now expressable as `impl Trait`.
+This is demonstrated by looking at one function calling another:
 
 ```rust
 #[entrait(Foo)]
@@ -51,6 +48,7 @@ fn bar<D>(deps: &D, n: i32) -> String {
     format!("You passed {n}")
 }
 ```
+
 
 ### Multiple dependencies
 Other frameworks might represent multiple dependencies by having one value for each one, but entrait represents all dependencies _within the same value_.
