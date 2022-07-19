@@ -49,15 +49,6 @@ pub enum Deps {
     NoDeps,
 }
 
-impl Deps {
-    pub fn is_deps_param(&self, index: usize) -> bool {
-        match self {
-            Self::NoDeps => false,
-            _ => index == 0,
-        }
-    }
-}
-
 pub fn analyze_generics(func: &InputFn, attr: &input::EntraitAttr) -> syn::Result<Generics> {
     if attr.no_deps_value() {
         return Ok(Generics::new(

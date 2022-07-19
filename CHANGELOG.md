@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Support for parameter-less functions without use of `no_deps`. This is technically 'breaking' but can also be seen as a bugfix.
 - Submodule import paths (`entrait::unimock`, etc). This is instead enabled by using features.
+### Fixed
+- Destructured fn params in the original function. Entrait will generate a param name to use in the trait.
 
 ## [0.3.4] - 2022-06-30
 ### Added

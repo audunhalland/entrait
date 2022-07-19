@@ -88,6 +88,10 @@ impl<'a> SignatureConverter<'a> {
         self.remove_generic_type_params(&mut entrait_sig.sig);
         tidy_generics(&mut entrait_sig.sig.generics);
 
+        if entrait_sig.sig.inputs.iter().any(needs_param_ident) {
+            self.convert_params_to_ident(&mut entrait_sig.sig);
+        }
+
         entrait_sig
     }
 
@@ -246,6 +250,55 @@ impl<'a> SignatureConverter<'a> {
             }
         }
     }
+
+    fn convert_params_to_ident(&self, sig: &mut syn::Signature) {
+        let mut taken_idents: HashSet<String> = sig
+            .inputs
+            .iter()
+            .filter_map(|fn_arg| match fn_arg {
+                syn::FnArg::Receiver(_) => None,
+                syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                    syn::Pat::Ident(pat_ident) => Some(pat_ident.ident.to_string()),
+                    _ => None,
+                },
+            })
+            .collect();
+
+        fn generate_ident(
+            index: usize,
+            attempts: usize,
+            taken_idents: &mut HashSet<String>,
+        ) -> String {
+            let ident = format!(
+                "{}arg{}",
+                (0..attempts).map(|_| '_').collect::<String>(),
+                index,
+            );
+
+            if taken_idents.contains(&ident) {
+                generate_ident(index, attempts + 1, taken_idents)
+            } else {
+                taken_idents.insert(ident.clone());
+                ident
+            }
+        }
+
+        let pat_type_args = sig.inputs.iter_mut().filter_map(|fn_arg| match fn_arg {
+            syn::FnArg::Typed(pat_type) => Some(pat_type),
+            _ => None,
+        });
+
+        for (index, pat_type_arg) in pat_type_args.enumerate() {
+            match pat_type_arg.pat.as_mut() {
+                syn::Pat::Ident(_) => {}
+                _ => {
+                    let new_ident_string = generate_ident(index, 0, &mut taken_idents);
+                    let new_ident = quote::format_ident!("{}", new_ident_string);
+                    *pat_type_arg.pat = syn::parse_quote! { #new_ident };
+                }
+            }
+        }
+    }
 }
 
 fn is_type_eq_ident(ty: &syn::Type, ident: &syn::Ident) -> bool {
@@ -261,6 +314,13 @@ fn output_type_tokens(return_type: &syn::ReturnType) -> TokenStream {
     match return_type {
         syn::ReturnType::Default => quote! { () },
         syn::ReturnType::Type(_, ty) => quote! { #ty },
+    }
+}
+
+fn needs_param_ident(fn_arg: &syn::FnArg) -> bool {
+    match fn_arg {
+        syn::FnArg::Receiver(_) => false,
+        syn::FnArg::Typed(pat_type) => !matches!(pat_type.pat.as_ref(), syn::Pat::Ident(_)),
     }
 }
 

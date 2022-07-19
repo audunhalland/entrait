@@ -1,6 +1,7 @@
 #![cfg(feature = "unimock")]
 #![cfg_attr(feature = "use-associated-future", feature(generic_associated_types))]
 #![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
+#![allow(unused_variables)]
 
 mod sync {
     use entrait::*;
@@ -421,4 +422,28 @@ mod generics {
     {
         Default::default()
     }
+}
+
+mod destructuring_params {
+    use entrait::entrait;
+
+    pub struct NewType<T>(T);
+
+    #[entrait(Destructuring1)]
+    fn destructuring1(_: &impl std::any::Any, NewType(num): NewType<i32>) {}
+
+    #[entrait(Destructuring2)]
+    fn destructuring2(
+        _: &impl std::any::Any,
+        NewType(num1): NewType<i32>,
+        NewType(num2): NewType<String>,
+    ) {
+    }
+
+    #[entrait(DestructuringNoDeps, no_deps)]
+    fn destructuring_no_deps(NewType(num1): NewType<i32>, NewType(num2): NewType<i32>) {}
+
+    // Should become (arg1, _arg1)
+    #[entrait(DestructuringNoDepsMixedConflict, no_deps)]
+    fn destructuring_no_deps_mixed_confict(arg1: NewType<i32>, NewType(num2): NewType<i32>) {}
 }

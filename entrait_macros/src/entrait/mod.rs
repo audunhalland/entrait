@@ -12,8 +12,8 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
+use quote::ToTokens;
 use syn::parse_quote;
-use syn::spanned::Spanned;
 
 use input::*;
 use signature::EntraitSignature;
@@ -72,7 +72,7 @@ fn gen_trait_def(
 
     Ok(
         match (
-            attr.opt_unimock_attribute(input_fn, &generics.deps),
+            attr.opt_unimock_attribute(entrait_sig, &generics.deps),
             attr.opt_mockall_automock_attribute(),
         ) {
             (None, None) => trait_def,
@@ -247,37 +247,20 @@ fn gen_delegating_fn_item(
     let mut opt_dot_await = input_fn.opt_dot_await(span);
     let trait_fn_sig = &entrait_sig.sig;
 
-    let arguments = input_fn
-        .fn_sig
-        .inputs
-        .iter()
-        .enumerate()
-        .filter_map(|(index, arg)| {
-            if deps.is_deps_param(index) {
-                match receiver_kind {
-                    FnReceiverKind::SelfArg => Some(Ok(quote_spanned! { span=> self })),
-                    FnReceiverKind::RefSelfArg => Some(Ok(quote_spanned! { span=> &self })),
-                    FnReceiverKind::SelfAsRefReceiver => None,
-                }
-            } else {
-                Some(match arg {
-                    syn::FnArg::Receiver(_) => {
-                        Err(syn::Error::new(arg.span(), "Unexpected receiver arg"))
-                    }
-                    syn::FnArg::Typed(pat_typed) => match pat_typed.pat.as_ref() {
-                        syn::Pat::Ident(pat_ident) => {
-                            let ident = &pat_ident.ident;
-                            Ok(quote_spanned! { span=> #ident })
-                        }
-                        _ => Err(syn::Error::new(
-                            arg.span(),
-                            "Expected ident for function argument",
-                        )),
-                    },
-                })
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let arguments = entrait_sig.sig.inputs.iter().filter_map(|arg| match arg {
+        syn::FnArg::Receiver(_) => match deps {
+            generics::Deps::NoDeps => None,
+            _ => match receiver_kind {
+                FnReceiverKind::SelfArg => Some(quote_spanned! { span=> self }),
+                FnReceiverKind::RefSelfArg => Some(quote_spanned! { span=> &self }),
+                FnReceiverKind::SelfAsRefReceiver => None,
+            },
+        },
+        syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+            syn::Pat::Ident(pat_ident) => Some(pat_ident.ident.to_token_stream()),
+            _ => panic!("Found a non-ident pattern, this should be handled in signature.rs"),
+        },
+    });
 
     let function_call = match receiver_kind {
         FnReceiverKind::SelfAsRefReceiver => quote_spanned! { span=>
@@ -302,20 +285,20 @@ fn gen_delegating_fn_item(
 impl EntraitAttr {
     pub fn opt_unimock_attribute(
         &self,
-        input_fn: &InputFn,
+        entrait_sig: &EntraitSignature,
         deps: &generics::Deps,
     ) -> Option<proc_macro2::TokenStream> {
         match self.default_option(self.unimock, false) {
             SpanOpt(true, span) => {
-                let fn_ident = &input_fn.fn_sig.ident;
+                let fn_ident = &entrait_sig.sig.ident;
 
                 let unmocked = match deps {
                     generics::Deps::Generic { .. } => quote! { #fn_ident },
                     generics::Deps::Concrete(_) => quote! { _ },
                     generics::Deps::NoDeps => {
                         let arguments =
-                            input_fn
-                                .fn_sig
+                            entrait_sig
+                                .sig
                                 .inputs
                                 .iter()
                                 .filter_map(|fn_arg| match fn_arg {
