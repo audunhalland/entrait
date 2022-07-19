@@ -101,3 +101,18 @@ mod test_tracing_instrument {
     #[entrait(OtherFunc, no_deps)]
     fn other_func(_some_arg: i32) {}
 }
+
+mod test_delegate_impl {
+    use entrait::delegate_impl;
+
+    #[delegate_impl]
+    trait Plain {
+        fn method0(&self, arg: i32) -> i32;
+    }
+
+    #[delegate_impl]
+    trait Generic1<T> {
+        fn generic_return(&self, arg: i32) -> T;
+        fn generic_param(&self, arg: T) -> i32;
+    }
+}

@@ -571,6 +571,8 @@ pub use macros::entrait;
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
 
+pub use entrait_macros::delegate_impl;
+
 /// Re-exported from the `implementation` crate.
 pub use ::implementation::Impl;
 
