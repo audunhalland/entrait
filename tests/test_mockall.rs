@@ -2,19 +2,19 @@
 
 use entrait::*;
 
-#[entrait(Foo, mockall)]
-fn foo(_deps: &(), arg: i32) -> i32 {
+#[entrait(MockallFoo, mockall)]
+fn mockall_foo(_deps: &(), arg: i32) -> i32 {
     arg
 }
 
-fn takes_foo(foo: &impl Foo, arg: i32) -> i32 {
-    foo.foo(arg)
+fn takes_foo(foo: &impl MockallFoo, arg: i32) -> i32 {
+    foo.mockall_foo(arg)
 }
 
 #[test]
 fn test() {
-    let mut mock = MockFoo::new();
-    mock.expect_foo().return_const(42);
+    let mut mock = MockMockallFoo::new();
+    mock.expect_mockall_foo().return_const(42);
 
     let result = takes_foo(&mock, 1337);
 

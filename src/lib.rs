@@ -522,7 +522,7 @@ mod macros {
         pub use entrait_macros::entrait_export;
     }
 
-    pub use auto_async::*;
+    pub use entrait_auto_async::*;
     pub use entrait_macros::delegate_impl;
 }
 
