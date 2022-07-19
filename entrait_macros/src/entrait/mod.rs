@@ -370,7 +370,7 @@ enum FnReceiverKind {
 
 impl InputFn {
     fn opt_dot_await(&self, span: Span) -> Option<proc_macro2::TokenStream> {
-        if let Some(_) = self.fn_sig.asyncness {
+        if self.fn_sig.asyncness.is_some() {
             Some(quote_spanned! { span=> .await })
         } else {
             None
@@ -378,10 +378,10 @@ impl InputFn {
     }
 
     pub fn use_associated_future(&self, attr: &EntraitAttr) -> bool {
-        match (attr.async_strategy(), self.fn_sig.asyncness) {
-            (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async)) => true,
-            _ => false,
-        }
+        matches!(
+            (attr.async_strategy(), self.fn_sig.asyncness),
+            (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
+        )
     }
 
     fn opt_async_trait_attribute(&self, attr: &EntraitAttr) -> Option<proc_macro2::TokenStream> {

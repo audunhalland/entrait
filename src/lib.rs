@@ -483,47 +483,47 @@ async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
 #[cfg(feature = "unimock")]
 mod macros {
     #[cfg(feature = "use-async-trait")]
-    mod macros {
+    mod auto_async {
         pub use entrait_macros::entrait_export_unimock_use_async_trait as entrait_export;
         pub use entrait_macros::entrait_unimock_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    mod macros {
+    mod auto_async {
         pub use entrait_macros::entrait_export_unimock_use_associated_future as entrait_export;
         pub use entrait_macros::entrait_unimock_use_associated_future as entrait;
     }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    mod macros {
+    mod auto_async {
         pub use entrait_macros::entrait_export_unimock as entrait_export;
         pub use entrait_macros::entrait_unimock as entrait;
     }
 
-    pub use macros::*;
+    pub use auto_async::*;
 }
 
 #[cfg(not(feature = "unimock"))]
 mod macros {
     #[cfg(feature = "use-async-trait")]
-    mod macros {
+    mod auto_async {
         pub use entrait_macros::entrait_export_use_async_trait as entrait_export;
         pub use entrait_macros::entrait_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    mod macros {
+    mod auto_async {
         pub use entrait_macros::entrait_export_use_associated_future as entrait_export;
         pub use entrait_macros::entrait_use_associated_future as entrait;
     }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    mod macros {
+    mod auto_async {
         pub use entrait_macros::entrait;
         pub use entrait_macros::entrait_export;
     }
 
-    pub use macros::*;
+    pub use auto_async::*;
 }
 
 /// The entrait attribute macro, used to generate traits and implementations of them.

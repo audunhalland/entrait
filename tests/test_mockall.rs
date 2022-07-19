@@ -1,3 +1,5 @@
+#![allow(clippy::blacklisted_name)]
+
 use entrait::*;
 
 #[entrait(Foo, mockall)]

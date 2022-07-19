@@ -45,7 +45,7 @@ pub enum Deps {
         generic_param: Option<syn::Ident>,
         trait_bounds: Vec<syn::TypeParamBound>,
     },
-    Concrete(syn::Type),
+    Concrete(Box<syn::Type>),
     NoDeps,
 }
 
@@ -58,7 +58,7 @@ impl Deps {
     }
 }
 
-pub fn analyze_generics<'f>(func: &'f InputFn, attr: &input::EntraitAttr) -> syn::Result<Generics> {
+pub fn analyze_generics(func: &InputFn, attr: &input::EntraitAttr) -> syn::Result<Generics> {
     if attr.no_deps_value() {
         return Ok(Generics::new(
             Deps::NoDeps,
@@ -117,7 +117,7 @@ fn extract_deps_from_type<'f>(
             }
             if type_path.path.segments.len() != 1 {
                 return Ok(Generics::new(
-                    Deps::Concrete(ty.clone()),
+                    Deps::Concrete(Box::new(ty.clone())),
                     clone_type_generics(&func.fn_sig.generics),
                 ));
             }
@@ -127,7 +127,7 @@ fn extract_deps_from_type<'f>(
             match find_deps_generic_bounds(func, &first_segment.ident) {
                 Some(generics) => Ok(generics),
                 None => Ok(Generics::new(
-                    Deps::Concrete(ty.clone()),
+                    Deps::Concrete(Box::new(ty.clone())),
                     clone_type_generics(&func.fn_sig.generics),
                 )),
             }
@@ -137,16 +137,13 @@ fn extract_deps_from_type<'f>(
         }
         syn::Type::Paren(paren) => extract_deps_from_type(func, arg_pat, paren.elem.as_ref()),
         ty => Ok(Generics::new(
-            Deps::Concrete(ty.clone()),
+            Deps::Concrete(Box::new(ty.clone())),
             clone_type_generics(&func.fn_sig.generics),
         )),
     }
 }
 
-fn find_deps_generic_bounds<'f>(
-    func: &'f InputFn,
-    generic_param_ident: &syn::Ident,
-) -> Option<Generics> {
+fn find_deps_generic_bounds(func: &InputFn, generic_param_ident: &syn::Ident) -> Option<Generics> {
     let generics = &func.fn_sig.generics;
     let generic_params = &generics.params;
 
@@ -214,7 +211,7 @@ fn find_deps_generic_bounds<'f>(
 
         if !new_predicates.is_empty() {
             Some(syn::WhereClause {
-                where_token: where_clause.where_token.clone(),
+                where_token: where_clause.where_token,
                 predicates: new_predicates,
             })
         } else {
@@ -227,10 +224,10 @@ fn find_deps_generic_bounds<'f>(
     let has_modified_generics = !remaining_params.is_empty() || new_where_clause.is_some();
 
     let modified_generics = syn::Generics {
-        lt_token: generics.lt_token.clone().filter(|_| has_modified_generics),
+        lt_token: generics.lt_token.filter(|_| has_modified_generics),
         params: remaining_params,
         where_clause: new_where_clause,
-        gt_token: generics.gt_token.clone().filter(|_| has_modified_generics),
+        gt_token: generics.gt_token.filter(|_| has_modified_generics),
     };
 
     Some(Generics::new(
@@ -250,10 +247,10 @@ fn extract_trait_bounds(
 
 fn clone_type_generics(generics: &syn::Generics) -> syn::Generics {
     let mut type_generics = syn::Generics {
-        lt_token: generics.lt_token.clone(),
+        lt_token: generics.lt_token,
         params: syn::punctuated::Punctuated::new(),
         where_clause: generics.where_clause.clone(),
-        gt_token: generics.gt_token.clone(),
+        gt_token: generics.gt_token,
     };
 
     for param in &generics.params {

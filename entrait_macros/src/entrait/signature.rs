@@ -120,7 +120,7 @@ impl<'a> SignatureConverter<'a> {
                 match input {
                     syn::FnArg::Typed(pat_type) => match pat_type.ty.as_ref() {
                         syn::Type::Reference(type_reference) => {
-                            let and_token = type_reference.and_token.clone();
+                            let and_token = type_reference.and_token;
                             let lifetime = type_reference.lifetime.clone();
 
                             *input = syn::FnArg::Receiver(syn::Receiver {
@@ -369,7 +369,7 @@ impl LifetimeExpander {
 
     fn only_elided_input(&self) -> Option<usize> {
         if self.elided_params.len() == 1 {
-            self.elided_params.iter().next().map(|index| *index)
+            self.elided_params.iter().next().copied()
         } else {
             None
         }
@@ -406,7 +406,7 @@ impl LifetimeExpander {
     }
 }
 
-impl<'s> syn::visit_mut::VisitMut for LifetimeExpander {
+impl syn::visit_mut::VisitMut for LifetimeExpander {
     fn visit_receiver_mut(&mut self, receiver: &mut syn::Receiver) {
         if let Some((_, lifetime)) = &mut receiver.reference {
             *lifetime = Some(self.make_lifetime_explicit(lifetime.clone()));
