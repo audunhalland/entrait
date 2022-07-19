@@ -125,14 +125,18 @@ pub fn entrait_export_unimock_use_associated_future(
 
 #[proc_macro_attribute]
 pub fn delegate_impl(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    syn::parse_macro_input!(attr as delegate_impl::DelegateImplInput);
-    let item_trait = syn::parse_macro_input!(input as syn::ItemTrait);
-
-    delegate_impl::gen_delegate_impl(item_trait)
+    delegate_impl::gen_delegate_impl(attr, input, |_| {})
 }
 
-fn set_fallbacks<const N: usize>(opts: [&mut Option<entrait::input::SpanOpt<bool>>; N]) {
+#[proc_macro_attribute]
+pub fn delegate_impl_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
+    delegate_impl::gen_delegate_impl(attr, input, |input| {
+        set_fallbacks([&mut input.unimock]);
+    })
+}
+
+fn set_fallbacks<const N: usize>(opts: [&mut Option<util::opt::SpanOpt<bool>>; N]) {
     for opt in opts.into_iter() {
-        opt.get_or_insert(entrait::input::SpanOpt::of(true));
+        opt.get_or_insert(util::opt::SpanOpt::of(true));
     }
 }

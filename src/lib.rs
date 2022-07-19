@@ -481,47 +481,49 @@ async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
 #[cfg(feature = "unimock")]
 mod macros {
     #[cfg(feature = "use-async-trait")]
-    mod auto_async {
+    mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock_use_async_trait as entrait_export;
         pub use entrait_macros::entrait_unimock_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    mod auto_async {
+    mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock_use_associated_future as entrait_export;
         pub use entrait_macros::entrait_unimock_use_associated_future as entrait;
     }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    mod auto_async {
+    mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock as entrait_export;
         pub use entrait_macros::entrait_unimock as entrait;
     }
 
-    pub use auto_async::*;
+    pub use entrait_auto_async::*;
+    pub use entrait_macros::delegate_impl_unimock as delegate_impl;
 }
 
 #[cfg(not(feature = "unimock"))]
 mod macros {
     #[cfg(feature = "use-async-trait")]
-    mod auto_async {
+    mod entrait_auto_async {
         pub use entrait_macros::entrait_export_use_async_trait as entrait_export;
         pub use entrait_macros::entrait_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
-    mod auto_async {
+    mod entrait_auto_async {
         pub use entrait_macros::entrait_export_use_associated_future as entrait_export;
         pub use entrait_macros::entrait_use_associated_future as entrait;
     }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
-    mod auto_async {
+    mod entrait_auto_async {
         pub use entrait_macros::entrait;
         pub use entrait_macros::entrait_export;
     }
 
     pub use auto_async::*;
+    pub use entrait_macros::delegate_impl;
 }
 
 /// The entrait attribute macro, used to generate traits and implementations of them.
@@ -571,7 +573,8 @@ pub use macros::entrait;
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
 
-pub use entrait_macros::delegate_impl;
+/// Generate an implementation of the annotatated trait for `Impl<T>`, by delegating to `T`.
+pub use macros::delegate_impl;
 
 /// Re-exported from the `implementation` crate.
 pub use ::implementation::Impl;

@@ -1,23 +1,55 @@
 use crate::util::generics;
+use crate::util::opt::*;
 
 use quote::quote;
 use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 use syn::parse_quote;
 
-pub struct DelegateImplInput;
+pub struct DelegateImplAttr {
+    pub unimock: Option<SpanOpt<bool>>,
 
-impl Parse for DelegateImplInput {
+    /// Mocking with mockall
+    pub mockall: Option<SpanOpt<bool>>,
+}
+
+impl Parse for DelegateImplAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut unimock = None;
+        let mut mockall = None;
+
         if !input.is_empty() {
-            return Err(syn::Error::new(input.span(), "No arguments expected"));
+            loop {
+                match input.parse::<EntraitOpt>()? {
+                    EntraitOpt::Unimock(opt) => unimock = Some(opt),
+                    EntraitOpt::Mockall(opt) => mockall = Some(opt),
+                    entrait_opt => {
+                        return Err(syn::Error::new(entrait_opt.span(), "Unsupported option"))
+                    }
+                };
+
+                if input.peek(syn::token::Comma) {
+                    input.parse::<syn::token::Comma>()?;
+                } else {
+                    break;
+                }
+            }
         }
 
-        Ok(Self)
+        Ok(Self { unimock, mockall })
     }
 }
 
-pub fn gen_delegate_impl(item_trait: syn::ItemTrait) -> proc_macro::TokenStream {
+pub fn gen_delegate_impl(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+    attr_modifier: impl FnOnce(&mut DelegateImplAttr),
+) -> proc_macro::TokenStream {
+    let mut attr = syn::parse_macro_input!(attr as DelegateImplAttr);
+    let item_trait = syn::parse_macro_input!(input as syn::ItemTrait);
+
+    attr_modifier(&mut attr);
+
     let generics = generics::Generics::new(generics::Deps::NoDeps, item_trait.generics.clone());
     let trait_ident = &item_trait.ident;
 

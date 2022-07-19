@@ -9,6 +9,7 @@ mod analyze_generics;
 mod signature;
 
 use crate::util::generics;
+use crate::util::opt::SpanOpt;
 use input::*;
 use signature::EntraitSignature;
 
