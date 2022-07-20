@@ -77,6 +77,11 @@ pub fn gen_delegate_impl(
     } else {
         None
     };
+    let opt_mockall_automock_attr = if attr.mockall.map(|opt| *opt.value()).unwrap_or(false) {
+        Some(attr.gated_mock_attr(quote! { ::mockall::automock }))
+    } else {
+        None
+    };
 
     let impl_attrs = item_trait.attrs.iter().filter(|attr| {
         matches!(
@@ -111,6 +116,7 @@ pub fn gen_delegate_impl(
 
     let tokens = quote! {
         #opt_unimock_attr
+        #opt_mockall_automock_attr
         #item_trait
 
         #(#impl_attrs)*
