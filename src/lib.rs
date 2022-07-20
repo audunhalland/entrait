@@ -447,7 +447,7 @@ async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
 //!
 //! Optmized builds should inline a lot of these calls, because all types are fully known at every step.
 //!
-//! #### Using entrait with a trait
+//! ### Using entrait with a trait
 //! An alternative way to achieve something similar to the above is to use the entrait macro _directly on a trait_.
 //!
 //! A typical use case for this is to put core abstractions in some "core" crate, letting other libraries use those core abstractions as dependencies.
