@@ -447,6 +447,51 @@ async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
 //!
 //! Optmized builds should inline a lot of these calls, because all types are fully known at every step.
 //!
+//! #### Using entrait with a trait
+//! An alternative way to achieve something similar to the above is to use the entrait macro _directly on a trait_.
+//!
+//! A typical use case for this is to put core abstractions in some "core" crate, letting other libraries use those core abstractions as dependencies.
+//!
+//! ```rust
+//! # use entrait::*;
+//! // core_crate
+//! #[entrait]
+//! trait System {
+//!     fn current_time(&self) -> u128;
+//! }
+//!
+//! // lib_crate
+//! #[entrait(ComputeSomething)]
+//! fn compute_something(deps: &impl System) {
+//!     let system_time = deps.current_time();
+//!     // do something with the time...
+//! }
+//!
+//! // main.rs
+//! struct App;
+//! impl System for App {
+//!     fn current_time(&self) -> u128 {
+//!         std::time::SystemTime::now()
+//!             .duration_since(std::time::UNIX_EPOCH)
+//!             .unwrap()
+//!             .as_millis()
+//!     }
+//! }
+//!
+//! Impl::new(App).compute_something();
+//! ```
+//!
+//! This is similar to defining a leaf dependency for a concrete type, only in this case, `core_crate` really has no type available to use.
+//! We know that `System` eventually has to be implemented for the application type, and that can happen in the main crate.
+//!
+//! The reason that the `#[entrait]` attribute has to be present in `core_crate`, is that it needs to define a blanket implementation for `Impl<T>` (as well as mocks),
+//!     and those need to live in the same crate that defined the trait.
+//! If not, this would have broken the orphan rule.
+//!
+//! (NB: This example's purpose is to demonstrate entrait, not to be a guide on how to deal with system time. It should contain some ideas for how to _mock_ time, though!)
+//!
+//!
+//!
 //! # "Philosophy"
 //! The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
 //! The entrait pattern is simply a convenient way to achieve unit testing of business logic.
@@ -526,19 +571,55 @@ mod macros {
 
 /// The entrait attribute macro, used to generate traits and implementations of them.
 ///
-/// The attached item must be a _function item_ (`fn foo(..) {}`).
+/// ## For functions
+/// When used with a function, the macro must be given the name of a trait to generate.
+/// The macro will generate that trait, and connect it to the function by supplying an implementation for [Impl], plus optional mock implementations.
 ///
-/// # Syntax
+/// #### Syntax
 ///
 /// ```no_compile
 /// #[entrait($visibility? $TraitIdent)]
+/// fn ...
 /// ```
 ///
 /// * `$visibility`: Optional visibility specifier for the generated trait.
 ///     See the [Rust documentation](https://doc.rust-lang.org/reference/visibility-and-privacy.html) for valid values.
-/// * `$TraitIdent`: Any valid Rust identifier, used as the name of the new trait.
+/// * `$TraitIdent`: Any valid Rust identifier that starts with an upper-case character, used as the name of the new trait.
 ///
-/// ### Options
+/// with options:
+///
+/// ```no_compile
+/// #[entrait($visibility? $TraitIdent, $option, ...)]
+/// fn ...
+/// ```
+///
+///
+/// ## For traits
+/// When used with a trait, the macro will only supply an implementation for [Impl] plus optional mock implementations.
+///
+/// As there is no implementation function to connect the trait to, the job of actual implementation is left to user code.
+/// The generated [Impl]-implementation works by delegating: The trait will only be implemented for `Impl<T>` when it is also implemented for `T`.
+/// User code has to supply a manual implementation of the trait for the `T` that is going to be used in the application.
+/// Inside this implementation, the application is no longer generic, therefore this will become a leaf dependency.
+///
+/// Mock exporting is implicitly turned on.
+/// The reason is that the only reasonable use case of entraiting a trait is that the trait has to live in an upstream crate, without access to the downstream application type.
+///
+/// #### Syntax
+///
+/// ```no_compile
+/// #[entrait]
+/// trait ...
+/// ```
+///
+/// with options:
+///
+/// ```no_compile
+/// #[entrait($option, ...)]
+/// trait ...
+/// ```
+///
+/// ## Options
 ///
 /// Entrait accepts some comma-separated options after the trait identifier:
 ///
@@ -548,14 +629,14 @@ mod macros {
 ///
 /// Where an option can be just `$option` or `$option = $value`. An option without value means `true`.
 ///
-/// | Option              | Type   | Default     | Description         |
-/// | ------------------- | ------- | ----------- | ------------------ |
-/// | `no_deps`           | `bool` | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
-/// | `export`            | `bool` | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
-/// | `unimock`           | `bool` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
-/// | `mockall`           | `bool` | `false`     | Enable mockall mocks |
-/// | `async_trait`       | `bool` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
-/// | `associated_future` | `bool` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(generic_associated_types)` and `feature(type_alias_impl_trait)`. |
+/// | Option              | Type   | Target     | Default     | Description         |
+/// | ------------------- | -------| ---------- | ----------- | ------------------- |
+/// | `no_deps`           | `bool` | `fn`       | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
+/// | `export`            | `bool` | `fn`       | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
+/// | `unimock`           | `bool` | `fn+trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
+/// | `mockall`           | `bool` | `fn+trait` | `false`     | Enable mockall mocks. |
+/// | `async_trait`       | `bool` | `fn`       | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
+/// | `associated_future` | `bool` | `fn`       | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(generic_associated_types)` and `feature(type_alias_impl_trait)`. |
 ///
 /// [^1]: Enabled by default by turning on the `unimock` cargo feature.
 ///

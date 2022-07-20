@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `async-trait` feature for adding a re-export of the async-trait crate.
 - `use-async-trait` and `use-associated-future` features for global selection of async strategy.
 - Support for generic functions.
+- Support for entraiting a trait.
 ### Changed
 - Restructure lib docs a bit.
 ### Removed

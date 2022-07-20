@@ -343,6 +343,50 @@ We end up with quite a dance to actually dig out the config string:
 
 Optmized builds should inline a lot of these calls, because all types are fully known at every step.
 
+#### Using entrait with a trait
+An alternative way to achieve something similar to the above is to use the entrait macro _directly on a trait_.
+
+A typical use case for this is to put core abstractions in some "core" crate, letting other libraries use those core abstractions as dependencies.
+
+```rust
+// core_crate
+#[entrait]
+trait System {
+    fn current_time(&self) -> u128;
+}
+
+// lib_crate
+#[entrait(ComputeSomething)]
+fn compute_something(deps: &impl System) {
+    let system_time = deps.current_time();
+    // do something with the time...
+}
+
+// main.rs
+struct App;
+impl System for App {
+    fn current_time(&self) -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    }
+}
+
+Impl::new(App).compute_something();
+```
+
+This is similar to defining a leaf dependency for a concrete type, only in this case, `core_crate` really has no type available to use.
+We know that `System` eventually has to be implemented for the application type, and that can happen in the main crate.
+
+The reason that the `#[entrait]` attribute has to be present in `core_crate`, is that it needs to define a blanket implementation for `Impl<T>` (as well as mocks),
+    and those need to live in the same crate that defined the trait.
+If not, this would have broken the orphan rule.
+
+(NB: This example's purpose is to demonstrate entrait, not to be a guide on how to deal with system time. It should contain some ideas for how to _mock_ time, though!)
+
+
+
 # "Philosophy"
 The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
 The entrait pattern is simply a convenient way to achieve unit testing of business logic.
