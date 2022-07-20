@@ -58,7 +58,7 @@ pub fn output_tokens(
     } else {
         None
     };
-    let opt_mockall_automock_attr = if attr.opts.unimock.map(|opt| *opt.value()).unwrap_or(false) {
+    let opt_mockall_automock_attr = if attr.opts.mockall.map(|opt| *opt.value()).unwrap_or(false) {
         Some(quote! { #[::mockall::automock] })
     } else {
         None
