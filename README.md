@@ -170,81 +170,6 @@ fn main() {
 ```
 
 
-# Options and features
-
-#### Trait visibility
-by default, entrait generates a trait that is module-private (no visibility keyword).
-To change this, just put a visibility specifier before the trait name:
-
-```rust
-use entrait::*;
-#[entrait(pub Foo)]   // <-- public trait
-fn foo<D>(deps: &D) { // <-- private function
-}
-```
-
-#### `async` support
-Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
-
-This is designed to be forwards compatible with real async fn in traits.
-When that day comes, you should be able to just remove the `async_trait` to get a proper zero-cost future.
-
-There is a feature to automatically turn on `async_trait` for every async entrait function: `use-async-trait`.
-This feature turns this on for all upstream crates that also exports entraited functions.
-
-#### Zero-cost async inversion of control - preview mode
-Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
-
-The entrait feature is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
-This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
-the resulting type of the future:
-
-```rust
-#![feature(generic_associated_types)]
-#![feature(type_alias_impl_trait)]
-
-use entrait::*;
-
-#[entrait(Foo, associated_future)]
-async fn foo<D>(deps: &D) {
-}
-```
-
-There is a feature for turning this on everywhere: `use-associated-future`.
-
-#### Integrating with other `fn`-targeting macros, and `no_deps`
-Some macros are used to transform the body of a function, or generate a body from scratch.
-For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp/) to generate an HTTP client. Entrait will try as best as it
-can to co-exist with macros like these. Since `entrait` is a higher-level macro that does not touch fn bodies (it does not even try to parse them),
-entrait should be processed after, which means it should be placed _before_ lower level macros. Example:
-
-
-Here we had to use the `no_deps` entrait option.
-This is used to tell entrait that the function does not have a `deps` parameter as its first input.
-Instead, all the function's inputs get promoted to the generated trait method.
-
-#### Conditional compilation of mocks
-Most often, you will only need to generate mock implementations for test code, and skip this for production code.
-A notable exception to this is when building libraries.
-When an application consists of several crates, downstream crates would likely want to mock out functionality from libraries.
-
-Entrait calls this _exporting_, and it unconditionally turns on autogeneration of mock implementations:
-
-```rust
-#[entrait_export(pub Bar)]
-fn bar(deps: &()) {}
-```
-or
-```rust
-#[entrait(pub Foo, export)]
-fn foo(deps: &()) {}
-```
-
-It is also possible to reduce noise by doing `use entrait::entrait_export as entrait`.
-
-
-
-
 # Modular applications consisting of several crates
 
 A common technique for Rust application development is to divide them into multiple crates.
@@ -384,6 +309,88 @@ The reason that the `#[entrait]` attribute has to be present in `core_crate`, is
 If not, this would have broken the orphan rule.
 
 (NB: This example's purpose is to demonstrate entrait, not to be a guide on how to deal with system time. It should contain some ideas for how to _mock_ time, though!)
+
+
+
+# Options and features
+
+#### Trait visibility
+by default, entrait generates a trait that is module-private (no visibility keyword).
+To change this, just put a visibility specifier before the trait name:
+
+```rust
+use entrait::*;
+#[entrait(pub Foo)]   // <-- public trait
+fn foo<D>(deps: &D) { // <-- private function
+}
+```
+
+#### `async` support
+Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
+
+This is designed to be forwards compatible with real async fn in traits.
+When that day comes, you should be able to just remove the `async_trait` to get a proper zero-cost future.
+
+There is a feature to automatically turn on `async_trait` for every async entrait function: `use-async-trait`.
+This feature turns this on for all upstream crates that also exports entraited functions.
+
+#### Zero-cost async inversion of control - preview mode
+Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
+
+The entrait feature is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
+This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
+the resulting type of the future:
+
+```rust
+#![feature(generic_associated_types)]
+#![feature(type_alias_impl_trait)]
+
+use entrait::*;
+
+#[entrait(Foo, associated_future)]
+async fn foo<D>(deps: &D) {
+}
+```
+
+There is a feature for turning this on everywhere: `use-associated-future`.
+
+#### Integrating with other `fn`-targeting macros, and `no_deps`
+Some macros are used to transform the body of a function, or generate a body from scratch.
+For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp/) to generate an HTTP client. Entrait will try as best as it
+can to co-exist with macros like these. Since `entrait` is a higher-level macro that does not touch fn bodies (it does not even try to parse them),
+entrait should be processed after, which means it should be placed _before_ lower level macros. Example:
+
+
+Here we had to use the `no_deps` entrait option.
+This is used to tell entrait that the function does not have a `deps` parameter as its first input.
+Instead, all the function's inputs get promoted to the generated trait method.
+
+#### Conditional compilation of mocks
+Most often, you will only need to generate mock implementations for test code, and skip this for production code.
+A notable exception to this is when building libraries.
+When an application consists of several crates, downstream crates would likely want to mock out functionality from libraries.
+
+Entrait calls this _exporting_, and it unconditionally turns on autogeneration of mock implementations:
+
+```rust
+#[entrait_export(pub Bar)]
+fn bar(deps: &()) {}
+```
+or
+```rust
+#[entrait(pub Foo, export)]
+fn foo(deps: &()) {}
+```
+
+It is also possible to reduce noise by doing `use entrait::entrait_export as entrait`.
+
+#### Feature summary
+| Feature                 | Implies       | Description         |
+| -------------------     | ------------- | ------------------- |
+| `unimock`               |               | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
+| `use-async-trait`       | `async_trait` | Automatically applies the [async_trait] macro to async trait methods. |
+| `use-associated-future` |               | Automatically transforms the return type of async trait methods into an associated future by using type-alias-impl-trait syntax. Requires a nightly compiler. |
+| `async-trait`           |               | Pulls in the [async_trait] optional dependency, enabling the `async_trait` entrait option (macro parameter). |
 
 
 
