@@ -8,11 +8,10 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 
-mod delegate_impl;
 mod entrait;
 mod util;
 
-use entrait::input::AsyncStrategy;
+use util::opt::AsyncStrategy;
 
 #[proc_macro_attribute]
 pub fn entrait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
@@ -21,15 +20,15 @@ pub fn entrait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream
 
 #[proc_macro_attribute]
 pub fn entrait_export(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.export]);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.export]);
     })
 }
 
 #[proc_macro_attribute]
 pub fn entrait_use_async_trait(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        attr.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
+    entrait::invoke(attr, input, |opts| {
+        opts.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
     })
 }
 
@@ -38,9 +37,9 @@ pub fn entrait_export_use_async_trait(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.export]);
-        attr.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.export]);
+        opts.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
     })
 }
 
@@ -49,8 +48,8 @@ pub fn entrait_use_associated_future(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        attr.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
+    entrait::invoke(attr, input, |opts| {
+        opts.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
     })
 }
 
@@ -59,23 +58,23 @@ pub fn entrait_export_use_associated_future(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.export]);
-        attr.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.export]);
+        opts.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
     })
 }
 
 #[proc_macro_attribute]
 pub fn entrait_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.unimock]);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.unimock]);
     })
 }
 
 #[proc_macro_attribute]
 pub fn entrait_export_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.export, &mut attr.unimock]);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.export, &mut opts.unimock]);
     })
 }
 
@@ -84,9 +83,9 @@ pub fn entrait_unimock_use_async_trait(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.unimock]);
-        attr.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.unimock]);
+        opts.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
     })
 }
 
@@ -95,9 +94,9 @@ pub fn entrait_export_unimock_use_async_trait(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.export, &mut attr.unimock]);
-        attr.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.export, &mut opts.unimock]);
+        opts.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
     })
 }
 
@@ -106,9 +105,9 @@ pub fn entrait_unimock_use_associated_future(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.unimock]);
-        attr.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.unimock]);
+        opts.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
     })
 }
 
@@ -117,21 +116,9 @@ pub fn entrait_export_unimock_use_associated_future(
     attr: TokenStream,
     input: TokenStream,
 ) -> proc_macro::TokenStream {
-    entrait::invoke(attr, input, |attr| {
-        set_fallbacks([&mut attr.export, &mut attr.unimock]);
-        attr.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
-    })
-}
-
-#[proc_macro_attribute]
-pub fn delegate_impl(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    delegate_impl::gen_delegate_impl(attr, input, |_| {})
-}
-
-#[proc_macro_attribute]
-pub fn delegate_impl_unimock(attr: TokenStream, input: TokenStream) -> proc_macro::TokenStream {
-    delegate_impl::gen_delegate_impl(attr, input, |input| {
-        set_fallbacks([&mut input.unimock]);
+    entrait::invoke(attr, input, |opts| {
+        set_fallbacks([&mut opts.export, &mut opts.unimock]);
+        opts.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
     })
 }
 

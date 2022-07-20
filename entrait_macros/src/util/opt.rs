@@ -1,6 +1,34 @@
 use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 
+pub struct Opts {
+    pub no_deps: Option<SpanOpt<bool>>,
+    pub debug: Option<SpanOpt<bool>>,
+    pub async_strategy: Option<SpanOpt<AsyncStrategy>>,
+
+    /// Whether to export mocks (i.e. not gated with cfg(test))
+    pub export: Option<SpanOpt<bool>>,
+
+    /// Mocking with unimock
+    pub unimock: Option<SpanOpt<bool>>,
+
+    /// Mocking with mockall
+    pub mockall: Option<SpanOpt<bool>>,
+}
+
+impl Opts {
+    pub fn set_fallback_async_strategy(&mut self, strategy: AsyncStrategy) {
+        self.async_strategy.get_or_insert(SpanOpt::of(strategy));
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum AsyncStrategy {
+    NoHack,
+    AsyncTrait,
+    AssociatedFuture,
+}
+
 #[derive(Copy, Clone)]
 pub struct SpanOpt<T>(pub T, pub Span);
 

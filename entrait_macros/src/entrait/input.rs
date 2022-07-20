@@ -7,52 +7,28 @@ use crate::util::opt::*;
 
 use syn::parse::{Parse, ParseStream};
 
-///
-/// The `entrait` invocation
-///
+/// The `entrait` invocation for functions
 pub struct EntraitAttr {
     pub trait_visibility: syn::Visibility,
     pub trait_ident: syn::Ident,
-    no_deps: Option<SpanOpt<bool>>,
-    debug: Option<SpanOpt<bool>>,
-    async_strategy: Option<SpanOpt<AsyncStrategy>>,
-
-    /// Whether to export mocks (i.e. not gated with cfg(test))
-    pub export: Option<SpanOpt<bool>>,
-
-    /// Mocking with unimock
-    pub unimock: Option<SpanOpt<bool>>,
-
-    /// Mocking with mockall
-    pub mockall: Option<SpanOpt<bool>>,
-}
-
-#[derive(Clone, Copy)]
-pub enum AsyncStrategy {
-    NoHack,
-    AsyncTrait,
-    AssociatedFuture,
+    pub opts: Opts,
 }
 
 impl EntraitAttr {
     pub fn no_deps_value(&self) -> bool {
-        self.default_option(self.no_deps, false).0
+        self.default_option(self.opts.no_deps, false).0
     }
 
     pub fn debug_value(&self) -> bool {
-        self.default_option(self.debug, false).0
-    }
-
-    pub fn set_fallback_async_strategy(&mut self, strategy: AsyncStrategy) {
-        self.async_strategy.get_or_insert(SpanOpt::of(strategy));
+        self.default_option(self.opts.debug, false).0
     }
 
     pub fn async_strategy(&self) -> SpanOpt<AsyncStrategy> {
-        self.default_option(self.async_strategy, AsyncStrategy::NoHack)
+        self.default_option(self.opts.async_strategy, AsyncStrategy::NoHack)
     }
 
     pub fn export_value(&self) -> bool {
-        self.default_option(self.export, false).0
+        self.default_option(self.opts.export, false).0
     }
 
     pub fn default_option<T>(&self, option: Option<SpanOpt<T>>, default: T) -> SpanOpt<T> {
@@ -95,16 +71,23 @@ impl Parse for EntraitAttr {
         }
 
         Ok(EntraitAttr {
-            no_deps,
             trait_visibility,
             trait_ident,
-            debug,
-            async_strategy,
-            export,
-            unimock,
-            mockall,
+            opts: Opts {
+                no_deps,
+                debug,
+                async_strategy,
+                export,
+                unimock,
+                mockall,
+            }
         })
     }
+}
+
+pub enum Input {
+    Fn(InputFn),
+    Trait(syn::ItemTrait),
 }
 
 ///
@@ -131,5 +114,35 @@ impl Parse for InputFn {
             fn_sig,
             fn_body,
         })
+    }
+}
+
+impl Parse for Input {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(syn::Attribute::parse_outer)?;
+        let vis = input.parse()?;
+
+        // BUG (In theory): missing "unsafe" and "auto" traits
+        if input.peek(syn::token::Trait) {
+            let item_trait: syn::ItemTrait = input.parse()?;
+
+            Ok(Input::Trait(
+                syn::ItemTrait {
+                    attrs,
+                    vis,
+                    ..item_trait
+                }
+            ))
+        } else {
+            let fn_sig: syn::Signature = input.parse()?;
+            let fn_body = input.parse()?;
+
+            Ok(Input::Fn(InputFn {
+                fn_attrs: attrs,
+                fn_vis: vis,
+                fn_sig,
+                fn_body,
+            }))
+        }
     }
 }

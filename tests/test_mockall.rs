@@ -23,19 +23,19 @@ mod basic {
     }
 }
 
-mod delegate_impl {
+mod entrait_for_trait {
     use entrait::*;
 
-    #[delegate_impl(mockall)]
-    trait Delegated {
-        fn delegate(&self) -> i32;
+    #[entrait(mockall)]
+    trait Trait {
+        fn method(&self) -> i32;
     }
 
     #[test]
     fn test() {
-        let mut mock = MockDelegated::new();
-        mock.expect_delegate().return_const(42);
+        let mut mock = MockTrait::new();
+        mock.expect_method().return_const(42);
 
-        assert_eq!(42, mock.delegate());
+        assert_eq!(42, mock.method());
     }
 }

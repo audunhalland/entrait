@@ -102,15 +102,15 @@ mod test_tracing_instrument {
     fn other_func(_some_arg: i32) {}
 }
 
-mod test_delegate_impl {
+mod test_entrait_for_trait {
     use entrait::*;
 
-    #[delegate_impl]
+    #[entrait]
     trait Plain {
         fn method0(&self, arg: i32) -> i32;
     }
 
-    #[delegate_impl]
+    #[entrait]
     trait Generic1<T> {
         fn generic_return(&self, arg: i32) -> T;
         fn generic_param(&self, arg: T) -> i32;
@@ -129,7 +129,7 @@ mod test_delegate_impl {
     }
 
     #[test]
-    fn delegate_should_have_impl_impl() {
+    fn entraited_trait_should_have_impl_impl() {
         assert_eq!(1337, Impl::new(()).method0(0));
         assert_eq!(42, Impl::new("app").method0(0));
     }

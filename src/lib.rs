@@ -499,7 +499,6 @@ mod macros {
     }
 
     pub use entrait_auto_async::*;
-    pub use entrait_macros::delegate_impl_unimock as delegate_impl;
 }
 
 #[cfg(not(feature = "unimock"))]
@@ -523,7 +522,6 @@ mod macros {
     }
 
     pub use entrait_auto_async::*;
-    pub use entrait_macros::delegate_impl;
 }
 
 /// The entrait attribute macro, used to generate traits and implementations of them.
@@ -572,9 +570,6 @@ pub use macros::entrait;
 ///
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
-
-/// Generate an implementation of the annotatated trait for `Impl<T>`, by delegating to `T`.
-pub use macros::delegate_impl;
 
 /// Re-exported from the `implementation` crate.
 pub use ::implementation::Impl;

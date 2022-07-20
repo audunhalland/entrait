@@ -448,31 +448,31 @@ mod destructuring_params {
     fn destructuring_no_deps_mixed_confict(arg1: NewType<i32>, NewType(num2): NewType<i32>) {}
 }
 
-mod delegate_impl_unimock {
+mod entrait_for_trait_unimock {
     use entrait::*;
     use unimock::*;
 
-    #[delegate_impl]
-    trait Delegated {
-        fn delegate1(&self) -> i32;
+    #[entrait]
+    trait Trait {
+        fn method1(&self) -> i32;
     }
 
     #[test]
-    fn delegate_should_have_unimock_impl() {
+    fn entraited_trait_should_have_unimock_impl() {
         assert_eq!(
             42,
             mock(Some(
-                Delegated__delegate1.each_call(matching!())
+                Trait__method1.each_call(matching!())
                     .returns(42)
                     .in_any_order()
             ))
-            .delegate1()
+            .method1()
         );
     }
 
     #[test]
-    #[should_panic(expected = "Delegated::delegate1 cannot be unmocked as there is no function available to call.")]
-    fn delegate_should_not_be_spyable() {
-        spy(None).delegate1();
+    #[should_panic(expected = "Trait::method1 cannot be unmocked as there is no function available to call.")]
+    fn entraited_trait_should_not_be_spyable() {
+        spy(None).method1();
     }
 }

@@ -1,3 +1,5 @@
+//! Implementation for invoking entrait on a trait!
+
 use crate::util::generics;
 use crate::util::opt::*;
 
@@ -8,36 +10,21 @@ use syn::parse::{Parse, ParseStream};
 use syn::parse_quote;
 
 pub struct DelegateImplAttr {
-    pub export: Option<SpanOpt<bool>>,
-    pub unimock: Option<SpanOpt<bool>>,
-    pub mockall: Option<SpanOpt<bool>>,
-}
-
-impl DelegateImplAttr {
-    fn gated_mock_attr(&self, attr: TokenStream) -> TokenStream {
-        match self.export.map(|opt| *opt.value()).unwrap_or(false) {
-            true => quote! {
-                #[#attr]
-            },
-            false => quote! {
-                #[cfg_attr(test, #attr)]
-            },
-        }
-    }
+    pub opts: Opts,
 }
 
 impl Parse for DelegateImplAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut export = None;
+        let mut debug = None;
         let mut unimock = None;
         let mut mockall = None;
 
         if !input.is_empty() {
             loop {
                 match input.parse::<EntraitOpt>()? {
-                    EntraitOpt::Export(opt) => export = Some(opt),
                     EntraitOpt::Unimock(opt) => unimock = Some(opt),
                     EntraitOpt::Mockall(opt) => mockall = Some(opt),
+                    EntraitOpt::Debug(opt) => debug = Some(opt),
                     entrait_opt => {
                         return Err(syn::Error::new(entrait_opt.span(), "Unsupported option"))
                     }
@@ -51,34 +38,28 @@ impl Parse for DelegateImplAttr {
             }
         }
 
-        Ok(Self { export, unimock, mockall })
+        Ok(Self { opts: Opts { no_deps: None, debug, async_strategy: None, export: None, unimock, mockall } })
     }
 }
 
-pub fn gen_delegate_impl(
-    attr: proc_macro::TokenStream,
-    input: proc_macro::TokenStream,
-    attr_modifier: impl FnOnce(&mut DelegateImplAttr),
-) -> proc_macro::TokenStream {
-    let mut attr = syn::parse_macro_input!(attr as DelegateImplAttr);
-    let item_trait = syn::parse_macro_input!(input as syn::ItemTrait);
-
-    attr_modifier(&mut attr);
-
+pub fn output_tokens(
+    attr: DelegateImplAttr,
+    item_trait: syn::ItemTrait,
+) -> syn::Result<proc_macro2::TokenStream> {
     let generics = generics::Generics::new(generics::Deps::NoDeps, item_trait.generics.clone());
     let trait_ident = &item_trait.ident;
 
     // NOTE: all of the trait _input attributes_ are outputted, unchanged
 
-    let opt_unimock_attr = if attr.unimock.map(|opt| *opt.value()).unwrap_or(false) {
-        Some(attr.gated_mock_attr(quote! {
-            ::entrait::__unimock::unimock(prefix=::entrait::__unimock)
-        }))
+    let opt_unimock_attr = if attr.opts.unimock.map(|opt| *opt.value()).unwrap_or(false) {
+        Some(quote! {
+            #[::entrait::__unimock::unimock(prefix=::entrait::__unimock)]
+        })
     } else {
         None
     };
-    let opt_mockall_automock_attr = if attr.mockall.map(|opt| *opt.value()).unwrap_or(false) {
-        Some(attr.gated_mock_attr(quote! { ::mockall::automock }))
+    let opt_mockall_automock_attr = if attr.opts.unimock.map(|opt| *opt.value()).unwrap_or(false) {
+        Some(quote! { #[::mockall::automock] })
     } else {
         None
     };
@@ -126,7 +107,7 @@ pub fn gen_delegate_impl(
         }
     };
 
-    tokens.into()
+    Ok(tokens)
 }
 
 fn gen_method(method: &syn::TraitItemMethod) -> TokenStream {
