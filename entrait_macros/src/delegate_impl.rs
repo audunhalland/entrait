@@ -3,24 +3,39 @@ use crate::util::opt::*;
 
 use quote::quote;
 use quote::ToTokens;
+use proc_macro2::TokenStream;
 use syn::parse::{Parse, ParseStream};
 use syn::parse_quote;
 
 pub struct DelegateImplAttr {
+    pub export: Option<SpanOpt<bool>>,
     pub unimock: Option<SpanOpt<bool>>,
-
-    /// Mocking with mockall
     pub mockall: Option<SpanOpt<bool>>,
+}
+
+impl DelegateImplAttr {
+    fn gated_mock_attr(&self, attr: TokenStream) -> TokenStream {
+        match self.export.map(|opt| *opt.value()).unwrap_or(false) {
+            true => quote! {
+                #[#attr]
+            },
+            false => quote! {
+                #[cfg_attr(test, #attr)]
+            },
+        }
+    }
 }
 
 impl Parse for DelegateImplAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut export = None;
         let mut unimock = None;
         let mut mockall = None;
 
         if !input.is_empty() {
             loop {
                 match input.parse::<EntraitOpt>()? {
+                    EntraitOpt::Export(opt) => export = Some(opt),
                     EntraitOpt::Unimock(opt) => unimock = Some(opt),
                     EntraitOpt::Mockall(opt) => mockall = Some(opt),
                     entrait_opt => {
@@ -36,7 +51,7 @@ impl Parse for DelegateImplAttr {
             }
         }
 
-        Ok(Self { unimock, mockall })
+        Ok(Self { export, unimock, mockall })
     }
 }
 
@@ -53,7 +68,15 @@ pub fn gen_delegate_impl(
     let generics = generics::Generics::new(generics::Deps::NoDeps, item_trait.generics.clone());
     let trait_ident = &item_trait.ident;
 
-    // NOTE: all of the trait attributes are outputted, unchanged
+    // NOTE: all of the trait _input attributes_ are outputted, unchanged
+
+    let opt_unimock_attr = if attr.unimock.map(|opt| *opt.value()).unwrap_or(false) {
+        Some(attr.gated_mock_attr(quote! {
+            ::entrait::__unimock::unimock(prefix=::entrait::__unimock)
+        }))
+    } else {
+        None
+    };
 
     let impl_attrs = item_trait.attrs.iter().filter(|attr| {
         matches!(
@@ -87,6 +110,7 @@ pub fn gen_delegate_impl(
         });
 
     let tokens = quote! {
+        #opt_unimock_attr
         #item_trait
 
         #(#impl_attrs)*
@@ -99,7 +123,7 @@ pub fn gen_delegate_impl(
     tokens.into()
 }
 
-fn gen_method(method: &syn::TraitItemMethod) -> proc_macro2::TokenStream {
+fn gen_method(method: &syn::TraitItemMethod) -> TokenStream {
     let fn_sig = &method.sig;
     let fn_ident = &fn_sig.ident;
     let arguments = fn_sig.inputs.iter().filter_map(|arg| match arg {
@@ -118,7 +142,7 @@ fn gen_method(method: &syn::TraitItemMethod) -> proc_macro2::TokenStream {
     }
 }
 
-fn impl_assoc_type(assoc_type: &syn::TraitItemType) -> proc_macro2::TokenStream {
+fn impl_assoc_type(assoc_type: &syn::TraitItemType) -> TokenStream {
     if let Some(future_arguments) = assoc_type.bounds.iter().find_map(find_future_arguments) {
         let ident = &assoc_type.ident;
         let generics = &assoc_type.generics;

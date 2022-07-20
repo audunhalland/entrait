@@ -103,7 +103,7 @@ mod test_tracing_instrument {
 }
 
 mod test_delegate_impl {
-    use entrait::delegate_impl;
+    use entrait::*;
 
     #[delegate_impl]
     trait Plain {
@@ -114,5 +114,23 @@ mod test_delegate_impl {
     trait Generic1<T> {
         fn generic_return(&self, arg: i32) -> T;
         fn generic_param(&self, arg: T) -> i32;
+    }
+
+    impl Plain for () {
+        fn method0(&self, arg: i32) -> i32 {
+            1337
+        }
+    }
+
+    impl Plain for &'static str {
+        fn method0(&self, arg: i32) -> i32 {
+            42
+        }
+    }
+
+    #[test]
+    fn delegate_should_have_impl_impl() {
+        assert_eq!(1337, Impl::new(()).method0(0));
+        assert_eq!(42, Impl::new("app").method0(0));
     }
 }

@@ -8,6 +8,10 @@ impl<T> SpanOpt<T> {
     pub fn of(value: T) -> Self {
         Self(value, proc_macro2::Span::call_site())
     }
+
+    pub fn value(&self) -> &T {
+        &self.0
+    }
 }
 
 ///
