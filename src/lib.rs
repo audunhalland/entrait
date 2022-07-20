@@ -620,14 +620,7 @@ mod macros {
 /// ```
 ///
 /// ## Options
-///
-/// Entrait accepts some comma-separated options after the trait identifier:
-///
-/// ```no_compile
-/// #[entrait($visibility? $TraitIdent, $option, ...)]
-/// ```
-///
-/// Where an option can be just `$option` or `$option = $value`. An option without value means `true`.
+/// An option can be just `$option` or `$option = $value`. An option without value means `true`.
 ///
 /// | Option              | Type   | Target     | Default     | Description         |
 /// | ------------------- | -------| ---------- | ----------- | ------------------- |
@@ -652,7 +645,7 @@ pub use macros::entrait;
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
 
-/// Re-exported from the `implementation` crate.
+/// Re-exported from the [implementation] crate.
 pub use ::implementation::Impl;
 
 /// Optional mock re-exports for macros
