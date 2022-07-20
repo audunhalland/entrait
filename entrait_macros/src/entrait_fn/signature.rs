@@ -1,5 +1,6 @@
-use super::input::{EntraitAttr, InputFn};
-use crate::util::generics::Deps;
+use super::attr::EntraitFnAttr;
+use crate::generics::Deps;
+use crate::input::InputFn;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -32,7 +33,7 @@ pub enum SigComponent {
 pub struct UserProvidedLifetime(bool);
 
 pub struct SignatureConverter<'a> {
-    attr: &'a EntraitAttr,
+    attr: &'a EntraitFnAttr,
     input_fn: &'a InputFn,
     deps: &'a Deps,
 }
@@ -46,7 +47,7 @@ enum ReceiverGeneration {
 
 impl<'a> SignatureConverter<'a> {
     pub fn new(
-        attr: &'a EntraitAttr,
+        attr: &'a EntraitFnAttr,
         input_fn: &'a InputFn,
         deps: &'a Deps,
     ) -> SignatureConverter<'a> {

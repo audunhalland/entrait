@@ -1,19 +1,19 @@
 //! Implementation for invoking entrait on a trait!
 
-use crate::util::generics;
-use crate::util::opt::*;
+use crate::generics;
+use crate::opt::*;
 
+use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
-use proc_macro2::TokenStream;
 use syn::parse::{Parse, ParseStream};
 use syn::parse_quote;
 
-pub struct DelegateImplAttr {
+pub struct EntraitTraitAttr {
     pub opts: Opts,
 }
 
-impl Parse for DelegateImplAttr {
+impl Parse for EntraitTraitAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut debug = None;
         let mut unimock = None;
@@ -38,12 +38,21 @@ impl Parse for DelegateImplAttr {
             }
         }
 
-        Ok(Self { opts: Opts { no_deps: None, debug, async_strategy: None, export: None, unimock, mockall } })
+        Ok(Self {
+            opts: Opts {
+                no_deps: None,
+                debug,
+                async_strategy: None,
+                export: None,
+                unimock,
+                mockall,
+            },
+        })
     }
 }
 
 pub fn output_tokens(
-    attr: DelegateImplAttr,
+    attr: EntraitTraitAttr,
     item_trait: syn::ItemTrait,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let generics = generics::Generics::new(generics::Deps::NoDeps, item_trait.generics.clone());
@@ -64,12 +73,16 @@ pub fn output_tokens(
         None
     };
 
-    let impl_attrs = item_trait.attrs.iter().filter(|attr| {
-        matches!(
-            attr.path.segments.last(),
-            Some(last_segment) if last_segment.ident == "async_trait"
-        )
-    }).collect::<Vec<_>>();
+    let impl_attrs = item_trait
+        .attrs
+        .iter()
+        .filter(|attr| {
+            matches!(
+                attr.path.segments.last(),
+                Some(last_segment) if last_segment.ident == "async_trait"
+            )
+        })
+        .collect::<Vec<_>>();
 
     let params_gen = generics.params_generator(generics::ImplementationGeneric(true));
     let args_gen = generics.arguments_generator();
@@ -84,7 +97,7 @@ pub fn output_tokens(
         .iter()
         .filter_map(|trait_item| match trait_item {
             syn::TraitItem::Type(trait_item_type) => Some(impl_assoc_type(trait_item_type)),
-            _ => None
+            _ => None,
         });
 
     let method_items = item_trait
@@ -146,12 +159,10 @@ fn impl_assoc_type(assoc_type: &syn::TraitItemType) -> TokenStream {
 
 fn find_future_arguments(bound: &syn::TypeParamBound) -> Option<&syn::PathArguments> {
     match bound {
-        syn::TypeParamBound::Trait(trait_bound) => {
-            match trait_bound.path.segments.last() {
-                Some(segment) if segment.ident == "Future" => Some(&segment.arguments),
-                _ => None
-            }
-        }
-        _ => None
+        syn::TypeParamBound::Trait(trait_bound) => match trait_bound.path.segments.last() {
+            Some(segment) if segment.ident == "Future" => Some(&segment.arguments),
+            _ => None,
+        },
+        _ => None,
     }
 }

@@ -3,15 +3,15 @@
 //! Procedural macros used by entrait.
 //!
 
-pub mod input;
+pub mod attr;
 
 mod analyze_generics;
 mod signature;
-mod for_trait;
 
-use crate::util::generics;
-use crate::util::opt::*;
-use input::*;
+use crate::generics;
+use crate::input::InputFn;
+use crate::opt::*;
+use attr::*;
 use signature::EntraitSignature;
 
 use proc_macro2::Span;
@@ -21,42 +21,10 @@ use quote::quote_spanned;
 use quote::ToTokens;
 use syn::parse_quote;
 
-pub fn invoke(
-    attr: proc_macro::TokenStream,
-    input: proc_macro::TokenStream,
-    opts_modifier: impl FnOnce(&mut Opts),
-) -> proc_macro::TokenStream {
-    let input = syn::parse_macro_input!(input as Input);
-
-    let (result, debug) = match input {
-        Input::Fn(input_fn) => {
-            let mut attr = syn::parse_macro_input!(attr as EntraitAttr);
-            opts_modifier(&mut attr.opts);
-
-            (output_tokens(&attr, input_fn), attr.debug_value())
-        }
-        Input::Trait(item_trait) => {
-            let mut attr = syn::parse_macro_input!(attr as for_trait::DelegateImplAttr);
-            opts_modifier(&mut attr.opts);
-            let debug = attr.opts.debug.map(|opt| *opt.value()).unwrap_or(false);
-
-            (for_trait::output_tokens(attr, item_trait), debug)
-        }
-    };
-
-    let output = match result {
-        Ok(token_stream) => token_stream,
-        Err(err) => err.into_compile_error(),
-    };
-
-    if debug {
-        println!("{}", output);
-    }
-
-    proc_macro::TokenStream::from(output)
-}
-
-fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macro2::TokenStream> {
+pub fn output_tokens(
+    attr: &EntraitFnAttr,
+    input_fn: InputFn,
+) -> syn::Result<proc_macro2::TokenStream> {
     let generics = analyze_generics::analyze_generics(&input_fn, attr)?;
     let entrait_sig = signature::SignatureConverter::new(attr, &input_fn, &generics.deps).convert();
     let trait_def = gen_trait_def(attr, &input_fn, &entrait_sig, &generics)?;
@@ -78,7 +46,7 @@ fn output_tokens(attr: &EntraitAttr, input_fn: InputFn) -> syn::Result<proc_macr
 }
 
 fn gen_trait_def(
-    attr: &EntraitAttr,
+    attr: &EntraitFnAttr,
     input_fn: &InputFn,
     entrait_sig: &EntraitSignature,
     generics: &generics::Generics,
@@ -90,7 +58,7 @@ fn gen_trait_def(
         generics::Deps::Concrete(_) => {
             Some(quote! { #[::entrait::entrait(unimock = false, mockall = false)] })
         }
-        _ => None
+        _ => None,
     };
     let opt_mockall_automock_attr = attr.opt_mockall_automock_attribute();
     let opt_async_trait_attr = input_fn.opt_async_trait_attribute(attr);
@@ -102,18 +70,16 @@ fn gen_trait_def(
     let where_clause = &generics.trait_generics.where_clause;
     let generics = &generics.trait_generics;
 
-    Ok(
-        quote_spanned! { span=>
-            #opt_unimock_attr
-            #opt_entrait_for_trait_attr
-            #opt_mockall_automock_attr
-            #opt_async_trait_attr
-            #trait_visibility trait #trait_ident #generics #where_clause {
-                #opt_associated_fut_decl
-                #trait_fn_sig;
-            }
+    Ok(quote_spanned! { span=>
+        #opt_unimock_attr
+        #opt_entrait_for_trait_attr
+        #opt_mockall_automock_attr
+        #opt_async_trait_attr
+        #trait_visibility trait #trait_ident #generics #where_clause {
+            #opt_associated_fut_decl
+            #trait_fn_sig;
         }
-    )
+    })
 }
 
 ///
@@ -128,12 +94,12 @@ fn gen_trait_def(
 /// ```
 ///
 fn gen_impl_blocks(
-    attr: &EntraitAttr,
+    attr: &EntraitFnAttr,
     input_fn: &InputFn,
     entrait_sig: &EntraitSignature,
     generics: &generics::Generics,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let EntraitAttr { trait_ident, .. } = attr;
+    let EntraitFnAttr { trait_ident, .. } = attr;
     let InputFn { fn_sig, .. } = input_fn;
 
     let span = trait_ident.span();
@@ -279,7 +245,7 @@ fn gen_delegating_fn_item(
     })
 }
 
-impl EntraitAttr {
+impl EntraitFnAttr {
     pub fn opt_unimock_attribute(
         &self,
         entrait_sig: &EntraitSignature,
@@ -357,14 +323,14 @@ impl InputFn {
         }
     }
 
-    pub fn use_associated_future(&self, attr: &EntraitAttr) -> bool {
+    pub fn use_associated_future(&self, attr: &EntraitFnAttr) -> bool {
         matches!(
             (attr.async_strategy(), self.fn_sig.asyncness),
             (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
         )
     }
 
-    fn opt_async_trait_attribute(&self, attr: &EntraitAttr) -> Option<proc_macro2::TokenStream> {
+    fn opt_async_trait_attribute(&self, attr: &EntraitFnAttr) -> Option<proc_macro2::TokenStream> {
         match (attr.async_strategy(), self.fn_sig.asyncness) {
             (SpanOpt(AsyncStrategy::AsyncTrait, span), Some(_async)) => {
                 Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })

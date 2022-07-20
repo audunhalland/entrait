@@ -1,9 +1,10 @@
-use super::input;
-use super::input::InputFn;
-use crate::util::generics::{Deps, Generics};
+use super::attr::EntraitFnAttr;
+use crate::generics::{Deps, Generics};
+use crate::input::InputFn;
+
 use syn::spanned::Spanned;
 
-pub fn analyze_generics(func: &InputFn, attr: &input::EntraitAttr) -> syn::Result<Generics> {
+pub fn analyze_generics(func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<Generics> {
     if attr.no_deps_value() {
         return Ok(Generics::new(
             Deps::NoDeps,
