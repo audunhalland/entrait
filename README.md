@@ -384,7 +384,7 @@ fn foo(deps: &()) {}
 
 It is also possible to reduce noise by doing `use entrait::entrait_export as entrait`.
 
-#### Feature summary
+#### Feature overview
 | Feature                 | Implies       | Description         |
 | -------------------     | ------------- | ------------------- |
 | `unimock`               |               | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |

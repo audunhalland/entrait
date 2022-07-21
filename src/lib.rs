@@ -489,7 +489,7 @@ async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
 //!
 //! It is also possible to reduce noise by doing `use entrait::entrait_export as entrait`.
 //!
-//! #### Feature summary
+//! #### Feature overview
 //! | Feature                 | Implies       | Description         |
 //! | -------------------     | ------------- | ------------------- |
 //! | `unimock`               |               | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
