@@ -28,6 +28,10 @@ feignhttp = "0.4"
 mockall = "0.11"
 tracing = "0.1"
 
+[lib]
+# do not run doctest by default with `cargo hack`. They are tested with a separate `cargo test --doc` run.
+doctest = false
+
 [package.metadata.docs.rs]
 features = ["unimock", "use-async-trait"]
 

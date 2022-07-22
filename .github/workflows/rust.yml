@@ -16,6 +16,8 @@ jobs:
       - uses: taiki-e/install-action@cargo-hack
       - name: Test feature powerset
         run: cargo hack --feature-powerset --optional-deps "unimock" --exclude-features "default use-associated-future" --exclude-no-default-features test
+      - name: Doctest
+        run: cargo test --doc --features "unimock use-async-trait"
       - name: Test workspace
         run: cargo test --workspace --features "async-trait"
 

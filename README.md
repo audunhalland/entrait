@@ -134,10 +134,66 @@ To enable mocking of entraited functions, they get reified and defined as a type
 
 Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
 
+```rust
+#[entrait(Foo)]
+fn foo<D>(_: &D) -> i32 {
+    unimplemented!()
+}
+#[entrait(Bar)]
+fn bar<D>(_: &D) -> i32 {
+    unimplemented!()
+}
+
+fn my_func(deps: &(impl Foo + Bar)) -> i32 {
+    deps.foo() + deps.bar()
+}
+
+let mocked_deps = unimock::mock([
+    foo::Fn.each_call(matching!()).returns(40).in_any_order(),
+    bar::Fn.each_call(matching!()).returns(2).in_any_order(),
+]);
+
+assert_eq!(42, my_func(&mocked_deps));
+```
 
 #### Deep integration testing with unimock
 Entrait with unimock supports _un-mocking_. This means that the test environment can be _partially mocked!_
 
+```rust
+#[entrait(SayHello)]
+fn say_hello(deps: &impl FetchPlanetName, planet_id: u32) -> Result<String, ()> {
+    Ok(format!("Hello {}!", deps.fetch_planet_name(planet_id)?))
+}
+
+#[entrait(FetchPlanetName)]
+fn fetch_planet_name(deps: &impl FetchPlanet, planet_id: u32) -> Result<String, ()> {
+    let planet = deps.fetch_planet(planet_id)?;
+    Ok(planet.name)
+}
+
+pub struct Planet {
+    name: String
+}
+
+#[entrait(FetchPlanet)]
+fn fetch_planet(deps: &(), planet_id: u32) -> Result<Planet, ()> {
+    unimplemented!("This doc test has no access to a database :(")
+}
+
+let hello_string = say_hello(
+    &unimock::spy([
+        fetch_planet::Fn
+            .each_call(matching!(_))
+            .answers(|_| Ok(Planet {
+                name: "World".to_string(),
+            }))
+            .in_any_order(),
+    ]),
+    123456,
+).unwrap();
+
+assert_eq!("Hello World!", hello_string);
+```
 
 This example used [`unimock::spy`](unimock::spy) to create a mocker that works mostly like `Impl`, except that the call graph can be short-circuited at arbitrary, run-time configurable points.
 The example code goes through three layers (`say_hello => fetch_planet_name => fetch_planet`), and only the deepest one gets mocked out.
@@ -328,6 +384,11 @@ fn foo<D>(deps: &D) { // <-- private function
 #### `async` support
 Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
 
+```rust
+#[entrait(Foo, async_trait)]
+async fn foo<D>(deps: &D) {
+}
+```
 This is designed to be forwards compatible with real async fn in traits.
 When that day comes, you should be able to just remove the `async_trait` to get a proper zero-cost future.
 
@@ -360,6 +421,11 @@ For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp
 can to co-exist with macros like these. Since `entrait` is a higher-level macro that does not touch fn bodies (it does not even try to parse them),
 entrait should be processed after, which means it should be placed _before_ lower level macros. Example:
 
+```rust
+#[entrait(FetchThing, no_deps)]
+#[feignhttp::get("https://my.api.org/api/{param}")]
+async fn fetch_thing(#[path] param: String) -> feignhttp::Result<String> {}
+```
 
 Here we had to use the `no_deps` entrait option.
 This is used to tell entrait that the function does not have a `deps` parameter as its first input.
