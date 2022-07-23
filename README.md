@@ -461,20 +461,33 @@ It is also possible to reduce noise by doing `use entrait::entrait_export as ent
 
 
 # "Philosophy"
-The `entrait` crate is a building block of a design pattern - the _entrait pattern_.
-The entrait pattern is simply a convenient way to achieve unit testing of business logic.
+The `entrait` crate is central to the _entrait pattern_, an opinionated yet flexible way to build testable applications/business logic.
 
-Entrait is not intended for achieving polymorphism. If you want that, you should instead hand-write a trait.
+To understand the entrait model and how to achieve Dependency Injection (DI) with it, we can compare it with a more widely used and classical alternative pattern:
+    _Object-Oriented DI_.
 
-_Entrait should only be used to define an abstract computation that has a single implementation in realase mode, but is mockable in test mode._
+In object-oriented DI, each named dependency is a separate object instance.
+Each dependency exports a set of public methods, and internally points to a set of private dependencies.
+A working application is built by fully instantiating such an _object graph_ of interconnected dependencies.
 
-`entrait` does not implement Dependency Injection (DI) in the classical, Object Oriented sense.
-Classical DI is an object-oriented concept that will often look awkward in Rust.
-The author thinks of DI as the "reification of code modules":
-  In a DI-enabled programming environment, code modules are grouped together as _objects_ and other modules may depend upon the _interface_ of such an object by receiving some instance that implements it.
-When this pattern is applied successively, one ends up with an in-memory dependency graph of high-level modules.
+Entrait was built to address two drawbacks inherent to this design:
 
-`entrait` tries to turn this around by saying that the primary abstraction that is depended upon is a set of _functions_, not a set of code modules.
+* Representing a _graph_ of objects (even if acyclic) in Rust usually requires reference counting/heap allocation.
+* Each "dependency" abstraction often contains a lot of different functionality.
+    As an example, consider [DDD](https://en.wikipedia.org/wiki/Domain-driven_design)-based applications consisting of `DomainServices`.
+    There will typically be one such class per domain object, with a lot of methods in each.
+    This results in dependency graphs with fewer nodes overall, but the number of possible _call graphs_ is much larger.
+    A common problem with this is that the _actual dependencies_—the functions actually getting called—are encapsulated
+        and hidden away from public interfaces.
+    To construct valid dependency mocks in unit tests, a developer will have to read through full function bodies instead of looking at signatures.
+
+`entrait` solves this by:
+
+* Representing dependencies as _traits_ instead of types, automatically profiting from Rust's builtin zero-cost abstraction tool.
+* Having each dependency do only one thing, by abstracting over _functions_ instead of _modules_.
+    This is possible because we do not pay anything extra for having more detailed dependency graphs.
+
+
 
 # Limitations
 This section lists known limitations of entrait:
