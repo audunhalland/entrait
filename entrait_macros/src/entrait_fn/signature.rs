@@ -98,7 +98,7 @@ impl<'a> SignatureConverter<'a> {
 
     fn detect_receiver_generation(&self, sig: &syn::Signature) -> ReceiverGeneration {
         match self.deps {
-            Deps::NoDeps => ReceiverGeneration::Insert,
+            Deps::NoDeps { .. } => ReceiverGeneration::Insert,
             _ => {
                 if sig.inputs.is_empty() {
                     if self.input_fn.use_associated_future(self.attr) {

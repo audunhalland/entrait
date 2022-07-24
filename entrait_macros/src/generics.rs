@@ -1,24 +1,24 @@
 pub struct Generics {
     pub deps: Deps,
     pub trait_generics: syn::Generics,
-    pub entrait_t: syn::Ident,
 }
-
-pub struct ImplementationGeneric(pub bool);
 
 impl Generics {
     pub fn new(deps: Deps, trait_generics: syn::Generics) -> Self {
         Self {
             deps,
             trait_generics,
-            entrait_t: syn::Ident::new("EntraitT", proc_macro2::Span::call_site()),
         }
     }
 
-    pub fn params_generator(&self, impl_generic: ImplementationGeneric) -> ParamsGenerator {
+    pub fn params_generator(&self) -> ParamsGenerator {
         ParamsGenerator {
             trait_generics: &self.trait_generics,
-            entrait_t: impl_generic.0.then_some(&self.entrait_t),
+            impl_t: match &self.deps {
+                Deps::Generic { idents, .. } => Some(&idents.impl_t),
+                Deps::NoDeps { idents } => Some(&idents.impl_t),
+                Deps::Concrete(_) => None,
+            },
         }
     }
 
@@ -40,28 +40,73 @@ pub enum Deps {
     Generic {
         generic_param: Option<syn::Ident>,
         trait_bounds: Vec<syn::TypeParamBound>,
+        idents: GenericIdents,
     },
     Concrete(Box<syn::Type>),
-    NoDeps,
+    NoDeps {
+        idents: GenericIdents,
+    },
+}
+
+pub struct GenericIdents {
+    /// "entrait"
+    pub entrait_crate: syn::Ident,
+
+    /// "Impl"
+    pub impl_self: syn::Ident,
+
+    /// The "T" in `Impl<T>`
+    pub impl_t: syn::Ident, //
+}
+
+impl GenericIdents {
+    pub fn new(span: proc_macro2::Span) -> Self {
+        Self {
+            entrait_crate: syn::Ident::new("entrait", span),
+            impl_self: syn::Ident::new("Impl", span),
+            impl_t: syn::Ident::new("EntraitT", span),
+        }
+    }
+
+    /// `::entrait::Impl<EntraitT>`
+    pub fn impl_path(&self, span: proc_macro2::Span) -> ImplPath<'_> {
+        ImplPath(self, span)
+    }
+}
+
+/// `::entrait::Impl<EntraitT>`
+pub struct ImplPath<'g>(&'g GenericIdents, proc_macro2::Span);
+
+impl<'g> quote::ToTokens for ImplPath<'g> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let span = self.1;
+        syn::token::Colon2(span).to_tokens(tokens);
+        self.0.entrait_crate.to_tokens(tokens);
+        syn::token::Colon2(span).to_tokens(tokens);
+        self.0.impl_self.to_tokens(tokens);
+        syn::token::Lt(span).to_tokens(tokens);
+        self.0.impl_t.to_tokens(tokens);
+        syn::token::Gt(span).to_tokens(tokens);
+    }
 }
 
 // Params as in impl<..Param>
 pub struct ParamsGenerator<'g> {
     trait_generics: &'g syn::Generics,
-    entrait_t: Option<&'g syn::Ident>,
+    impl_t: Option<&'g syn::Ident>,
 }
 
 impl<'g> quote::ToTokens for ParamsGenerator<'g> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let has_trait_generics = !self.trait_generics.params.is_empty();
 
-        if !has_trait_generics && self.entrait_t.is_none() {
+        if !has_trait_generics && self.impl_t.is_none() {
             return;
         }
 
         syn::token::Lt::default().to_tokens(tokens);
-        if let Some(entrait_t) = &self.entrait_t {
-            entrait_t.to_tokens(tokens);
+        if let Some(impl_t) = &self.impl_t {
+            impl_t.to_tokens(tokens);
 
             if has_trait_generics {
                 syn::token::Comma::default().to_tokens(tokens);

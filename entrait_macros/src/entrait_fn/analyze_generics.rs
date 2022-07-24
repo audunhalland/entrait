@@ -1,13 +1,16 @@
 use super::attr::EntraitFnAttr;
-use crate::generics::{Deps, Generics};
+use crate::generics::{Deps, GenericIdents, Generics};
 use crate::input::InputFn;
 
 use syn::spanned::Spanned;
 
 pub fn analyze_generics(func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<Generics> {
+    let span = attr.trait_ident.span();
     if attr.no_deps_value() {
         return Ok(Generics::new(
-            Deps::NoDeps,
+            Deps::NoDeps {
+                idents: GenericIdents::new(span),
+            },
             clone_type_generics(&func.fn_sig.generics),
         ));
     }
@@ -31,10 +34,11 @@ pub fn analyze_generics(func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<Gen
         }
     };
 
-    extract_deps_from_type(func, pat_type, pat_type.ty.as_ref())
+    extract_deps_from_type(span, func, pat_type, pat_type.ty.as_ref())
 }
 
 fn extract_deps_from_type<'f>(
+    span: proc_macro2::Span,
     func: &'f InputFn,
     arg_pat: &'f syn::PatType,
     ty: &'f syn::Type,
@@ -46,6 +50,7 @@ fn extract_deps_from_type<'f>(
                 Deps::Generic {
                     generic_param: None,
                     trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
+                    idents: GenericIdents::new(span),
                 },
                 clone_type_generics(&func.fn_sig.generics),
             ))
@@ -70,7 +75,7 @@ fn extract_deps_from_type<'f>(
 
             let first_segment = type_path.path.segments.first().unwrap();
 
-            match find_deps_generic_bounds(func, &first_segment.ident) {
+            match find_deps_generic_bounds(span, func, &first_segment.ident) {
                 Some(generics) => Ok(generics),
                 None => Ok(Generics::new(
                     Deps::Concrete(Box::new(ty.clone())),
@@ -79,9 +84,9 @@ fn extract_deps_from_type<'f>(
             }
         }
         syn::Type::Reference(type_reference) => {
-            extract_deps_from_type(func, arg_pat, type_reference.elem.as_ref())
+            extract_deps_from_type(span, func, arg_pat, type_reference.elem.as_ref())
         }
-        syn::Type::Paren(paren) => extract_deps_from_type(func, arg_pat, paren.elem.as_ref()),
+        syn::Type::Paren(paren) => extract_deps_from_type(span, func, arg_pat, paren.elem.as_ref()),
         ty => Ok(Generics::new(
             Deps::Concrete(Box::new(ty.clone())),
             clone_type_generics(&func.fn_sig.generics),
@@ -89,7 +94,11 @@ fn extract_deps_from_type<'f>(
     }
 }
 
-fn find_deps_generic_bounds(func: &InputFn, generic_param_ident: &syn::Ident) -> Option<Generics> {
+fn find_deps_generic_bounds(
+    span: proc_macro2::Span,
+    func: &InputFn,
+    generic_param_ident: &syn::Ident,
+) -> Option<Generics> {
     let generics = &func.fn_sig.generics;
     let generic_params = &generics.params;
 
@@ -180,6 +189,7 @@ fn find_deps_generic_bounds(func: &InputFn, generic_param_ident: &syn::Ident) ->
         Deps::Generic {
             generic_param: Some(generic_param_ident.clone()),
             trait_bounds: deps_trait_bounds,
+            idents: GenericIdents::new(span),
         },
         modified_generics,
     ))

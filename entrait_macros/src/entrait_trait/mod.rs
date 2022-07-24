@@ -55,8 +55,18 @@ pub fn output_tokens(
     attr: EntraitTraitAttr,
     item_trait: syn::ItemTrait,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let generics = generics::Generics::new(generics::Deps::NoDeps, item_trait.generics.clone());
+    let generics = generics::Generics::new(
+        generics::Deps::NoDeps {
+            idents: generics::GenericIdents::new(item_trait.ident.span()),
+        },
+        item_trait.generics.clone(),
+    );
+    let generic_idents = match &generics.deps {
+        generics::Deps::NoDeps { idents } => idents,
+        _ => panic!(),
+    };
     let trait_ident = &item_trait.ident;
+    let impl_t = &generic_idents.impl_t;
 
     // NOTE: all of the trait _input attributes_ are outputted, unchanged
 
@@ -84,12 +94,13 @@ pub fn output_tokens(
         })
         .collect::<Vec<_>>();
 
-    let params_gen = generics.params_generator(generics::ImplementationGeneric(true));
-    let args_gen = generics.arguments_generator();
+    let params = generics.params_generator();
+    let args = generics.arguments_generator();
+    let self_ty = generic_idents.impl_path(item_trait.ident.span());
     let mut where_clause_gen = generics.where_clause_generator();
 
     where_clause_gen.push_impl_predicate(parse_quote! {
-        EntraitT: #trait_ident #args_gen + Sync
+        #impl_t: #trait_ident #args + Sync
     });
 
     let impl_assoc_types = item_trait
@@ -114,7 +125,7 @@ pub fn output_tokens(
         #item_trait
 
         #(#impl_attrs)*
-        impl #params_gen #trait_ident #args_gen for ::entrait::Impl<EntraitT> #where_clause_gen {
+        impl #params #trait_ident #args for #self_ty #where_clause_gen {
             #(#impl_assoc_types)*
             #(#method_items)*
         }
