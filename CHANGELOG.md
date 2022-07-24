@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+## [0.4.0]
 ### Added
 - `implementation` as a dependency, to help users getting started.
 - `unimock` feature. Enabling the features downstream will generate mocks upstream.
@@ -14,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for generic functions.
 - Support for entraiting a trait.
 ### Changed
-- Restructure lib docs a bit.
+- Restructure lib docs.
 ### Removed
 - Support for parameter-less functions without use of `no_deps`. This is technically 'breaking' but can also be seen as a bugfix.
 - Submodule import paths (`entrait::unimock`, etc). This is instead enabled by using features.
