@@ -91,9 +91,7 @@ impl<'a> SignatureConverter<'a> {
         self.remove_generic_type_params(&mut entrait_sig.sig);
         tidy_generics(&mut entrait_sig.sig.generics);
 
-        if entrait_sig.sig.inputs.iter().any(needs_param_ident) {
-            fn_params::convert_params_to_ident(&mut entrait_sig.sig);
-        }
+        fn_params::convert_params_to_ident(&mut entrait_sig.sig);
 
         entrait_sig
     }
@@ -268,13 +266,6 @@ fn output_type_tokens(return_type: &syn::ReturnType) -> TokenStream {
     match return_type {
         syn::ReturnType::Default => quote! { () },
         syn::ReturnType::Type(_, ty) => quote! { #ty },
-    }
-}
-
-fn needs_param_ident(fn_arg: &syn::FnArg) -> bool {
-    match fn_arg {
-        syn::FnArg::Receiver(_) => false,
-        syn::FnArg::Typed(pat_type) => !matches!(pat_type.pat.as_ref(), syn::Pat::Ident(_)),
     }
 }
 

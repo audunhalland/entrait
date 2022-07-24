@@ -446,6 +446,10 @@ mod destructuring_params {
     // Should become (arg1, _arg1)
     #[entrait(DestructuringNoDepsMixedConflict, no_deps)]
     fn destructuring_no_deps_mixed_confict(arg1: NewType<i32>, NewType(num2): NewType<i32>) {}
+
+    // Should become (arg1, _arg1)
+    #[entrait(WildcardParams, no_deps)]
+    fn wildcard_params(_: i32, _: i32) {}
 }
 
 mod entrait_for_trait_unimock {
@@ -462,7 +466,8 @@ mod entrait_for_trait_unimock {
         assert_eq!(
             42,
             mock(Some(
-                Trait__method1.each_call(matching!())
+                Trait__method1
+                    .each_call(matching!())
                     .returns(42)
                     .in_any_order()
             ))
@@ -471,7 +476,9 @@ mod entrait_for_trait_unimock {
     }
 
     #[test]
-    #[should_panic(expected = "Trait::method1 cannot be unmocked as there is no function available to call.")]
+    #[should_panic(
+        expected = "Trait::method1 cannot be unmocked as there is no function available to call."
+    )]
     fn entraited_trait_should_not_be_spyable() {
         spy(None).method1();
     }
