@@ -6,6 +6,66 @@ pub fn convert_params_to_ident(sig: &mut syn::Signature) {
         return;
     }
 
+    lift_inner_pat_idents(sig);
+    autogenerate_for_non_idents(sig);
+}
+
+fn needs_param_ident(fn_arg: &syn::FnArg) -> bool {
+    match fn_arg {
+        syn::FnArg::Receiver(_) => false,
+        syn::FnArg::Typed(pat_type) => !matches!(pat_type.pat.as_ref(), syn::Pat::Ident(_)),
+    }
+}
+
+fn lift_inner_pat_idents(sig: &mut syn::Signature) {
+    fn try_lift_unambiguous_inner(pat: &syn::Pat) -> Option<&syn::Ident> {
+        struct PatIdentSearcher<'ast> {
+            binding_pat_idents: Vec<&'ast syn::Ident>,
+        }
+
+        impl<'ast> syn::visit::Visit<'ast> for PatIdentSearcher<'ast> {
+            fn visit_pat_ident(&mut self, i: &'ast syn::PatIdent) {
+                let ident_string = i.ident.to_string();
+
+                match ident_string.chars().next() {
+                    Some(char) if char.is_lowercase() => {
+                        self.binding_pat_idents.push(&i.ident);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut searcher = PatIdentSearcher {
+            binding_pat_idents: vec![],
+        };
+
+        searcher.visit_pat(pat);
+
+        if searcher.binding_pat_idents.len() == 1 {
+            searcher.binding_pat_idents.into_iter().next()
+        } else {
+            None
+        }
+    }
+
+    for fn_arg in &mut sig.inputs {
+        match fn_arg {
+            syn::FnArg::Receiver(_) => {}
+            syn::FnArg::Typed(pat_type) => match pat_type.pat.as_mut() {
+                syn::Pat::Ident(_) => {}
+                pat => match try_lift_unambiguous_inner(pat) {
+                    Some(ident) => {
+                        *pat_type.pat = syn::parse_quote! { #ident };
+                    }
+                    None => {}
+                },
+            },
+        }
+    }
+}
+
+fn autogenerate_for_non_idents(sig: &mut syn::Signature) {
     let mut taken_idents: HashSet<String> = sig
         .inputs
         .iter()
@@ -41,55 +101,11 @@ pub fn convert_params_to_ident(sig: &mut syn::Signature) {
     for (index, pat_type_arg) in pat_type_args.enumerate() {
         match pat_type_arg.pat.as_mut() {
             syn::Pat::Ident(_) => {}
-            pat => match find_unambiguous_pat_ident_binding(pat) {
-                Some(ident) => {
-                    taken_idents.insert(ident.to_string());
-                    *pat_type_arg.pat = syn::parse_quote! { #ident };
-                }
-                None => {
-                    let new_ident_string = generate_ident(index, 0, &mut taken_idents);
-                    let new_ident = quote::format_ident!("{}", new_ident_string);
-                    *pat_type_arg.pat = syn::parse_quote! { #new_ident };
-                }
-            },
-        }
-    }
-}
-
-fn needs_param_ident(fn_arg: &syn::FnArg) -> bool {
-    match fn_arg {
-        syn::FnArg::Receiver(_) => false,
-        syn::FnArg::Typed(pat_type) => !matches!(pat_type.pat.as_ref(), syn::Pat::Ident(_)),
-    }
-}
-
-fn find_unambiguous_pat_ident_binding(pat: &syn::Pat) -> Option<&syn::Ident> {
-    let mut searcher = PatIdentSearcher {
-        binding_pat_idents: vec![],
-    };
-
-    searcher.visit_pat(pat);
-
-    if searcher.binding_pat_idents.len() == 1 {
-        searcher.binding_pat_idents.into_iter().next()
-    } else {
-        None
-    }
-}
-
-struct PatIdentSearcher<'ast> {
-    binding_pat_idents: Vec<&'ast syn::Ident>,
-}
-
-impl<'ast> syn::visit::Visit<'ast> for PatIdentSearcher<'ast> {
-    fn visit_pat_ident(&mut self, i: &'ast syn::PatIdent) {
-        let ident_string = i.ident.to_string();
-
-        match ident_string.chars().next() {
-            Some(char) if char.is_lowercase() => {
-                self.binding_pat_idents.push(&i.ident);
+            _ => {
+                let new_ident_string = generate_ident(index, 0, &mut taken_idents);
+                let new_ident = quote::format_ident!("{}", new_ident_string);
+                *pat_type_arg.pat = syn::parse_quote! { #new_ident };
             }
-            _ => {}
         }
     }
 }
@@ -116,6 +132,15 @@ mod tests {
             },
             syn::parse_quote! {
                 fn foo(arg1: T, _arg1: T, arg3: T, _arg3: T)
+            },
+        );
+
+        convert_expect(
+            syn::parse_quote! {
+                fn foo(_: T, T(arg0): T)
+            },
+            syn::parse_quote! {
+                fn foo(_arg0: T, arg0: T)
             },
         );
     }
