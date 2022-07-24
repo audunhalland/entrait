@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Fixed
+- Extract idents from destructured fn params and use those in trait fn signature, given that the ident is unambigous.
 ### Changed
 - Refactor/optimize internal where clause generator, avoiding syn::parse_quote
 
