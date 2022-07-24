@@ -27,13 +27,6 @@ impl Generics {
             trait_generics: &self.trait_generics,
         }
     }
-
-    pub fn where_clause_generator(&self) -> WhereClauseGenerator {
-        WhereClauseGenerator {
-            trait_generics: &self.trait_generics,
-            impl_predicates: Default::default(),
-        }
-    }
 }
 
 pub enum Deps {
@@ -147,47 +140,5 @@ impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
         }
 
         syn::token::Gt::default().to_tokens(tokens);
-    }
-}
-
-/// Join where clauses from the input function and the required ones for Impl<T>
-pub struct WhereClauseGenerator<'g> {
-    trait_generics: &'g syn::Generics,
-    impl_predicates: syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
-}
-
-impl<'g> WhereClauseGenerator<'g> {
-    pub fn push_impl_predicate(&mut self, predicate: syn::WherePredicate) {
-        self.impl_predicates.push(predicate);
-    }
-}
-
-impl<'g> quote::ToTokens for WhereClauseGenerator<'g> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let has_impl_preds = !self.impl_predicates.is_empty();
-        if self.trait_generics.where_clause.is_none() && !has_impl_preds {
-            return;
-        }
-
-        syn::token::Where::default().to_tokens(tokens);
-        if let Some(where_clause) = &self.trait_generics.where_clause {
-            let mut trailing_comma = false;
-            for pair in where_clause.predicates.pairs() {
-                pair.value().to_tokens(tokens);
-                trailing_comma = match pair.punct() {
-                    Some(punct) => {
-                        punct.to_tokens(tokens);
-                        true
-                    }
-                    None => false,
-                }
-            }
-
-            if has_impl_preds && !trailing_comma {
-                syn::token::Comma::default().to_tokens(tokens);
-            }
-        }
-
-        self.impl_predicates.to_tokens(tokens);
     }
 }

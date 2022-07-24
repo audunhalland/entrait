@@ -7,7 +7,6 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
-use syn::parse_quote;
 
 pub struct EntraitTraitAttr {
     pub opts: Opts,
@@ -66,7 +65,6 @@ pub fn output_tokens(
         _ => panic!(),
     };
     let trait_ident = &item_trait.ident;
-    let impl_t = &generic_idents.impl_t;
 
     // NOTE: all of the trait _input attributes_ are outputted, unchanged
 
@@ -97,11 +95,12 @@ pub fn output_tokens(
     let params = generics.params_generator();
     let args = generics.arguments_generator();
     let self_ty = generic_idents.impl_path(item_trait.ident.span());
-    let mut where_clause_gen = generics.where_clause_generator();
-
-    where_clause_gen.push_impl_predicate(parse_quote! {
-        #impl_t: #trait_ident #args + Sync
-    });
+    let where_clause = ImplWhereClause {
+        trait_ident,
+        generics: &generics,
+        generic_idents,
+        span: item_trait.ident.span(),
+    };
 
     let impl_assoc_types = item_trait
         .items
@@ -125,7 +124,7 @@ pub fn output_tokens(
         #item_trait
 
         #(#impl_attrs)*
-        impl #params #trait_ident #args for #self_ty #where_clause_gen {
+        impl #params #trait_ident #args for #self_ty #where_clause {
             #(#impl_assoc_types)*
             #(#method_items)*
         }
@@ -175,5 +174,38 @@ fn find_future_arguments(bound: &syn::TypeParamBound) -> Option<&syn::PathArgume
             _ => None,
         },
         _ => None,
+    }
+}
+
+struct ImplWhereClause<'g> {
+    trait_ident: &'g syn::Ident,
+    generics: &'g generics::Generics,
+    generic_idents: &'g generics::GenericIdents,
+    span: proc_macro2::Span,
+}
+
+impl<'g> quote::ToTokens for ImplWhereClause<'g> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        syn::token::Where(self.span).to_tokens(tokens);
+
+        // T: Trait<G> + Sync
+        {
+            // T:
+            self.generic_idents.impl_t.to_tokens(tokens);
+            syn::token::Colon(self.span).to_tokens(tokens);
+
+            // Trait<G>
+            self.trait_ident.to_tokens(tokens);
+            self.generics.arguments_generator().to_tokens(tokens);
+
+            // + Sync
+            syn::token::Add(self.span).to_tokens(tokens);
+            syn::Ident::new("Sync", self.span).to_tokens(tokens);
+        }
+
+        if let Some(where_clause) = &self.generics.trait_generics.where_clause {
+            syn::token::Comma(self.span).to_tokens(tokens);
+            where_clause.predicates.to_tokens(tokens);
+        }
     }
 }
