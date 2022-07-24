@@ -41,8 +41,9 @@ pub fn convert_params_to_ident(sig: &mut syn::Signature) {
     for (index, pat_type_arg) in pat_type_args.enumerate() {
         match pat_type_arg.pat.as_mut() {
             syn::Pat::Ident(_) => {}
-            pat => match find_ident(pat) {
+            pat => match find_unambiguous_pat_ident_binding(pat) {
                 Some(ident) => {
+                    taken_idents.insert(ident.to_string());
                     *pat_type_arg.pat = syn::parse_quote! { #ident };
                 }
                 None => {
@@ -62,7 +63,7 @@ fn needs_param_ident(fn_arg: &syn::FnArg) -> bool {
     }
 }
 
-fn find_ident(pat: &syn::Pat) -> Option<&syn::Ident> {
+fn find_unambiguous_pat_ident_binding(pat: &syn::Pat) -> Option<&syn::Ident> {
     let mut searcher = PatIdentSearcher {
         binding_pat_idents: vec![],
     };
@@ -111,10 +112,10 @@ mod tests {
     fn should_not_generate_conflicts() {
         convert_expect(
             syn::parse_quote! {
-                fn foo(arg1: i32, _: i32)
+                fn foo(arg1: T, _: T, T(arg3): T, _: T)
             },
             syn::parse_quote! {
-                fn foo(arg1: i32, _arg1: i32)
+                fn foo(arg1: T, _arg1: T, arg3: T, _arg3: T)
             },
         );
     }
