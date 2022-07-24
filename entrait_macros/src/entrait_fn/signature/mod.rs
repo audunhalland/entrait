@@ -1,3 +1,5 @@
+mod fn_params;
+
 use super::attr::EntraitFnAttr;
 use crate::generics::Deps;
 use crate::input::InputFn;
