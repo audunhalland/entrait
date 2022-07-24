@@ -153,7 +153,7 @@ impl<'a> SignatureConverter<'a> {
     ) {
         let span = self.attr.trait_ident.span();
 
-        lifetimes::expand_lifetimes(entrait_sig, receiver_generation);
+        lifetimes::de_elide_lifetimes(entrait_sig, receiver_generation);
 
         let output_ty = output_type_tokens(&entrait_sig.sig.output);
 

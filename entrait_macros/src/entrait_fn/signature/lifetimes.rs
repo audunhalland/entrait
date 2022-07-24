@@ -5,44 +5,44 @@ use super::{
 use std::collections::HashSet;
 use syn::visit_mut::VisitMut;
 
-pub(super) fn expand_lifetimes(
+pub(super) fn de_elide_lifetimes(
     entrait_sig: &mut EntraitSignature,
     receiver_generation: ReceiverGeneration,
 ) {
     let mut elision_detector = ElisionDetector::new(receiver_generation);
     elision_detector.detect(&mut entrait_sig.sig);
 
-    let mut expander = LifetimeExpander::new(elision_detector.elided_params);
+    let mut de_elider = LifetimeDeElider::new(elision_detector.elided_params);
 
     match receiver_generation {
         ReceiverGeneration::None => {
             for (index, arg) in entrait_sig.sig.inputs.iter_mut().enumerate() {
-                expander.expand_param(index, arg);
+                de_elider.de_elide_param(index, arg);
             }
         }
         ReceiverGeneration::Rewrite | ReceiverGeneration::Insert => {
-            expander.expand_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
+            de_elider.de_elide_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
 
             for (index, arg) in entrait_sig.sig.inputs.iter_mut().skip(1).enumerate() {
-                expander.expand_param(index, arg);
+                de_elider.de_elide_param(index, arg);
             }
         }
     }
 
-    expander.expand_output(&mut entrait_sig.sig.output);
+    de_elider.de_elide_output(&mut entrait_sig.sig.output);
 
-    entrait_sig.lifetimes.append(&mut expander.lifetimes);
+    entrait_sig.lifetimes.append(&mut de_elider.lifetimes);
 }
 
 /// Looks at elided lifetimes and makes them explicit.
 /// Also collects all lifetimes into `lifetimes`.
-struct LifetimeExpander {
+struct LifetimeDeElider {
     current_component: SigComponent,
     elided_params: HashSet<usize>,
     lifetimes: Vec<EntraitLifetime>,
 }
 
-impl LifetimeExpander {
+impl LifetimeDeElider {
     fn new(elided_params: HashSet<usize>) -> Self {
         Self {
             current_component: SigComponent::Receiver,
@@ -51,17 +51,17 @@ impl LifetimeExpander {
         }
     }
 
-    fn expand_receiver(&mut self, arg: &mut syn::FnArg) {
+    fn de_elide_receiver(&mut self, arg: &mut syn::FnArg) {
         self.current_component = SigComponent::Receiver;
         self.visit_fn_arg_mut(arg);
     }
 
-    fn expand_param(&mut self, index: usize, arg: &mut syn::FnArg) {
+    fn de_elide_param(&mut self, index: usize, arg: &mut syn::FnArg) {
         self.current_component = SigComponent::Param(index);
         self.visit_fn_arg_mut(arg);
     }
 
-    fn expand_output(&mut self, output: &mut syn::ReturnType) {
+    fn de_elide_output(&mut self, output: &mut syn::ReturnType) {
         self.current_component = SigComponent::Output;
         self.visit_return_type_mut(output);
     }
@@ -134,7 +134,7 @@ impl LifetimeExpander {
     }
 }
 
-impl syn::visit_mut::VisitMut for LifetimeExpander {
+impl syn::visit_mut::VisitMut for LifetimeDeElider {
     fn visit_receiver_mut(&mut self, receiver: &mut syn::Receiver) {
         if let Some((_, lifetime)) = &mut receiver.reference {
             *lifetime = Some(self.make_lifetime_explicit(lifetime.clone()));
