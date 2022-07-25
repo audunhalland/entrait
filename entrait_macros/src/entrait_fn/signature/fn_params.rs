@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use syn::visit::Visit;
+use syn::visit_mut::VisitMut;
 
 pub fn convert_params_to_ident(sig: &mut syn::Signature) {
     if !sig.inputs.iter().any(needs_param_ident) {
@@ -18,18 +18,22 @@ fn needs_param_ident(fn_arg: &syn::FnArg) -> bool {
 }
 
 fn lift_inner_pat_idents(sig: &mut syn::Signature) {
-    fn try_lift_unambiguous_inner(pat: &syn::Pat) -> Option<&syn::Ident> {
-        struct PatIdentSearcher<'ast> {
-            binding_pat_idents: Vec<&'ast syn::Ident>,
+    fn try_lift_unambiguous_inner(pat: &mut syn::Pat) {
+        struct PatIdentSearcher {
+            first_binding_pat_ident: Option<syn::Ident>,
+            binding_pat_count: usize,
         }
 
-        impl<'ast> syn::visit::Visit<'ast> for PatIdentSearcher<'ast> {
-            fn visit_pat_ident(&mut self, i: &'ast syn::PatIdent) {
+        impl syn::visit_mut::VisitMut for PatIdentSearcher {
+            fn visit_pat_ident_mut(&mut self, i: &mut syn::PatIdent) {
                 let ident_string = i.ident.to_string();
 
                 match ident_string.chars().next() {
                     Some(char) if char.is_lowercase() => {
-                        self.binding_pat_idents.push(&i.ident);
+                        self.binding_pat_count += 1;
+                        if self.first_binding_pat_ident.is_none() {
+                            self.first_binding_pat_ident = Some(i.ident.clone());
+                        }
                     }
                     _ => {}
                 }
@@ -37,15 +41,15 @@ fn lift_inner_pat_idents(sig: &mut syn::Signature) {
         }
 
         let mut searcher = PatIdentSearcher {
-            binding_pat_idents: vec![],
+            first_binding_pat_ident: None,
+            binding_pat_count: 0,
         };
 
-        searcher.visit_pat(pat);
+        searcher.visit_pat_mut(pat);
 
-        if searcher.binding_pat_idents.len() == 1 {
-            searcher.binding_pat_idents.into_iter().next()
-        } else {
-            None
+        if searcher.binding_pat_count == 1 {
+            let ident = searcher.first_binding_pat_ident;
+            *pat = syn::parse_quote! { #ident };
         }
     }
 
@@ -54,12 +58,7 @@ fn lift_inner_pat_idents(sig: &mut syn::Signature) {
             syn::FnArg::Receiver(_) => {}
             syn::FnArg::Typed(pat_type) => match pat_type.pat.as_mut() {
                 syn::Pat::Ident(_) => {}
-                pat => match try_lift_unambiguous_inner(pat) {
-                    Some(ident) => {
-                        *pat_type.pat = syn::parse_quote! { #ident };
-                    }
-                    None => {}
-                },
+                pat => try_lift_unambiguous_inner(pat),
             },
         }
     }
