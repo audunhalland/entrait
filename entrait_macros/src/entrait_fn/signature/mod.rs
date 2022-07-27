@@ -90,7 +90,7 @@ impl<'a> SignatureConverter<'a> {
         self.remove_generic_type_params(&mut entrait_sig.sig);
         tidy_generics(&mut entrait_sig.sig.generics);
 
-        fn_params::convert_params_to_ident(&mut entrait_sig.sig);
+        fn_params::fix_fn_param_idents(&mut entrait_sig.sig);
 
         entrait_sig
     }

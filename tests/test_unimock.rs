@@ -483,3 +483,10 @@ mod entrait_for_trait_unimock {
         spy(None).method1();
     }
 }
+
+mod naming_conflict_between_fn_and_param {
+    use entrait::*;
+
+    #[entrait(Foo)]
+    fn foo<T>(_: &T, foo: i32) {}
+}

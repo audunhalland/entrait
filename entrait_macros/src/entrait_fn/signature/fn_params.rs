@@ -1,24 +1,67 @@
 use std::collections::HashSet;
 use syn::visit_mut::VisitMut;
 
-pub fn convert_params_to_ident(sig: &mut syn::Signature) {
-    if !sig.inputs.iter().any(needs_param_ident) {
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum ParamStatus {
+    Ok,
+    NeedsFix,
+}
+
+impl ParamStatus {
+    fn is_ok(self) -> bool {
+        matches!(self, Self::Ok)
+    }
+
+    fn combine(self, other: ParamStatus) -> Self {
+        match (self, other) {
+            (Self::Ok, Self::Ok) => Self::Ok,
+            _ => Self::NeedsFix,
+        }
+    }
+}
+
+pub fn fix_fn_param_idents(sig: &mut syn::Signature) {
+    if fix_ident_conflicts(sig).is_ok() {
         return;
     }
 
-    lift_inner_pat_idents(sig);
+    if lift_inner_pat_idents(sig).is_ok() {
+        return;
+    }
+
     autogenerate_for_non_idents(sig);
 }
 
-fn needs_param_ident(fn_arg: &syn::FnArg) -> bool {
-    match fn_arg {
-        syn::FnArg::Receiver(_) => false,
-        syn::FnArg::Typed(pat_type) => !matches!(pat_type.pat.as_ref(), syn::Pat::Ident(_)),
+fn fix_ident_conflicts(sig: &mut syn::Signature) -> ParamStatus {
+    let mut status = ParamStatus::Ok;
+    let fn_ident_string = sig.ident.to_string();
+
+    for fn_arg in sig.inputs.iter_mut() {
+        let arg_status = match fn_arg {
+            syn::FnArg::Receiver(_) => ParamStatus::Ok,
+            syn::FnArg::Typed(pat_type) => match pat_type.pat.as_mut() {
+                syn::Pat::Ident(param_ident) => {
+                    if &param_ident.ident == &fn_ident_string {
+                        param_ident.ident = syn::Ident::new(
+                            &format!("{}_", param_ident.ident),
+                            param_ident.ident.span(),
+                        );
+                    }
+
+                    ParamStatus::Ok
+                }
+                _ => ParamStatus::NeedsFix,
+            },
+        };
+
+        status = status.combine(arg_status);
     }
+
+    status
 }
 
-fn lift_inner_pat_idents(sig: &mut syn::Signature) {
-    fn try_lift_unambiguous_inner(pat: &mut syn::Pat) {
+fn lift_inner_pat_idents(sig: &mut syn::Signature) -> ParamStatus {
+    fn try_lift_unambiguous_inner(pat: &mut syn::Pat) -> ParamStatus {
         struct PatIdentSearcher {
             first_binding_pat_ident: Option<syn::Ident>,
             binding_pat_count: usize,
@@ -50,18 +93,28 @@ fn lift_inner_pat_idents(sig: &mut syn::Signature) {
         if searcher.binding_pat_count == 1 {
             let ident = searcher.first_binding_pat_ident;
             *pat = syn::parse_quote! { #ident };
+
+            ParamStatus::Ok
+        } else {
+            ParamStatus::NeedsFix
         }
     }
 
+    let mut status = ParamStatus::Ok;
+
     for fn_arg in &mut sig.inputs {
-        match fn_arg {
-            syn::FnArg::Receiver(_) => {}
+        let param_status = match fn_arg {
+            syn::FnArg::Receiver(_) => ParamStatus::Ok,
             syn::FnArg::Typed(pat_type) => match pat_type.pat.as_mut() {
-                syn::Pat::Ident(_) => {}
+                syn::Pat::Ident(_) => ParamStatus::Ok,
                 pat => try_lift_unambiguous_inner(pat),
             },
-        }
+        };
+
+        status = status.combine(param_status);
     }
+
+    status
 }
 
 fn autogenerate_for_non_idents(sig: &mut syn::Signature) {
@@ -116,7 +169,7 @@ mod tests {
     use super::*;
 
     fn convert_expect(mut source: syn::Signature, expected: syn::Signature) {
-        convert_params_to_ident(&mut source);
+        fix_fn_param_idents(&mut source);
         assert_eq!(
             source.to_token_stream().to_string(),
             expected.to_token_stream().to_string(),
