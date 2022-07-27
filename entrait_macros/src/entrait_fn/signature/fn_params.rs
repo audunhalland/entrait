@@ -41,7 +41,7 @@ fn fix_ident_conflicts(sig: &mut syn::Signature) -> ParamStatus {
             syn::FnArg::Receiver(_) => ParamStatus::Ok,
             syn::FnArg::Typed(pat_type) => match pat_type.pat.as_mut() {
                 syn::Pat::Ident(param_ident) => {
-                    if &param_ident.ident == &fn_ident_string {
+                    if param_ident.ident == fn_ident_string {
                         param_ident.ident = syn::Ident::new(
                             &format!("{}_", param_ident.ident),
                             param_ident.ident.span(),
