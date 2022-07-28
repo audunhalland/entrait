@@ -78,35 +78,16 @@ impl Parse for EntraitOpt {
         let span = ident.span();
         let ident_string = ident.to_string();
 
+        use EntraitOpt::*;
+
         match ident_string.as_str() {
-            "no_deps" => Ok(EntraitOpt::NoDeps(SpanOpt(
-                parse_eq_bool_or_true(input)?,
-                span,
-            ))),
-            "debug" => Ok(EntraitOpt::Debug(SpanOpt(
-                parse_eq_bool_or_true(input)?,
-                span,
-            ))),
-            "async_trait" => Ok(EntraitOpt::AsyncTrait(SpanOpt(
-                parse_eq_bool_or_true(input)?,
-                span,
-            ))),
-            "associated_future" => Ok(EntraitOpt::AssociatedFuture(SpanOpt(
-                parse_eq_bool_or_true(input)?,
-                span,
-            ))),
-            "export" => Ok(EntraitOpt::Export(SpanOpt(
-                parse_eq_bool_or_true(input)?,
-                span,
-            ))),
-            "unimock" => Ok(EntraitOpt::Unimock(SpanOpt(
-                parse_eq_bool_or_true(input)?,
-                span,
-            ))),
-            "mockall" => Ok(EntraitOpt::Mockall(SpanOpt(
-                parse_eq_bool_or_true(input)?,
-                span,
-            ))),
+            "no_deps" => Ok(NoDeps(parse_eq_bool(input, true, span)?)),
+            "debug" => Ok(Debug(parse_eq_bool(input, true, span)?)),
+            "async_trait" => Ok(AsyncTrait(parse_eq_bool(input, true, span)?)),
+            "associated_future" => Ok(AssociatedFuture(parse_eq_bool(input, true, span)?)),
+            "export" => Ok(Export(parse_eq_bool(input, true, span)?)),
+            "unimock" => Ok(Unimock(parse_eq_bool(input, true, span)?)),
+            "mockall" => Ok(Mockall(parse_eq_bool(input, true, span)?)),
             _ => Err(syn::Error::new(
                 span,
                 format!("Unkonwn entrait option \"{ident_string}\""),
@@ -115,26 +96,27 @@ impl Parse for EntraitOpt {
     }
 }
 
-fn parse_eq_bool_or_true(input: ParseStream) -> syn::Result<bool> {
-    parse_eq_value_or_default(input, true, |b: syn::LitBool| b.value())
+fn parse_eq_bool(input: ParseStream, default: bool, span: Span) -> syn::Result<SpanOpt<bool>> {
+    parse_eq_value_or_default(input, default, |b: syn::LitBool| b.value(), span)
 }
 
 fn parse_eq_value_or_default<V, F, O>(
     input: ParseStream,
     default_value: O,
     mapper: F,
-) -> syn::Result<O>
+    span: Span,
+) -> syn::Result<SpanOpt<O>>
 where
     V: syn::parse::Parse,
     F: FnOnce(V) -> O,
 {
     if !input.peek(syn::token::Eq) {
-        return Ok(default_value);
+        return Ok(SpanOpt(default_value, span));
     }
 
     input.parse::<syn::token::Eq>()?;
 
     let parsed = input.parse::<V>()?;
 
-    Ok(mapper(parsed))
+    Ok(SpanOpt(mapper(parsed), span))
 }
