@@ -1,0 +1,3 @@
+[submodule "examples/rust-realworld-entrait"]
+	path = examples/rust-realworld-entrait
+	url = https://github.com/audunhalland/rust-realworld-entrait.git

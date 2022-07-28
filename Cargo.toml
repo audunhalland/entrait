@@ -38,5 +38,6 @@ features = ["unimock", "use-async-trait"]
 [workspace]
 members = [
     "entrait_macros",
-    "examples/*"
+    "examples/async-graphql",
+    "examples/axum"
 ]
