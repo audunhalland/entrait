@@ -159,10 +159,9 @@ impl<'a, 'i, 'g> quote::ToTokens for ImplWhereClause<'a, 'i, 'g> {
             } => {
                 syn::token::Where::default().to_tokens(tokens);
 
-                // Impl<T> bounds
+                // Self bounds
                 if !trait_bounds.is_empty() {
-                    let impl_path = idents.impl_path(self.span);
-                    impl_path.to_tokens(tokens);
+                    syn::token::SelfType(self.span).to_tokens(tokens);
                     syn::token::Colon(self.span).to_tokens(tokens);
 
                     let n_bounds = trait_bounds.len();
