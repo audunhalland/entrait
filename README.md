@@ -362,7 +362,7 @@ We know that `System` eventually has to be implemented for the application type,
 
 The reason that the `#[entrait]` attribute has to be present in `core_crate`, is that it needs to define a blanket implementation for `Impl<T>` (as well as mocks),
     and those need to live in the same crate that defined the trait.
-If not, this would have broken the orphan rule.
+If not, this would have violated the orphan rule.
 
 (NB: This example's purpose is to demonstrate entrait, not to be a guide on how to deal with system time. It should contain some ideas for how to _mock_ time, though!)
 
@@ -382,23 +382,23 @@ fn foo<D>(deps: &D) { // <-- private function
 ```
 
 #### `async` support
-Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait:
+Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait.
+Enable the `async-trait` cargo feature and pass the `async_trait` option like this:
 
 ```rust
 #[entrait(Foo, async_trait)]
 async fn foo<D>(deps: &D) {
 }
 ```
-This is designed to be forwards compatible with real async fn in traits.
-When that day comes, you should be able to just remove the `async_trait` to get a proper zero-cost future.
+This is designed to be forwards compatible with [static async fn in traits](https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html).
+When that day comes, you should be able to just remove that option and get a proper zero-cost future.
 
-There is a feature to automatically turn on `async_trait` for every async entrait function: `use-async-trait`.
-This feature turns this on for all upstream crates that also exports entraited functions.
+There is a cargo feature to automatically apply `#[async_trait]` to every generated async trait: `use-async-trait`.
 
 #### Zero-cost async inversion of control - preview mode
 Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
 
-The entrait feature is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
+The entrait option is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
 This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
 the resulting type of the future:
 
