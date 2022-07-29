@@ -13,6 +13,15 @@ macro_rules! push_tokens {
 
 pub(crate) use push_tokens;
 
+pub struct TokenPair<T, U>(pub T, pub U);
+
+impl<T: ToTokens, U: ToTokens> quote::ToTokens for TokenPair<T, U> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0.to_tokens(tokens);
+        self.1.to_tokens(tokens);
+    }
+}
+
 pub struct EmptyToken;
 
 impl quote::ToTokens for EmptyToken {

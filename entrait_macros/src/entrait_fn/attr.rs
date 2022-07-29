@@ -62,6 +62,7 @@ impl Parse for EntraitFnAttr {
                 EntraitOpt::Export(opt) => export = Some(opt),
                 EntraitOpt::Unimock(opt) => unimock = Some(opt),
                 EntraitOpt::Mockall(opt) => mockall = Some(opt),
+                opt => return Err(syn::Error::new(opt.span(), "Unsupported option")),
             };
         }
 
