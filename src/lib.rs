@@ -372,7 +372,68 @@
 //!
 //! (NB: This example's purpose is to demonstrate entrait, not to be a guide on how to deal with system time. It should contain some ideas for how to _mock_ time, though!)
 //!
+//! #### `dyn` leaf dependencies
+//! Most application configuration is data-based, but some applications also require dynamically changing _implementation_.
+//! Rust can express dynamically changing implementation using `dyn Trait`.
 //!
+//! Entrait supports this for leaf dependencies.
+//! As an example, imagine a trait for abstracting away how to read some config:
+//!
+//! ```rust
+//! # use entrait::*;
+//! #[entrait]
+//! trait ReadConfig {
+//!     fn read_config(&self) -> String;
+//! }
+//! ```
+//!
+//! How to read this config could be different depending on which platform the application runs on, and the application would like to support several implementations of this trait.
+//!
+//! The problem we face here, is that the generated delegation code for `Impl<T>` will require that `T: ReadConfig`.
+//! In other words, there can only be one implementation of this trait per `T`.
+//! This means that we would have to create a separate application type for each way of reading config.
+//! This doesn't scale well, and leads to combinatorial type explosion when we have several such traits to implement.
+//! Additionally, this approach would lead to several copies of our entire generic application written with the entrait pattern, because it would need to get monomorphized for each type.
+//!
+//! The solution is to borrow a `dyn` reference to this trait.
+//! Since `Impl<T>` delegations does not know anything about the concrete `T`, we need to describe in an abstracted way how to borrow it.
+//! For this, Rust has the [Borrow](::core::borrow::Borrow) trait.
+//!
+//! Instead of generating a `T: ReadConfig` bound, we can generate a `T: Borrow<dyn ReadConfig>` bound, by using `delegate_by = Borrow`.
+//!
+//! ```rust
+//! # use entrait::*;
+//! #[entrait(delegate_by = Borrow)]
+//! trait ReadConfig: 'static {
+//!     fn read_config(&self) -> String;
+//! }
+//!
+//! #[entrait(DoSomething)]
+//! fn do_something(deps: &impl ReadConfig) {
+//!     let config = deps.read_config();
+//! }
+//!
+//! struct App {
+//!     read_config: Box<dyn ReadConfig + Sync>,
+//! };
+//!
+//! impl ReadConfig for String {
+//!     fn read_config(&self) -> String {
+//!         self.clone()
+//!     }
+//! }
+//!
+//! impl std::borrow::Borrow<dyn ReadConfig> for App {
+//!     fn borrow(&self) -> &dyn ReadConfig {
+//!         self.read_config.as_ref()
+//!     }
+//! }
+//!
+//! let app = Impl::new(App {
+//!     read_config: Box::new("hard-coded!".to_string()),
+//! });
+//! app.do_something();
+//! ```
 //!
 //! # Options and features
 //!
@@ -613,14 +674,15 @@ mod macros {
 /// ## Options
 /// An option can be just `$option` or `$option = $value`. An option without value means `true`.
 ///
-/// | Option              | Type   | Target     | Default     | Description         |
-/// | ------------------- | -------| ---------- | ----------- | ------------------- |
-/// | `no_deps`           | `bool` | `fn`       | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
-/// | `export`            | `bool` | `fn`       | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
-/// | `unimock`           | `bool` | `fn+trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
-/// | `mockall`           | `bool` | `fn+trait` | `false`     | Enable mockall mocks. |
-/// | `async_trait`       | `bool` | `fn`       | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
-/// | `associated_future` | `bool` | `fn`       | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(generic_associated_types)` and `feature(type_alias_impl_trait)`. |
+/// | Option              | Type            | Target       | Default     | Description         |
+/// | ------------------- | --------------- | ----------   | ----------- | ------------------- |
+/// | `no_deps`           | `bool`          | `fn`         | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
+/// | `export`            | `bool`          | `fn`         | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
+/// | `unimock`           | `bool`          | `fn`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
+/// | `mockall`           | `bool`          | `fn`+`trait` | `false`     | Enable mockall mocks. |
+/// | `async_trait`       | `bool`          | `fn`         | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
+/// | `associated_future` | `bool`          | `fn`         | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(generic_associated_types)` and `feature(type_alias_impl_trait)`. |
+/// | `delegate_by`       | `Self`/`Borrow` | `trait`      | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `Borrow` generates a [`T: Borrow<dyn Trait>`](::core::borrow::Borrow) bound. |
 ///
 /// [^1]: Enabled by default by turning on the `unimock` cargo feature.
 ///

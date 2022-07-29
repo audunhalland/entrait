@@ -11,6 +11,7 @@ use syn::parse::{Parse, ParseStream};
 
 pub struct EntraitTraitAttr {
     pub opts: Opts,
+    pub delegation_kind: Option<SpanOpt<DelegationKind>>,
 }
 
 impl Parse for EntraitTraitAttr {
@@ -18,6 +19,7 @@ impl Parse for EntraitTraitAttr {
         let mut debug = None;
         let mut unimock = None;
         let mut mockall = None;
+        let mut delegation_kind = None;
 
         if !input.is_empty() {
             loop {
@@ -25,6 +27,7 @@ impl Parse for EntraitTraitAttr {
                     EntraitOpt::Unimock(opt) => unimock = Some(opt),
                     EntraitOpt::Mockall(opt) => mockall = Some(opt),
                     EntraitOpt::Debug(opt) => debug = Some(opt),
+                    EntraitOpt::DelegateBy(kind) => delegation_kind = Some(kind),
                     entrait_opt => {
                         return Err(syn::Error::new(entrait_opt.span(), "Unsupported option"))
                     }
@@ -47,6 +50,7 @@ impl Parse for EntraitTraitAttr {
                 unimock,
                 mockall,
             },
+            delegation_kind,
         })
     }
 }
@@ -68,6 +72,11 @@ pub fn output_tokens(
     let trait_ident = &item_trait.ident;
 
     // NOTE: all of the trait _input attributes_ are outputted, unchanged
+
+    let contains_async = item_trait.items.iter().any(|item| match item {
+        syn::TraitItem::Method(method) => method.sig.asyncness.is_some(),
+        _ => false,
+    });
 
     let opt_unimock_attr = if attr.opts.unimock.map(|opt| *opt.value()).unwrap_or(false) {
         Some(quote! {
@@ -97,9 +106,11 @@ pub fn output_tokens(
     let args = generics.arguments_generator();
     let self_ty = generic_idents.impl_path(item_trait.ident.span());
     let where_clause = ImplWhereClause {
-        trait_ident,
+        item_trait: &item_trait,
+        contains_async,
         generics: &generics,
         generic_idents,
+        attr: &attr,
         span: item_trait.ident.span(),
     };
 
@@ -115,7 +126,7 @@ pub fn output_tokens(
         .items
         .iter()
         .filter_map(|trait_item| match trait_item {
-            syn::TraitItem::Method(method) => Some(gen_method(method)),
+            syn::TraitItem::Method(method) => Some(gen_method(method, &attr)),
             _ => None,
         });
 
@@ -134,7 +145,7 @@ pub fn output_tokens(
     Ok(tokens)
 }
 
-fn gen_method(method: &syn::TraitItemMethod) -> TokenStream {
+fn gen_method(method: &syn::TraitItemMethod, attr: &EntraitTraitAttr) -> TokenStream {
     let fn_sig = &method.sig;
     let fn_ident = &fn_sig.ident;
     let arguments = fn_sig.inputs.iter().filter_map(|arg| match arg {
@@ -146,9 +157,20 @@ fn gen_method(method: &syn::TraitItemMethod) -> TokenStream {
     });
     let opt_dot_await = fn_sig.asyncness.map(|_| quote! { .await });
 
-    quote! {
-        #fn_sig {
-            self.as_ref().#fn_ident(#(#arguments),*) #opt_dot_await
+    match &attr.delegation_kind {
+        Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
+            quote! {
+                #fn_sig {
+                    self.as_ref().borrow().#fn_ident(#(#arguments),*) #opt_dot_await
+                }
+            }
+        }
+        _ => {
+            quote! {
+                #fn_sig {
+                    self.as_ref().#fn_ident(#(#arguments),*) #opt_dot_await
+                }
+            }
         }
     }
 }
@@ -179,32 +201,92 @@ fn find_future_arguments(bound: &syn::TypeParamBound) -> Option<&syn::PathArgume
 }
 
 struct ImplWhereClause<'g> {
-    trait_ident: &'g syn::Ident,
+    item_trait: &'g syn::ItemTrait,
+    contains_async: bool,
     generics: &'g generics::Generics,
     generic_idents: &'g generics::GenericIdents,
+    attr: &'g EntraitTraitAttr,
     span: proc_macro2::Span,
 }
 
+impl<'g> ImplWhereClause<'g> {
+    fn impl_t_bounds(&self, stream: &mut TokenStream) {
+        push_tokens!(
+            stream,
+            self.generic_idents.impl_t,
+            syn::token::Colon(self.span)
+        );
+
+        match &self.attr.delegation_kind {
+            Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
+                use syn::token::*;
+
+                use syn::Ident;
+
+                push_tokens!(
+                    stream,
+                    Colon2(self.span),
+                    Ident::new("core", self.span),
+                    Colon2(self.span),
+                    syn::Ident::new("borrow", self.span),
+                    Colon2(self.span),
+                    syn::Ident::new("Borrow", self.span),
+                    // Generic arguments:
+                    Lt(self.span),
+                    Dyn(self.span),
+                    self.trait_with_arguments(),
+                    Gt(self.span)
+                );
+
+                if self.contains_async {
+                    push_tokens!(stream, self.plus_send(), self.plus_sync());
+                }
+                push_tokens!(stream, self.plus_static());
+            }
+            _ => {
+                push_tokens!(stream, self.trait_with_arguments(), self.plus_sync());
+            }
+        }
+    }
+
+    fn trait_with_arguments(&self) -> TokenPair<impl ToTokens + '_, impl ToTokens + '_> {
+        TokenPair(&self.item_trait.ident, self.generics.arguments_generator())
+    }
+
+    fn plus_static(&self) -> TokenPair<impl ToTokens, impl ToTokens> {
+        TokenPair(
+            syn::token::Add(self.span),
+            syn::Lifetime::new("'static", self.span),
+        )
+    }
+
+    fn plus_send(&self) -> TokenPair<impl ToTokens, impl ToTokens> {
+        TokenPair(
+            syn::token::Add(self.span),
+            syn::Ident::new("Send", self.span),
+        )
+    }
+
+    fn plus_sync(&self) -> TokenPair<impl ToTokens, impl ToTokens> {
+        TokenPair(
+            syn::token::Add(self.span),
+            syn::Ident::new("Sync", self.span),
+        )
+    }
+}
+
 impl<'g> quote::ToTokens for ImplWhereClause<'g> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+    fn to_tokens(&self, stream: &mut TokenStream) {
         let mut punctuator = Punctuator::new(
-            tokens,
+            stream,
             syn::token::Where(self.span),
             syn::token::Comma(self.span),
             EmptyToken,
         );
 
-        // T: Trait<G> + Sync
+        // Bounds on the `T` in `Impl<T>`:
         punctuator.push_fn(|stream| {
-            push_tokens!(
-                stream,
-                // T:
-                self.generic_idents.impl_t,
-                syn::token::Colon(self.span),
-                // Trait<G>
-                self.trait_ident,
-                self.generics.arguments_generator()
-            );
+            self.impl_t_bounds(stream);
         });
 
         if let Some(where_clause) = &self.generics.trait_generics.where_clause {

@@ -29,6 +29,12 @@ pub enum AsyncStrategy {
     AssociatedFuture,
 }
 
+#[derive(Clone, Copy)]
+pub enum DelegationKind {
+    BySelf,
+    ByBorrow,
+}
+
 #[derive(Copy, Clone)]
 pub struct SpanOpt<T>(pub T, pub Span);
 
@@ -50,6 +56,7 @@ pub enum EntraitOpt {
     Debug(SpanOpt<bool>),
     AsyncTrait(SpanOpt<bool>),
     AssociatedFuture(SpanOpt<bool>),
+    DelegateBy(SpanOpt<DelegationKind>),
     /// Whether to export mocks
     Export(SpanOpt<bool>),
     /// Whether to generate unimock impl
@@ -65,6 +72,7 @@ impl EntraitOpt {
             Self::Debug(opt) => opt.1,
             Self::AsyncTrait(opt) => opt.1,
             Self::AssociatedFuture(opt) => opt.1,
+            Self::DelegateBy(opt) => opt.1,
             Self::Export(opt) => opt.1,
             Self::Unimock(opt) => opt.1,
             Self::Mockall(opt) => opt.1,
@@ -85,6 +93,11 @@ impl Parse for EntraitOpt {
             "debug" => Ok(Debug(parse_eq_bool(input, true, span)?)),
             "async_trait" => Ok(AsyncTrait(parse_eq_bool(input, true, span)?)),
             "associated_future" => Ok(AssociatedFuture(parse_eq_bool(input, true, span)?)),
+            "delegate_by" => Ok(DelegateBy(parse_eq_delegate_by(
+                input,
+                DelegationKind::BySelf,
+                span,
+            )?)),
             "export" => Ok(Export(parse_eq_bool(input, true, span)?)),
             "unimock" => Ok(Unimock(parse_eq_bool(input, true, span)?)),
             "mockall" => Ok(Mockall(parse_eq_bool(input, true, span)?)),
@@ -97,7 +110,27 @@ impl Parse for EntraitOpt {
 }
 
 fn parse_eq_bool(input: ParseStream, default: bool, span: Span) -> syn::Result<SpanOpt<bool>> {
-    parse_eq_value_or_default(input, default, |b: syn::LitBool| b.value(), span)
+    parse_eq_value_or_default(input, default, |b: syn::LitBool| Ok(b.value()), span)
+}
+
+fn parse_eq_delegate_by(
+    input: ParseStream,
+    default: DelegationKind,
+    span: Span,
+) -> syn::Result<SpanOpt<DelegationKind>> {
+    parse_eq_value_or_default(
+        input,
+        default,
+        |b: syn::Ident| match b.to_string().as_str() {
+            "Self" => Ok(DelegationKind::BySelf),
+            "Borrow" => Ok(DelegationKind::ByBorrow),
+            ident => Err(syn::Error::new(
+                span,
+                format!("Unknown delegation kind: `{ident}`. Use either `Self` or `Borrow`"),
+            )),
+        },
+        span,
+    )
 }
 
 fn parse_eq_value_or_default<V, F, O>(
@@ -108,7 +141,7 @@ fn parse_eq_value_or_default<V, F, O>(
 ) -> syn::Result<SpanOpt<O>>
 where
     V: syn::parse::Parse,
-    F: FnOnce(V) -> O,
+    F: FnOnce(V) -> syn::Result<O>,
 {
     if !input.peek(syn::token::Eq) {
         return Ok(SpanOpt(default_value, span));
@@ -118,5 +151,5 @@ where
 
     let parsed = input.parse::<V>()?;
 
-    Ok(SpanOpt(mapper(parsed), span))
+    Ok(SpanOpt(mapper(parsed)?, span))
 }

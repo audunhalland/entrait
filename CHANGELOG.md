@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Added
+- `delegate_by = Borrow` option for traits (supports dyn trait leaf dependencies).
 ### Fixed
 - Fix hygiene problem when a parameter has the same ident as the function. Fix uses a hack that appends an underscore to the trait fn param.
 - Improved generic params and where clause generation, should generate some fewer tokens overall.

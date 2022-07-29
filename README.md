@@ -355,7 +355,66 @@ If not, this would have violated the orphan rule.
 
 (NB: This example's purpose is to demonstrate entrait, not to be a guide on how to deal with system time. It should contain some ideas for how to _mock_ time, though!)
 
+#### `dyn` leaf dependencies
+Most application configuration is data-based, but some applications also require dynamically changing _implementation_.
+Rust can express dynamically changing implementation using `dyn Trait`.
 
+Entrait supports this for leaf dependencies.
+As an example, imagine a trait for abstracting away how to read some config:
+
+```rust
+#[entrait]
+trait ReadConfig {
+    fn read_config(&self) -> String;
+}
+```
+
+How to read this config could be different depending on which platform the application runs on, and the application would like to support several implementations of this trait.
+
+The problem we face here, is that the generated delegation code for `Impl<T>` will require that `T: ReadConfig`.
+In other words, there can only be one implementation of this trait per `T`.
+This means that we would have to create a separate application type for each way of reading config.
+This doesn't scale well, and leads to combinatorial type explosion when we have several such traits to implement.
+Additionally, this approach would lead to several copies of our entire generic application written with the entrait pattern, because it would need to get monomorphized for each type.
+
+The solution is to borrow a `dyn` reference to this trait.
+Since `Impl<T>` delegations does not know anything about the concrete `T`, we need to describe in an abstracted way how to borrow it.
+For this, Rust has the Borrow trait.
+
+Instead of generating a `T: ReadConfig` bound, we can generate a `T: Borrow<dyn ReadConfig>` bound, by using `delegate_by = Borrow`.
+
+```rust
+#[entrait(delegate_by = Borrow)]
+trait ReadConfig: 'static {
+    fn read_config(&self) -> String;
+}
+
+#[entrait(DoSomething)]
+fn do_something(deps: &impl ReadConfig) {
+    let config = deps.read_config();
+}
+
+struct App {
+    read_config: Box<dyn ReadConfig + Sync>,
+};
+
+impl ReadConfig for String {
+    fn read_config(&self) -> String {
+        self.clone()
+    }
+}
+
+impl std::borrow::Borrow<dyn ReadConfig> for App {
+    fn borrow(&self) -> &dyn ReadConfig {
+        self.read_config.as_ref()
+    }
+}
+
+let app = Impl::new(App {
+    read_config: Box::new("hard-coded!".to_string()),
+});
+app.do_something();
+```
 
 # Options and features
 
