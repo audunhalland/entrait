@@ -85,6 +85,16 @@ let app = Impl::new(());
 assert_eq!(42, app.foo());
 ```
 
+The linking happens in the generated impl block for `Impl<T>`, putting the entire impl under a where clause derived from the original dependency bounds:
+
+```rust
+impl<T: Sync> Foo for Impl<T> where Self: Bar {
+    fn foo(&self) -> i32 {
+        foo(self) // <---- calls your function
+    }
+}
+```
+
 `Impl` is generic, so we can put whatever type we want into it.
 Normally this would be some type that represents the global state/configuration of the running application.
 But if dependencies can only be traits, and we always abstract away this type, how can this state ever be accessed?

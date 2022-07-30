@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Fixed
 - Fix hygiene problem when a parameter has the same ident as the function. Fix uses a hack that appends an underscore to the trait fn param.
+- Improved generic params and where clause generation, should generate some fewer tokens overall.
+- Doc: Bring back `Impl<T>` impl block code generation example.
 
 ## [0.4.1] - 2022-07-25
 ### Fixed
