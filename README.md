@@ -85,6 +85,8 @@ let app = Impl::new(());
 assert_eq!(42, app.foo());
 ```
 
+<details>
+<summary>Generated code</summary>
 The linking happens in the generated impl block for `Impl<T>`, putting the entire impl under a where clause derived from the original dependency bounds:
 
 ```rust
@@ -94,6 +96,7 @@ impl<T: Sync> Foo for Impl<T> where Self: Bar {
     }
 }
 ```
+</details>
 
 `Impl` is generic, so we can put whatever type we want into it.
 Normally this would be some type that represents the global state/configuration of the running application.
