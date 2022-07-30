@@ -2,6 +2,7 @@
 
 use crate::generics;
 use crate::opt::*;
+use crate::token_util::{EmptyToken, Punctuator};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -92,7 +93,7 @@ pub fn output_tokens(
         })
         .collect::<Vec<_>>();
 
-    let params = generics.params_generator();
+    let params = generics.params_generator(generics::UseAssociatedFuture(false));
     let args = generics.arguments_generator();
     let self_ty = generic_idents.impl_path(item_trait.ident.span());
     let where_clause = ImplWhereClause {
@@ -186,10 +187,15 @@ struct ImplWhereClause<'g> {
 
 impl<'g> quote::ToTokens for ImplWhereClause<'g> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        syn::token::Where(self.span).to_tokens(tokens);
+        let mut punctuator = Punctuator::new(
+            tokens,
+            syn::token::Where(self.span),
+            syn::token::Comma(self.span),
+            EmptyToken,
+        );
 
         // T: Trait<G> + Sync
-        {
+        punctuator.push_fn(|tokens| {
             // T:
             self.generic_idents.impl_t.to_tokens(tokens);
             syn::token::Colon(self.span).to_tokens(tokens);
@@ -197,15 +203,12 @@ impl<'g> quote::ToTokens for ImplWhereClause<'g> {
             // Trait<G>
             self.trait_ident.to_tokens(tokens);
             self.generics.arguments_generator().to_tokens(tokens);
-
-            // + Sync
-            syn::token::Add(self.span).to_tokens(tokens);
-            syn::Ident::new("Sync", self.span).to_tokens(tokens);
-        }
+        });
 
         if let Some(where_clause) = &self.generics.trait_generics.where_clause {
-            syn::token::Comma(self.span).to_tokens(tokens);
-            where_clause.predicates.to_tokens(tokens);
+            for predicate in &where_clause.predicates {
+                punctuator.push(predicate);
+            }
         }
     }
 }

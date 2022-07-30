@@ -13,6 +13,7 @@ mod entrait_trait;
 mod generics;
 mod input;
 mod opt;
+mod token_util;
 
 use input::Input;
 use opt::AsyncStrategy;

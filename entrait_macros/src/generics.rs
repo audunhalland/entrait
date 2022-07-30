@@ -1,7 +1,11 @@
+use crate::token_util::Punctuator;
+
 pub struct Generics {
     pub deps: Deps,
     pub trait_generics: syn::Generics,
 }
+
+pub struct UseAssociatedFuture(pub bool);
 
 impl Generics {
     pub fn new(deps: Deps, trait_generics: syn::Generics) -> Self {
@@ -11,7 +15,7 @@ impl Generics {
         }
     }
 
-    pub fn params_generator(&self) -> ParamsGenerator {
+    pub fn params_generator(&self, use_associated_future: UseAssociatedFuture) -> ParamsGenerator {
         ParamsGenerator {
             trait_generics: &self.trait_generics,
             impl_t: match &self.deps {
@@ -19,6 +23,7 @@ impl Generics {
                 Deps::NoDeps { idents } => Some(&idents.impl_t),
                 Deps::Concrete(_) => None,
             },
+            use_associated_future,
         }
     }
 
@@ -49,7 +54,7 @@ pub struct GenericIdents {
     pub impl_self: syn::Ident,
 
     /// The "T" in `Impl<T>`
-    pub impl_t: syn::Ident, //
+    pub impl_t: syn::Ident,
 }
 
 impl GenericIdents {
@@ -87,26 +92,37 @@ impl<'g> quote::ToTokens for ImplPath<'g> {
 pub struct ParamsGenerator<'g> {
     trait_generics: &'g syn::Generics,
     impl_t: Option<&'g syn::Ident>,
+    use_associated_future: UseAssociatedFuture,
 }
 
 impl<'g> quote::ToTokens for ParamsGenerator<'g> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let has_trait_generics = !self.trait_generics.params.is_empty();
+        let mut punctuator = Punctuator::new(
+            tokens,
+            syn::token::Lt::default(),
+            syn::token::Comma::default(),
+            syn::token::Gt::default(),
+        );
 
-        if !has_trait_generics && self.impl_t.is_none() {
-            return;
-        }
-
-        syn::token::Lt::default().to_tokens(tokens);
         if let Some(impl_t) = &self.impl_t {
-            impl_t.to_tokens(tokens);
+            punctuator.push_fn(|tokens| {
+                impl_t.to_tokens(tokens);
 
-            if has_trait_generics {
-                syn::token::Comma::default().to_tokens(tokens);
-            }
+                syn::token::Colon::default().to_tokens(tokens);
+                syn::Ident::new("Sync", proc_macro2::Span::call_site()).to_tokens(tokens);
+
+                if self.use_associated_future.0 {
+                    // Deps must be 'static for zero-cost futures to work
+                    syn::token::Add::default().to_tokens(tokens);
+
+                    syn::Lifetime::new("'static", proc_macro2::Span::call_site()).to_tokens(tokens);
+                }
+            });
         }
-        self.trait_generics.params.to_tokens(tokens);
-        syn::token::Gt::default().to_tokens(tokens);
+
+        for param in &self.trait_generics.params {
+            punctuator.push(param);
+        }
     }
 }
 
@@ -117,28 +133,25 @@ pub struct ArgumentsGenerator<'g> {
 
 impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let has_trait_generics = !self.trait_generics.params.is_empty();
+        let mut punctuator = Punctuator::new(
+            tokens,
+            syn::token::Lt::default(),
+            syn::token::Comma::default(),
+            syn::token::Gt::default(),
+        );
 
-        if !has_trait_generics {
-            return;
-        }
-
-        syn::token::Lt::default().to_tokens(tokens);
         for pair in self.trait_generics.params.pairs() {
             match pair.value() {
                 syn::GenericParam::Type(type_param) => {
-                    type_param.ident.to_tokens(tokens);
+                    punctuator.push(&type_param.ident);
                 }
                 syn::GenericParam::Lifetime(lifetime_def) => {
-                    lifetime_def.lifetime.to_tokens(tokens);
+                    punctuator.push(&lifetime_def.lifetime);
                 }
                 syn::GenericParam::Const(const_param) => {
-                    const_param.ident.to_tokens(tokens);
+                    punctuator.push(&const_param.ident);
                 }
             }
-            pair.punct().to_tokens(tokens);
         }
-
-        syn::token::Gt::default().to_tokens(tokens);
     }
 }
