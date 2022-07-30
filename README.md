@@ -296,47 +296,22 @@ How can this be made to work at all? Let's deconstruct what is happening:
 6. Calling `LibFunction` requires the caller to implement `GetFoo`.
 7. `GetFoo` is somehow only implemented for `Impl<LibConfig>`, not `Impl<App>`.
 
-#### Desugaring of concrete deps
-The way Entrait lets you get around this problem is how implementations are generated for concrete leafs:
+The clue to get around this problem lies in _trait delegation_.
+Trait delegation is an implementation of a trait that contains no logic, but just forwards each method to another implementation of the same trait, through some kind of indirection.
+
+_A leaf dependency is a trait which gets delegated from `Impl<T>` to `T`, conditional on `where T: Trait`._
+
+In our example, `GetFoo` is automatically implemented for `Impl<T> where T: GetFoo` and for `LibConfig`.
+This means it is definitely implemented for `Impl<LibConfig>`.
+To make the trait implemented for `Impl<App>`, we only have to implement it for `App`. That impl will be _another_ delegation, to `LibConfig`:
 
 ```rust
-// desugared entrait:
-fn get_foo(config: &LibConfig) -> &str {
-    &config.foo // (3)
-}
-
-// generic:
-impl<T> GetFoo for Impl<T>
-where
-    T: GetFoo
-{
+impl GetFoo for App {
     fn get_foo(&self) -> &str {
-        self.as_ref().get_foo() // calls `<LibConfig as GetFoo>::get_foo`
-    }
-}
-
-// concrete:
-impl GetFoo for LibConfig {
-    fn get_foo(&self) -> &str {
-        get_foo(self) // calls get_foo, the original function
+        self.lib_config.get_foo()
     }
 }
 ```
-
-We see that `GetFoo` is implemented for all `Impl<T>` where `T: GetFoo`.
-So the only thing we need to do to get our app working, is to manually implement `lib::GetFoo for App`, which would just delegate to `self.lib_config.get_foo()`.
-
-We end up with quite a dance to actually dig out the config string:
-
-```text
-<Impl<App> as lib::LibFunction>::lib_function() lib.rs
-=> <Impl<App> as lib::GetFoo>::get_foo() lib.rs
-  => <App as lib::GetFoo>::get_foo() main.rs: hand-written implementation
-    => <lib::LibConfig as lib::GetFoo>::get_foo() lib.rs
-      => lib::get_foo(config) lib.rs
-```
-
-Optmized builds should inline a lot of these calls, because all types are fully known at every step.
 
 ### Using entrait with a trait
 An alternative way to achieve something similar to the above is to use the entrait macro _directly on a trait_.
