@@ -1,4 +1,4 @@
-use crate::token_util::Punctuator;
+use crate::token_util::{push_tokens, Punctuator};
 
 pub struct Generics {
     pub deps: Deps,
@@ -76,15 +76,19 @@ impl GenericIdents {
 pub struct ImplPath<'g>(&'g GenericIdents, proc_macro2::Span);
 
 impl<'g> quote::ToTokens for ImplPath<'g> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+    fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let span = self.1;
-        syn::token::Colon2(span).to_tokens(tokens);
-        self.0.entrait_crate.to_tokens(tokens);
-        syn::token::Colon2(span).to_tokens(tokens);
-        self.0.impl_self.to_tokens(tokens);
-        syn::token::Lt(span).to_tokens(tokens);
-        self.0.impl_t.to_tokens(tokens);
-        syn::token::Gt(span).to_tokens(tokens);
+
+        push_tokens!(
+            stream,
+            syn::token::Colon2(span),
+            self.0.entrait_crate,
+            syn::token::Colon2(span),
+            self.0.impl_self,
+            syn::token::Lt(span),
+            self.0.impl_t,
+            syn::token::Gt(span)
+        );
     }
 }
 
@@ -96,26 +100,30 @@ pub struct ParamsGenerator<'g> {
 }
 
 impl<'g> quote::ToTokens for ParamsGenerator<'g> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+    fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let mut punctuator = Punctuator::new(
-            tokens,
+            stream,
             syn::token::Lt::default(),
             syn::token::Comma::default(),
             syn::token::Gt::default(),
         );
 
         if let Some(impl_t) = &self.impl_t {
-            punctuator.push_fn(|tokens| {
-                impl_t.to_tokens(tokens);
-
-                syn::token::Colon::default().to_tokens(tokens);
-                syn::Ident::new("Sync", proc_macro2::Span::call_site()).to_tokens(tokens);
+            punctuator.push_fn(|stream| {
+                push_tokens!(
+                    stream,
+                    impl_t,
+                    syn::token::Colon::default(),
+                    syn::Ident::new("Sync", proc_macro2::Span::call_site())
+                );
 
                 if self.use_associated_future.0 {
                     // Deps must be 'static for zero-cost futures to work
-                    syn::token::Add::default().to_tokens(tokens);
-
-                    syn::Lifetime::new("'static", proc_macro2::Span::call_site()).to_tokens(tokens);
+                    push_tokens!(
+                        stream,
+                        syn::token::Add::default(),
+                        syn::Lifetime::new("'static", proc_macro2::Span::call_site())
+                    );
                 }
             });
         }
@@ -132,9 +140,9 @@ pub struct ArgumentsGenerator<'g> {
 }
 
 impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+    fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let mut punctuator = Punctuator::new(
-            tokens,
+            stream,
             syn::token::Lt::default(),
             syn::token::Comma::default(),
             syn::token::Gt::default(),

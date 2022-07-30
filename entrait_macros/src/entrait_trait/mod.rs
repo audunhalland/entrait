@@ -2,7 +2,7 @@
 
 use crate::generics;
 use crate::opt::*;
-use crate::token_util::{EmptyToken, Punctuator};
+use crate::token_util::*;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -195,14 +195,16 @@ impl<'g> quote::ToTokens for ImplWhereClause<'g> {
         );
 
         // T: Trait<G> + Sync
-        punctuator.push_fn(|tokens| {
-            // T:
-            self.generic_idents.impl_t.to_tokens(tokens);
-            syn::token::Colon(self.span).to_tokens(tokens);
-
-            // Trait<G>
-            self.trait_ident.to_tokens(tokens);
-            self.generics.arguments_generator().to_tokens(tokens);
+        punctuator.push_fn(|stream| {
+            push_tokens!(
+                stream,
+                // T:
+                self.generic_idents.impl_t,
+                syn::token::Colon(self.span),
+                // Trait<G>
+                self.trait_ident,
+                self.generics.arguments_generator()
+            );
         });
 
         if let Some(where_clause) = &self.generics.trait_generics.where_clause {

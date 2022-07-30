@@ -1,6 +1,18 @@
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 
+macro_rules! push_tokens {
+    ($stream:expr, $token:expr) => {
+        $token.to_tokens($stream)
+    };
+    ($stream:expr, $token:expr, $($rest:expr),+) => {
+        $token.to_tokens($stream);
+        push_tokens!($stream, $($rest),*)
+    };
+}
+
+pub(crate) use push_tokens;
+
 pub struct EmptyToken;
 
 impl quote::ToTokens for EmptyToken {

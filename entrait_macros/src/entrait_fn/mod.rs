@@ -11,7 +11,7 @@ mod signature;
 use crate::generics;
 use crate::input::InputFn;
 use crate::opt::*;
-use crate::token_util::{EmptyToken, Punctuator};
+use crate::token_util::{push_tokens, EmptyToken, Punctuator};
 use attr::*;
 use signature::EntraitSignature;
 
@@ -124,12 +124,12 @@ fn gen_impl_block(
 struct SelfTy<'g>(&'g generics::Generics, Span);
 
 impl<'g> quote::ToTokens for SelfTy<'g> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+    fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.1;
         match &self.0.deps {
-            generics::Deps::Generic { idents, .. } => idents.impl_path(span).to_tokens(tokens),
-            generics::Deps::NoDeps { idents, .. } => idents.impl_path(span).to_tokens(tokens),
-            generics::Deps::Concrete(ty) => ty.to_tokens(tokens),
+            generics::Deps::Generic { idents, .. } => push_tokens!(stream, idents.impl_path(span)),
+            generics::Deps::NoDeps { idents, .. } => push_tokens!(stream, idents.impl_path(span)),
+            generics::Deps::Concrete(ty) => push_tokens!(stream, ty),
         }
     }
 }
@@ -141,9 +141,9 @@ pub struct ImplWhereClause<'g> {
 }
 
 impl<'g> quote::ToTokens for ImplWhereClause<'g> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+    fn to_tokens(&self, stream: &mut TokenStream) {
         let mut punctuator = Punctuator::new(
-            tokens,
+            stream,
             syn::token::Where(self.span),
             syn::token::Comma(self.span),
             EmptyToken,
@@ -154,15 +154,18 @@ impl<'g> quote::ToTokens for ImplWhereClause<'g> {
             generics::Deps::Generic { trait_bounds, .. } => {
                 // Self bounds
                 if !trait_bounds.is_empty() {
-                    punctuator.push_fn(|tokens| {
-                        syn::token::SelfType(self.span).to_tokens(tokens);
-                        syn::token::Colon(self.span).to_tokens(tokens);
+                    punctuator.push_fn(|stream| {
+                        push_tokens!(
+                            stream,
+                            syn::token::SelfType(self.span),
+                            syn::token::Colon(self.span)
+                        );
 
                         let n_bounds = trait_bounds.len();
                         for (index, bound) in trait_bounds.iter().enumerate() {
-                            bound.to_tokens(tokens);
+                            push_tokens!(stream, bound);
                             if index < n_bounds - 1 {
-                                syn::token::Add(self.span).to_tokens(tokens);
+                                push_tokens!(stream, syn::token::Add(self.span));
                             }
                         }
                     });
@@ -198,9 +201,12 @@ fn gen_delegating_fn_item(
     struct SelfComma(Span);
 
     impl quote::ToTokens for SelfComma {
-        fn to_tokens(&self, tokens: &mut TokenStream) {
-            syn::token::SelfValue(self.0).to_tokens(tokens);
-            syn::token::Comma(self.0).to_tokens(tokens);
+        fn to_tokens(&self, stream: &mut TokenStream) {
+            push_tokens!(
+                stream,
+                syn::token::SelfValue(self.0),
+                syn::token::Comma(self.0)
+            );
         }
     }
 
