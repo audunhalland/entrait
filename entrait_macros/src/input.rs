@@ -8,6 +8,7 @@ use syn::parse::{Parse, ParseStream};
 pub enum Input {
     Fn(InputFn),
     Trait(syn::ItemTrait),
+    Mod(InputMod),
 }
 
 pub struct InputFn {
@@ -16,6 +17,20 @@ pub struct InputFn {
     pub fn_sig: syn::Signature,
     // don't try to parse fn_body, just pass through the tokens:
     pub fn_body: proc_macro2::TokenStream,
+}
+
+pub struct InputMod {
+    attrs: Vec<syn::Attribute>,
+    vis: syn::Visibility,
+    mod_token: syn::token::Mod,
+    ident: syn::Ident,
+    brace_token: syn::token::Brace,
+    items: Vec<InputModItem>,
+}
+
+pub enum InputModItem {
+    Fn(InputFn),
+    Verbatim(proc_macro2::TokenStream),
 }
 
 impl Parse for Input {
@@ -32,6 +47,28 @@ impl Parse for Input {
                 vis,
                 ..item_trait
             }))
+        } else if input.peek(syn::token::Mod) {
+            let mod_token = input.parse()?;
+            let ident = input.parse()?;
+
+            let lookahead = input.lookahead1();
+            if lookahead.peek(syn::token::Brace) {
+                let content;
+                let brace_token = syn::braced!(content in input);
+
+                let items = vec![];
+
+                Ok(Input::Mod(InputMod {
+                    attrs,
+                    vis,
+                    mod_token,
+                    ident,
+                    brace_token,
+                    items,
+                }))
+            } else {
+                Err(lookahead.error())
+            }
         } else {
             let fn_sig: syn::Signature = input.parse()?;
             let fn_body = input.parse()?;
