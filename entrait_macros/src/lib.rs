@@ -147,7 +147,7 @@ fn invoke(
             opts_modifier(&mut attr.opts);
 
             (
-                entrait_fn::output_tokens(&attr, input_fn),
+                entrait_fn::gen_single_fn(&attr, input_fn),
                 attr.debug_value(),
             )
         }

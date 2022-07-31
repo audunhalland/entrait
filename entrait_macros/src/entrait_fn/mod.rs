@@ -13,18 +13,37 @@ use crate::input::InputFn;
 use crate::opt::*;
 use crate::token_util::{push_tokens, EmptyToken, Punctuator};
 use attr::*;
-use signature::EntraitSignature;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
 
-pub fn output_tokens(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
-    let generics = analyze_generics::analyze_generics(&input_fn, attr)?;
-    let entrait_sig = signature::SignatureConverter::new(attr, &input_fn, &generics.deps).convert();
-    let trait_def = gen_trait_def(attr, &input_fn, &entrait_sig, &generics)?;
-    let impl_block = gen_impl_block(attr, &input_fn, &entrait_sig, &generics);
+struct OutputFn {
+    generics: generics::Generics,
+    entrait_sig: signature::EntraitSignature,
+}
+
+impl OutputFn {
+    fn analyze(input_fn: &InputFn, attr: &EntraitFnAttr) -> syn::Result<Self> {
+        let generics = analyze_generics::analyze_generics(&input_fn, attr)?;
+        let entrait_sig =
+            signature::SignatureConverter::new(attr, &input_fn, &generics.deps).convert();
+        Ok(Self {
+            generics,
+            entrait_sig,
+        })
+    }
+
+    fn sig(&self) -> &syn::Signature {
+        &self.entrait_sig.sig
+    }
+}
+
+pub fn gen_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
+    let output_fn = OutputFn::analyze(&input_fn, attr)?;
+    let trait_def = gen_trait_def(attr, &input_fn, &output_fn)?;
+    let impl_block = gen_impl_block(attr, &input_fn, &output_fn);
 
     let InputFn {
         fn_attrs,
@@ -44,13 +63,12 @@ pub fn output_tokens(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<Tok
 fn gen_trait_def(
     attr: &EntraitFnAttr,
     input_fn: &InputFn,
-    entrait_sig: &EntraitSignature,
-    generics: &generics::Generics,
+    output_fn: &OutputFn,
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
-    let opt_unimock_attr = attr.opt_unimock_attribute(entrait_sig, &generics.deps);
-    let opt_entrait_for_trait_attr = match &generics.deps {
+    let opt_unimock_attr = attr.opt_unimock_attribute(output_fn);
+    let opt_entrait_for_trait_attr = match &output_fn.generics.deps {
         generics::Deps::Concrete(_) => {
             Some(quote! { #[::entrait::entrait(unimock = false, mockall = false)] })
         }
@@ -61,9 +79,9 @@ fn gen_trait_def(
 
     let trait_visibility = &attr.trait_visibility;
     let trait_ident = &attr.trait_ident;
-    let opt_associated_fut_decl = &entrait_sig.associated_fut_decl;
-    let trait_fn_sig = &entrait_sig.sig;
-    let generics = &generics.trait_generics;
+    let opt_associated_fut_decl = &output_fn.entrait_sig.associated_fut_decl;
+    let trait_fn_sig = &output_fn.sig();
+    let generics = &output_fn.generics.trait_generics;
     let where_clause = &generics.where_clause;
 
     Ok(quote_spanned! { span=>
@@ -89,13 +107,9 @@ fn gen_trait_def(
 /// }
 /// ```
 ///
-fn gen_impl_block(
-    attr: &EntraitFnAttr,
-    input_fn: &InputFn,
-    entrait_sig: &EntraitSignature,
-    generics: &generics::Generics,
-) -> TokenStream {
+fn gen_impl_block(attr: &EntraitFnAttr, input_fn: &InputFn, output_fn: &OutputFn) -> TokenStream {
     let span = attr.trait_ident.span();
+    let generics = &output_fn.generics;
 
     let async_trait_attribute = input_fn.opt_async_trait_attribute(attr);
     let params = generics.params_generator(generics::UseAssociatedFuture(
@@ -107,10 +121,9 @@ fn gen_impl_block(
     let where_clause = ImplWhereClause { generics, span };
     let mut input_fn_ident = input_fn.fn_sig.ident.clone();
     input_fn_ident.set_span(span);
-    let associated_fut_impl = &entrait_sig.associated_fut_impl;
+    let associated_fut_impl = &output_fn.entrait_sig.associated_fut_impl;
 
-    let fn_item =
-        gen_delegating_fn_item(span, input_fn, &input_fn_ident, entrait_sig, &generics.deps);
+    let fn_item = gen_delegating_fn_item(span, input_fn, &input_fn_ident, output_fn);
 
     quote_spanned! { span=>
         #async_trait_attribute
@@ -193,10 +206,11 @@ fn gen_delegating_fn_item(
     span: Span,
     input_fn: &InputFn,
     fn_ident: &syn::Ident,
-    entrait_sig: &EntraitSignature,
-    deps: &generics::Deps,
+    output_fn: &OutputFn,
 ) -> TokenStream {
-    let trait_fn_sig = &entrait_sig.sig;
+    let entrait_sig = &output_fn.entrait_sig;
+    let trait_fn_sig = &output_fn.sig();
+    let deps = &output_fn.generics.deps;
 
     struct SelfComma(Span);
 
@@ -240,22 +254,18 @@ fn gen_delegating_fn_item(
 }
 
 impl EntraitFnAttr {
-    pub fn opt_unimock_attribute(
-        &self,
-        entrait_sig: &EntraitSignature,
-        deps: &generics::Deps,
-    ) -> Option<TokenStream> {
+    fn opt_unimock_attribute(&self, output_fn: &OutputFn) -> Option<TokenStream> {
         match self.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => {
-                let fn_ident = &entrait_sig.sig.ident;
+                let fn_ident = &output_fn.sig().ident;
 
-                let unmocked = match deps {
+                let unmocked = match &output_fn.generics.deps {
                     generics::Deps::Generic { .. } => quote! { #fn_ident },
                     generics::Deps::Concrete(_) => quote! { _ },
                     generics::Deps::NoDeps { .. } => {
                         let arguments =
-                            entrait_sig
-                                .sig
+                            output_fn
+                                .sig()
                                 .inputs
                                 .iter()
                                 .filter_map(|fn_arg| match fn_arg {
