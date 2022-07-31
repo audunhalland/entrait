@@ -151,6 +151,15 @@ fn invoke(
                 attr.debug_value(),
             )
         }
+        Input::Mod(input_mod) => {
+            let mut attr = syn::parse_macro_input!(attr as entrait_fn::attr::EntraitFnAttr);
+            opts_modifier(&mut attr.opts);
+
+            (
+                entrait_fn::entrait_for_mod(&attr, input_mod),
+                attr.debug_value(),
+            )
+        }
         Input::Trait(item_trait) => {
             let mut attr = syn::parse_macro_input!(attr as entrait_trait::EntraitTraitAttr);
             opts_modifier(&mut attr.opts);
@@ -158,7 +167,6 @@ fn invoke(
 
             (entrait_trait::output_tokens(attr, item_trait), debug)
         }
-        Input::Mod(input_mod) => (Ok(quote::quote! { #input_mod }), true),
     };
 
     let output = match result {

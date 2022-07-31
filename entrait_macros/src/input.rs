@@ -25,12 +25,12 @@ pub struct InputFn {
 }
 
 pub struct InputMod {
-    attrs: Vec<syn::Attribute>,
-    vis: syn::Visibility,
-    mod_token: syn::token::Mod,
-    ident: syn::Ident,
-    brace_token: syn::token::Brace,
-    items: Vec<ModItem>,
+    pub attrs: Vec<syn::Attribute>,
+    pub vis: syn::Visibility,
+    pub mod_token: syn::token::Mod,
+    pub ident: syn::Ident,
+    pub brace_token: syn::token::Brace,
+    pub items: Vec<ModItem>,
 }
 
 impl ToTokens for InputMod {
@@ -41,22 +41,7 @@ impl ToTokens for InputMod {
         push_tokens!(stream, self.vis, self.mod_token, self.ident);
         self.brace_token.surround(stream, |stream| {
             for item in &self.items {
-                match item {
-                    ModItem::Fn(InputFn {
-                        fn_attrs,
-                        fn_vis,
-                        fn_sig,
-                        fn_body,
-                    }) => {
-                        for attr in fn_attrs {
-                            push_tokens!(stream, attr);
-                        }
-                        push_tokens!(stream, fn_vis, fn_sig, fn_body);
-                    }
-                    ModItem::Unknown(unknown) => {
-                        unknown.to_tokens(stream);
-                    }
-                }
+                item.to_tokens(stream);
             }
         });
     }
@@ -65,6 +50,42 @@ impl ToTokens for InputMod {
 pub enum ModItem {
     Fn(InputFn),
     Unknown(ItemUnknown),
+}
+
+impl ModItem {
+    // We include all functions that have a visibility keyword into the trait
+    pub fn filter_pub_fn(&self) -> Option<&InputFn> {
+        match self {
+            Self::Fn(input_fn) => match input_fn.fn_vis {
+                syn::Visibility::Public(_)
+                | syn::Visibility::Crate(_)
+                | syn::Visibility::Restricted(_) => Some(input_fn),
+                syn::Visibility::Inherited => None,
+            },
+            _ => None,
+        }
+    }
+}
+
+impl ToTokens for ModItem {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        match self {
+            ModItem::Fn(InputFn {
+                fn_attrs,
+                fn_vis,
+                fn_sig,
+                fn_body,
+            }) => {
+                for attr in fn_attrs {
+                    push_tokens!(stream, attr);
+                }
+                push_tokens!(stream, fn_vis, fn_sig, fn_body);
+            }
+            ModItem::Unknown(unknown) => {
+                unknown.to_tokens(stream);
+            }
+        }
+    }
 }
 
 pub struct ItemUnknown {

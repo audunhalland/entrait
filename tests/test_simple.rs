@@ -1,4 +1,5 @@
-#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(unused)]
 #![cfg_attr(feature = "use-associated-future", feature(generic_associated_types))]
 #![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
 
@@ -150,5 +151,54 @@ mod test_entrait_for_trait {
     fn entraited_trait_should_have_impl_impl() {
         assert_eq!(1337, Impl::new(()).method0(0));
         assert_eq!(42, Impl::new("app").method0(0));
+    }
+}
+
+mod module {
+    use entrait::*;
+    use std::any::Any;
+
+    #[entrait(pub Dep1)]
+    fn dep1(_: &impl Any) {}
+
+    #[entrait(pub Dep2)]
+    fn dep2(_: &impl Any) {}
+
+    #[entrait(pub FooBarBazQux)]
+    mod foo_bar_baz_qux {
+        use super::Dep1;
+
+        pub fn foo(deps: &impl Dep1, arg: i32) {}
+
+        struct Foo {}
+
+        pub fn bar(deps: &impl super::Dep2, arg: &str) {}
+
+        mod hei {}
+
+        pub(super) fn baz(deps: &impl Dep1) {}
+
+        const _: () = {};
+
+        pub(crate) fn qux(deps: &impl super::Dep2) {
+            not_included();
+        }
+
+        static S: &'static str = "";
+
+        fn not_included() {}
+    }
+
+    // There should be an automatic `pub use foo_bar_baz_qux::FooBarBazQux`;
+    fn takes_foo_bar_baz_qux(deps: &impl FooBarBazQux) {
+        deps.foo(42);
+        deps.bar("");
+        deps.baz();
+        deps.qux();
+    }
+
+    fn test() {
+        let app = Impl::new(());
+        takes_foo_bar_baz_qux(&app);
     }
 }

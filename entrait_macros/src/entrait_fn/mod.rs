@@ -9,7 +9,7 @@ mod analyze_generics;
 mod signature;
 
 use crate::generics::{self, TraitDependencyMode};
-use crate::input::InputFn;
+use crate::input::{InputFn, InputMod, ModItem};
 use crate::opt::*;
 use crate::token_util::{push_tokens, TokenPair};
 use analyze_generics::GenericsAnalyzer;
@@ -21,6 +21,113 @@ use quote::quote;
 use quote::quote_spanned;
 
 use self::analyze_generics::detect_trait_dependency_mode;
+
+enum Mode<'a> {
+    SingleFn(&'a syn::Ident),
+    Module,
+}
+
+pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
+    let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
+    let output_fn = OutputFn::analyze(&input_fn, &mut generics_analyzer, attr)?;
+
+    let output_fns = [output_fn];
+
+    let trait_dependency_mode = detect_trait_dependency_mode(&output_fns, attr.trait_ident.span());
+    let use_associated_future = detect_use_associated_future(attr, [&input_fn].into_iter());
+
+    let trait_generics = generics_analyzer.into_trait_generics();
+    let trait_def = gen_trait_def(
+        attr,
+        &trait_generics,
+        &trait_dependency_mode,
+        &output_fns,
+        &Mode::SingleFn(&input_fn.fn_sig.ident),
+    )?;
+    let impl_block = gen_impl_block(
+        attr,
+        &trait_generics,
+        &output_fns,
+        &trait_dependency_mode,
+        use_associated_future,
+    );
+
+    let InputFn {
+        fn_attrs,
+        fn_vis,
+        fn_sig,
+        fn_body,
+        ..
+    } = input_fn;
+
+    Ok(quote! {
+        #(#fn_attrs)* #fn_vis #fn_sig #fn_body
+        #trait_def
+        #impl_block
+    })
+}
+
+pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result<TokenStream> {
+    let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
+    let output_fns = input_mod
+        .items
+        .iter()
+        .filter_map(ModItem::filter_pub_fn)
+        .map(|input_fn| OutputFn::analyze(input_fn, &mut generics_analyzer, attr))
+        .collect::<syn::Result<Vec<_>>>()?;
+
+    let trait_dependency_mode = detect_trait_dependency_mode(&output_fns, attr.trait_ident.span());
+    let use_associated_future = detect_use_associated_future(
+        attr,
+        input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
+    );
+
+    let trait_generics = generics_analyzer.into_trait_generics();
+    let trait_def = gen_trait_def(
+        attr,
+        &trait_generics,
+        &trait_dependency_mode,
+        &output_fns,
+        &Mode::Module,
+    )?;
+    let impl_block = gen_impl_block(
+        attr,
+        &trait_generics,
+        &output_fns,
+        &trait_dependency_mode,
+        use_associated_future,
+    );
+
+    let InputMod {
+        attrs,
+        vis,
+        mod_token,
+        ident: mod_ident,
+        items,
+        ..
+    } = input_mod;
+
+    let use_stmt = {
+        let trait_vis = &attr.trait_visibility;
+        let trait_ident = &attr.trait_ident;
+
+        quote! {
+            #trait_vis use #mod_ident::#trait_ident;
+        }
+    };
+
+    Ok(quote! {
+        #(#attrs)*
+        #vis #mod_token #mod_ident {
+            #(#items)*
+
+            #trait_def
+            #impl_block
+        }
+
+        #use_stmt
+    })
+}
 
 pub struct OutputFn<'i> {
     source: &'i InputFn,
@@ -48,56 +155,16 @@ impl<'i> OutputFn<'i> {
     }
 }
 
-pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
-    let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
-    let output_fn = OutputFn::analyze(&input_fn, &mut generics_analyzer, attr)?;
-    let trait_generics = generics_analyzer.into_trait_generics();
-
-    let output_fns = [output_fn];
-
-    let trait_dependency_mode = detect_trait_dependency_mode(&output_fns, attr.trait_ident.span());
-    let use_associated_future = detect_use_associated_future(attr, [&input_fn].into_iter());
-
-    let trait_def = gen_trait_def(
-        attr,
-        &trait_generics,
-        &trait_dependency_mode,
-        &output_fns,
-        Some(&input_fn.fn_sig.ident),
-    )?;
-    let impl_block = gen_impl_block(
-        attr,
-        &trait_generics,
-        &output_fns,
-        &trait_dependency_mode,
-        use_associated_future,
-    );
-
-    let InputFn {
-        fn_attrs,
-        fn_vis,
-        fn_sig,
-        fn_body,
-        ..
-    } = input_fn;
-
-    Ok(quote! {
-        #(#fn_attrs)* #fn_vis #fn_sig #fn_body
-        #trait_def
-        #impl_block
-    })
-}
-
 fn gen_trait_def(
     attr: &EntraitFnAttr,
     trait_generics: &generics::TraitGenerics,
     trait_dependency_mode: &TraitDependencyMode,
     output_fns: &[OutputFn],
-    single_fn_ident: Option<&syn::Ident>,
+    mode: &Mode<'_>,
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
-    let opt_unimock_attr = attr.opt_unimock_attribute(output_fns, single_fn_ident);
+    let opt_unimock_attr = attr.opt_unimock_attribute(output_fns, mode);
     let opt_entrait_for_trait_attr = match trait_dependency_mode {
         TraitDependencyMode::Concrete(_) => {
             Some(quote! { #[::entrait::entrait(unimock = false, mockall = false)] })
@@ -241,7 +308,7 @@ impl EntraitFnAttr {
     fn opt_unimock_attribute(
         &self,
         output_fns: &[OutputFn],
-        single_fn_ident: Option<&syn::Ident>,
+        mode: &Mode<'_>,
     ) -> Option<TokenStream> {
         match self.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => {
@@ -272,7 +339,7 @@ impl EntraitFnAttr {
                         }
                     });
 
-                let opt_mock_mod = if let Some(fn_ident) = single_fn_ident {
+                let opt_mock_mod = if let Mode::SingleFn(fn_ident) = mode {
                     Some(quote! { mod=#fn_ident, as=[Fn], })
                 } else {
                     None
