@@ -8,10 +8,10 @@ pub mod attr;
 mod analyze_generics;
 mod signature;
 
-use crate::generics::{self, GenericIdents};
+use crate::generics::{self, TraitDependencyMode};
 use crate::input::InputFn;
 use crate::opt::*;
-use crate::token_util::{push_tokens, EmptyToken, Punctuator, TokenPair};
+use crate::token_util::{push_tokens, TokenPair};
 use analyze_generics::GenericsAnalyzer;
 use attr::*;
 
@@ -20,9 +20,11 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
 
-struct OutputFn<'i> {
+use self::analyze_generics::detect_trait_dependency_mode;
+
+pub struct OutputFn<'i> {
     source: &'i InputFn,
-    generics: generics::FnGenerics,
+    pub generics: generics::FnGenerics,
     entrait_sig: signature::EntraitSignature,
 }
 
@@ -47,19 +49,30 @@ impl<'i> OutputFn<'i> {
     }
 }
 
-pub fn gen_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
+pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
     let output_fn = OutputFn::analyze(&input_fn, &mut generics_analyzer, attr)?;
     let trait_generics = generics_analyzer.into_trait_generics();
 
-    let generic_idents = match &output_fn.generics.deps {
-        generics::FnDeps::Generic { idents, .. } => Some(idents),
-        generics::FnDeps::NoDeps { idents } => Some(idents),
-        generics::FnDeps::Concrete(_) => None,
-    };
+    let output_fns = [output_fn];
 
-    let trait_def = gen_trait_def(attr, &trait_generics, &output_fn)?;
-    let impl_block = gen_impl_block(attr, &output_fn);
+    let trait_dependency_mode = detect_trait_dependency_mode(&output_fns, attr.trait_ident.span());
+    let use_associated_future = detect_use_associated_future(attr, [&input_fn].into_iter());
+
+    let trait_def = gen_trait_def(
+        attr,
+        &trait_generics,
+        &trait_dependency_mode,
+        &output_fns,
+        Some(&input_fn.fn_sig.ident),
+    )?;
+    let impl_block = gen_impl_block(
+        attr,
+        &trait_generics,
+        &output_fns,
+        &trait_dependency_mode,
+        use_associated_future,
+    );
 
     let InputFn {
         fn_attrs,
@@ -79,24 +92,35 @@ pub fn gen_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<Tok
 fn gen_trait_def(
     attr: &EntraitFnAttr,
     trait_generics: &generics::TraitGenerics,
-    output_fn: &OutputFn,
+    trait_dependency_mode: &TraitDependencyMode,
+    output_fns: &[OutputFn],
+    single_fn_ident: Option<&syn::Ident>,
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
-    let opt_unimock_attr = attr.opt_unimock_attribute(output_fn);
-    let opt_entrait_for_trait_attr = match &output_fn.generics.deps {
-        generics::FnDeps::Concrete(_) => {
+    let opt_unimock_attr = attr.opt_unimock_attribute(output_fns, single_fn_ident);
+    let opt_entrait_for_trait_attr = match trait_dependency_mode {
+        TraitDependencyMode::Concrete(_) => {
             Some(quote! { #[::entrait::entrait(unimock = false, mockall = false)] })
         }
         _ => None,
     };
     let opt_mockall_automock_attr = attr.opt_mockall_automock_attribute();
-    let opt_async_trait_attr = output_fn.source.opt_async_trait_attribute(attr);
+    let opt_async_trait_attr = opt_async_trait_attribute(attr, output_fns.iter());
 
     let trait_visibility = &attr.trait_visibility;
     let trait_ident = &attr.trait_ident;
-    let opt_associated_fut_decl = &output_fn.entrait_sig.associated_fut_decl;
-    let trait_fn_sig = &output_fn.sig();
+
+    let fn_defs = output_fns.iter().map(|output_fn| {
+        let opt_associated_fut_decl = &output_fn.entrait_sig.associated_fut_decl;
+        let trait_fn_sig = output_fn.sig();
+
+        quote! {
+            #opt_associated_fut_decl
+            #trait_fn_sig;
+        }
+    });
+
     let params = trait_generics.trait_params();
     let where_clause = trait_generics.trait_where_clause();
 
@@ -106,8 +130,7 @@ fn gen_trait_def(
         #opt_mockall_automock_attr
         #opt_async_trait_attr
         #trait_visibility trait #trait_ident #params #where_clause {
-            #opt_associated_fut_decl
-            #trait_fn_sig;
+            #(#fn_defs)*
         }
     })
 }
@@ -123,95 +146,52 @@ fn gen_trait_def(
 /// }
 /// ```
 ///
-fn gen_impl_block(attr: &EntraitFnAttr, output_fn: &OutputFn) -> TokenStream {
+fn gen_impl_block(
+    attr: &EntraitFnAttr,
+    trait_generics: &generics::TraitGenerics,
+    output_fns: &[OutputFn],
+    trait_dependency_mode: &TraitDependencyMode,
+    use_associated_future: generics::UseAssociatedFuture,
+) -> TokenStream {
     let span = attr.trait_ident.span();
-    let generics = &output_fn.generics;
 
-    let async_trait_attribute = output_fn.source.opt_async_trait_attribute(attr);
-    let params = generics.params_generator(generics::UseAssociatedFuture(
-        output_fn.source.use_associated_future(attr),
-    ));
+    let async_trait_attribute = opt_async_trait_attribute(attr, output_fns.iter());
+    let params = trait_generics.impl_params(trait_dependency_mode, use_associated_future);
     let trait_ident = &attr.trait_ident;
-    let args = generics.arguments_generator();
-    let self_ty = SelfTy(generics, span);
-    let where_clause = ImplWhereClause { generics, span };
-    let associated_fut_impl = &output_fn.entrait_sig.associated_fut_impl;
+    let args = trait_generics.arguments();
+    let self_ty = SelfTy(trait_dependency_mode, span);
+    let where_clause = trait_generics.impl_where_clause(output_fns, trait_dependency_mode, span);
 
-    let fn_item = gen_delegating_fn_item(output_fn, span);
+    let items = output_fns.iter().map(|output_fn| {
+        let associated_fut_impl = &output_fn.entrait_sig.associated_fut_impl;
+
+        let fn_item = gen_delegating_fn_item(output_fn, span);
+
+        quote! {
+            #associated_fut_impl
+            #fn_item
+        }
+    });
 
     quote_spanned! { span=>
         #async_trait_attribute
         impl #params #trait_ident #args for #self_ty #where_clause {
-            #associated_fut_impl
-            #fn_item
+            #(#items)*
         }
     }
 }
 
-struct SelfTy<'g>(&'g generics::FnGenerics, Span);
+struct SelfTy<'g>(&'g TraitDependencyMode<'g>, Span);
 
 impl<'g> quote::ToTokens for SelfTy<'g> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.1;
-        match &self.0.deps {
-            generics::FnDeps::Generic { idents, .. } => {
+        match &self.0 {
+            TraitDependencyMode::Generic(idents) => {
                 push_tokens!(stream, idents.impl_path(span))
             }
-            generics::FnDeps::NoDeps { idents, .. } => push_tokens!(stream, idents.impl_path(span)),
-            generics::FnDeps::Concrete(ty) => push_tokens!(stream, ty),
-        }
-    }
-}
-
-/// Join where clauses from the input function and the required ones for Impl<T>
-pub struct ImplWhereClause<'g> {
-    generics: &'g generics::FnGenerics,
-    span: Span,
-}
-
-impl<'g> quote::ToTokens for ImplWhereClause<'g> {
-    fn to_tokens(&self, stream: &mut TokenStream) {
-        let mut punctuator = Punctuator::new(
-            stream,
-            syn::token::Where(self.span),
-            syn::token::Comma(self.span),
-            EmptyToken,
-        );
-
-        // The where clause looks quite different depending on what kind of Deps is used in the function.
-        match &self.generics.deps {
-            generics::FnDeps::Generic { trait_bounds, .. } => {
-                // Self bounds
-                if !trait_bounds.is_empty() {
-                    punctuator.push_fn(|stream| {
-                        push_tokens!(
-                            stream,
-                            syn::token::SelfType(self.span),
-                            syn::token::Colon(self.span)
-                        );
-
-                        let n_bounds = trait_bounds.len();
-                        for (index, bound) in trait_bounds.iter().enumerate() {
-                            push_tokens!(stream, bound);
-                            if index < n_bounds - 1 {
-                                push_tokens!(stream, syn::token::Add(self.span));
-                            }
-                        }
-                    });
-                }
-            }
-            generics::FnDeps::NoDeps { .. } => {
-                // Bounds for T are inline in params
-            }
-            generics::FnDeps::Concrete(_) => {
-                // NOTE: the impl for Impl<T> is generated by invoking #[entrait] on the trait(!),
-                // So we need only one impl here: for the path (the `T` in `Impl<T>`).
-            }
-        };
-
-        if let Some(where_clause) = &self.generics.trait_generics.where_clause {
-            for predicate in where_clause.predicates.iter() {
-                punctuator.push(predicate);
+            TraitDependencyMode::Concrete(ty) => {
+                push_tokens!(stream, ty)
             }
         }
     }
@@ -259,34 +239,48 @@ fn gen_delegating_fn_item(output_fn: &OutputFn, span: Span) -> TokenStream {
 }
 
 impl EntraitFnAttr {
-    fn opt_unimock_attribute(&self, output_fn: &OutputFn) -> Option<TokenStream> {
+    fn opt_unimock_attribute(
+        &self,
+        output_fns: &[OutputFn],
+        single_fn_ident: Option<&syn::Ident>,
+    ) -> Option<TokenStream> {
         match self.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => {
-                let fn_ident = &output_fn.sig().ident;
+                let unmocked =
+                    output_fns.iter().map(|output_fn| {
+                        let fn_ident = &output_fn.sig().ident;
 
-                let unmocked = match &output_fn.generics.deps {
-                    generics::FnDeps::Generic { .. } => quote! { #fn_ident },
-                    generics::FnDeps::Concrete(_) => quote! { _ },
-                    generics::FnDeps::NoDeps { .. } => {
-                        let arguments =
-                            output_fn
-                                .sig()
-                                .inputs
-                                .iter()
-                                .filter_map(|fn_arg| match fn_arg {
-                                    syn::FnArg::Receiver(_) => None,
-                                    syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                                        syn::Pat::Ident(pat_ident) => Some(&pat_ident.ident),
-                                        _ => None,
+                        match &output_fn.generics.deps {
+                            generics::FnDeps::Generic { .. } => quote! { #fn_ident },
+                            generics::FnDeps::Concrete(_) => quote! { _ },
+                            generics::FnDeps::NoDeps { .. } => {
+                                let arguments = output_fn.sig().inputs.iter().filter_map(
+                                    |fn_arg| match fn_arg {
+                                        syn::FnArg::Receiver(_) => None,
+                                        syn::FnArg::Typed(pat_type) => {
+                                            match pat_type.pat.as_ref() {
+                                                syn::Pat::Ident(pat_ident) => {
+                                                    Some(&pat_ident.ident)
+                                                }
+                                                _ => None,
+                                            }
+                                        }
                                     },
-                                });
+                                );
 
-                        quote! { #fn_ident(#(#arguments),*) }
-                    }
+                                quote! { #fn_ident(#(#arguments),*) }
+                            }
+                        }
+                    });
+
+                let opt_mock_mod = if let Some(fn_ident) = single_fn_ident {
+                    Some(quote! { mod=#fn_ident, as=[Fn], })
+                } else {
+                    None
                 };
 
                 Some(self.gated_mock_attr(span, quote_spanned! {span=>
-                    ::entrait::__unimock::unimock(prefix=::entrait::__unimock, mod=#fn_ident, as=[Fn], unmocked=[#unmocked])
+                    ::entrait::__unimock::unimock(prefix=::entrait::__unimock, #opt_mock_mod unmocked=[#(#unmocked),*])
                 }))
             }
             _ => None,
@@ -329,13 +323,36 @@ impl InputFn {
             (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
         )
     }
+}
 
-    fn opt_async_trait_attribute(&self, attr: &EntraitFnAttr) -> Option<TokenStream> {
-        match (attr.async_strategy(), self.fn_sig.asyncness) {
-            (SpanOpt(AsyncStrategy::AsyncTrait, span), Some(_async)) => {
-                Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })
-            }
-            _ => None,
+fn opt_async_trait_attribute<'o>(
+    attr: &EntraitFnAttr,
+    output_fns: impl Iterator<Item = &'o OutputFn<'o>>,
+) -> Option<TokenStream> {
+    match (
+        attr.async_strategy(),
+        has_any_async(output_fns.map(|output_fn| output_fn.sig())),
+    ) {
+        (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
+            Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })
         }
+        _ => None,
     }
+}
+
+fn detect_use_associated_future<'i>(
+    attr: &EntraitFnAttr,
+    input_fns: impl Iterator<Item = &'i InputFn>,
+) -> generics::UseAssociatedFuture {
+    generics::UseAssociatedFuture(matches!(
+        (
+            attr.async_strategy(),
+            has_any_async(input_fns.map(|input_fn| &input_fn.fn_sig))
+        ),
+        (SpanOpt(AsyncStrategy::AssociatedFuture, _), true)
+    ))
+}
+
+fn has_any_async<'s>(mut signatures: impl Iterator<Item = &'s syn::Signature>) -> bool {
+    signatures.any(|sig| sig.asyncness.is_some())
 }
