@@ -2,7 +2,12 @@
 //! inputs to procedural macros
 //!
 //!
+//!
 
+use crate::token_util::push_tokens;
+
+use proc_macro2::TokenStream;
+use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 
 pub enum Input {
@@ -25,12 +30,56 @@ pub struct InputMod {
     mod_token: syn::token::Mod,
     ident: syn::Ident,
     brace_token: syn::token::Brace,
-    items: Vec<InputModItem>,
+    items: Vec<ModItem>,
 }
 
-pub enum InputModItem {
+impl ToTokens for InputMod {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        for attr in &self.attrs {
+            push_tokens!(stream, attr);
+        }
+        push_tokens!(stream, self.vis, self.mod_token, self.ident);
+        self.brace_token.surround(stream, |stream| {
+            for item in &self.items {
+                match item {
+                    ModItem::Fn(InputFn {
+                        fn_attrs,
+                        fn_vis,
+                        fn_sig,
+                        fn_body,
+                    }) => {
+                        for attr in fn_attrs {
+                            push_tokens!(stream, attr);
+                        }
+                        push_tokens!(stream, fn_vis, fn_sig, fn_body);
+                    }
+                    ModItem::Unknown(unknown) => {
+                        unknown.to_tokens(stream);
+                    }
+                }
+            }
+        });
+    }
+}
+
+pub enum ModItem {
     Fn(InputFn),
-    Verbatim(proc_macro2::TokenStream),
+    Unknown(ItemUnknown),
+}
+
+pub struct ItemUnknown {
+    attrs: Vec<syn::Attribute>,
+    vis: syn::Visibility,
+    tokens: TokenStream,
+}
+
+impl ToTokens for ItemUnknown {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(stream);
+        }
+        push_tokens!(stream, self.vis, self.tokens);
+    }
 }
 
 impl Parse for Input {
@@ -56,7 +105,11 @@ impl Parse for Input {
                 let content;
                 let brace_token = syn::braced!(content in input);
 
-                let items = vec![];
+                let mut items = vec![];
+
+                while !content.is_empty() {
+                    items.push(content.parse()?);
+                }
 
                 Ok(Input::Mod(InputMod {
                     attrs,
@@ -81,4 +134,102 @@ impl Parse for Input {
             }))
         }
     }
+}
+
+impl Parse for ModItem {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(syn::Attribute::parse_outer)?;
+        let vis: syn::Visibility = input.parse()?;
+        let unknown = input.fork();
+        let ahead = input.fork();
+
+        if input.peek(syn::token::Fn) || peek_signature(&ahead) {
+            let sig: syn::Signature = input.parse()?;
+            if input.peek(syn::token::Semi) {
+                let _ = input.parse::<syn::token::Semi>()?;
+                Ok(ModItem::Unknown(ItemUnknown {
+                    attrs,
+                    vis,
+                    tokens: verbatim_between(unknown, input),
+                }))
+            } else {
+                let fn_body = parse_matched_braces_or_ending_semi(input)?;
+                Ok(ModItem::Fn(InputFn {
+                    fn_attrs: attrs,
+                    fn_vis: vis,
+                    fn_sig: sig,
+                    fn_body,
+                }))
+            }
+        } else {
+            let tokens = parse_matched_braces_or_ending_semi(input)?;
+            Ok(ModItem::Unknown(ItemUnknown { attrs, vis, tokens }))
+        }
+    }
+}
+
+fn peek_signature(input: ParseStream) -> bool {
+    let fork = input.fork();
+    fork.parse::<Option<syn::token::Const>>().is_ok()
+        && fork.parse::<Option<syn::token::Async>>().is_ok()
+        && fork.parse::<Option<syn::token::Unsafe>>().is_ok()
+        && fork.parse::<Option<syn::Abi>>().is_ok()
+        && fork.peek(syn::token::Fn)
+}
+
+fn verbatim_between<'a>(begin: syn::parse::ParseBuffer<'a>, end: ParseStream<'a>) -> TokenStream {
+    let end = end.cursor();
+    let mut cursor = begin.cursor();
+    let mut tokens = TokenStream::new();
+    while cursor != end {
+        let (tt, next) = cursor.token_tree().unwrap();
+        tokens.extend(std::iter::once(tt));
+        cursor = next;
+    }
+    tokens
+}
+
+fn parse_matched_braces_or_ending_semi(input: ParseStream) -> syn::Result<TokenStream> {
+    let mut tokens = input.step(|cursor| {
+        let mut tokens = TokenStream::new();
+
+        use proc_macro2::Delimiter;
+        use proc_macro2::TokenTree;
+
+        let mut rest = *cursor;
+
+        while let Some((tt, next)) = rest.token_tree() {
+            match &tt {
+                TokenTree::Group(group) => {
+                    let is_brace = group.delimiter() == Delimiter::Brace;
+                    tokens.extend(std::iter::once(tt));
+                    if is_brace {
+                        return Ok((tokens, next));
+                    }
+                }
+                TokenTree::Punct(punct) => {
+                    let is_semi = punct.as_char() == ';';
+                    tokens.extend(std::iter::once(tt));
+                    if is_semi {
+                        return Ok((tokens, next));
+                    }
+                }
+                _ => {
+                    tokens.extend(std::iter::once(tt));
+                }
+            }
+            rest = next;
+        }
+        Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "Read past the end",
+        ))
+    })?;
+
+    while input.peek(syn::token::Semi) {
+        let semi = input.parse::<syn::token::Semi>()?;
+        semi.to_tokens(&mut tokens);
+    }
+
+    Ok(tokens)
 }

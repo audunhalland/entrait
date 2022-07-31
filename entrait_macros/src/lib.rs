@@ -158,13 +158,7 @@ fn invoke(
 
             (entrait_trait::output_tokens(attr, item_trait), debug)
         }
-        Input::Mod(_) => (
-            Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
-                "No support for modules yet",
-            )),
-            false,
-        ),
+        Input::Mod(input_mod) => (Ok(quote::quote! { #input_mod }), true),
     };
 
     let output = match result {
