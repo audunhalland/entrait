@@ -48,7 +48,7 @@ impl ToTokens for InputMod {
 }
 
 pub enum ModItem {
-    Fn(InputFn),
+    Fn(Box<InputFn>),
     Unknown(ItemUnknown),
 }
 
@@ -70,12 +70,13 @@ impl ModItem {
 impl ToTokens for ModItem {
     fn to_tokens(&self, stream: &mut TokenStream) {
         match self {
-            ModItem::Fn(InputFn {
-                fn_attrs,
-                fn_vis,
-                fn_sig,
-                fn_body,
-            }) => {
+            ModItem::Fn(input_fn) => {
+                let InputFn {
+                    fn_attrs,
+                    fn_vis,
+                    fn_sig,
+                    fn_body,
+                } = input_fn.as_ref();
                 for attr in fn_attrs {
                     push_tokens!(stream, attr);
                 }
@@ -175,12 +176,12 @@ impl Parse for ModItem {
                 }))
             } else {
                 let fn_body = parse_matched_braces_or_ending_semi(input)?;
-                Ok(ModItem::Fn(InputFn {
+                Ok(ModItem::Fn(Box::new(InputFn {
                     fn_attrs: attrs,
                     fn_vis: vis,
                     fn_sig: sig,
                     fn_body,
-                }))
+                })))
             }
         } else {
             let tokens = parse_matched_braces_or_ending_semi(input)?;

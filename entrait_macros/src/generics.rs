@@ -39,7 +39,7 @@ impl TraitGenerics {
         }
     }
 
-    pub fn impl_params<'s, 'i>(
+    pub fn impl_params<'i>(
         &'i self,
         trait_dependency_mode: &'i TraitDependencyMode<'i>,
         use_associated_future: UseAssociatedFuture,
@@ -54,7 +54,7 @@ impl TraitGenerics {
         }
     }
 
-    pub fn impl_params_from_idents<'s, 'i>(
+    pub fn impl_params_from_idents<'i>(
         &'i self,
         idents: &'i GenericIdents,
         use_associated_future: UseAssociatedFuture,

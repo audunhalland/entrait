@@ -141,8 +141,8 @@ impl<'i> OutputFn<'i> {
         analyzer: &mut GenericsAnalyzer,
         attr: &EntraitFnAttr,
     ) -> syn::Result<Self> {
-        let deps = analyzer.analyze_fn_deps(&source, attr)?;
-        let entrait_sig = signature::SignatureConverter::new(attr, &source, &deps).convert();
+        let deps = analyzer.analyze_fn_deps(source, attr)?;
+        let entrait_sig = signature::SignatureConverter::new(attr, source, &deps).convert();
         Ok(Self {
             source,
             deps,
