@@ -1,5 +1,5 @@
 use super::attr::EntraitFnAttr;
-use crate::generics::{FnDeps, GenericIdents, Generics, TraitGenerics};
+use crate::generics::{FnDeps, FnGenerics, GenericIdents, TraitGenerics};
 use crate::input::InputFn;
 
 use syn::spanned::Spanned;
@@ -18,15 +18,19 @@ impl GenericsAnalyzer {
         }
     }
 
+    pub fn into_trait_generics(self) -> TraitGenerics {
+        self.trait_generics
+    }
+
     // TODO: Should return FnDeps
-    pub fn analyze_fn(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<Generics> {
+    pub fn analyze_fn(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<FnGenerics> {
         let span = attr.trait_ident.span();
         if attr.no_deps_value() {
-            return Ok(Generics::new(
+            return Ok(FnGenerics::new(
                 FnDeps::NoDeps {
                     idents: GenericIdents::new(span),
                 },
-                clone_type_generics(&func.fn_sig.generics),
+                self.extract_type_generics(&func.fn_sig.generics),
             ));
         }
 
@@ -58,17 +62,17 @@ impl GenericsAnalyzer {
         func: &'f InputFn,
         arg_pat: &'f syn::PatType,
         ty: &'f syn::Type,
-    ) -> syn::Result<Generics> {
+    ) -> syn::Result<FnGenerics> {
         match ty {
             syn::Type::ImplTrait(type_impl_trait) => {
                 // Simple case, bounds are actually inline, no lookup necessary
-                Ok(Generics::new(
+                Ok(FnGenerics::new(
                     FnDeps::Generic {
                         generic_param: None,
                         trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
                         idents: GenericIdents::new(span),
                     },
-                    clone_type_generics(&func.fn_sig.generics),
+                    self.extract_type_generics(&func.fn_sig.generics),
                 ))
             }
             syn::Type::Path(type_path) => {
@@ -83,9 +87,9 @@ impl GenericsAnalyzer {
                     ));
                 }
                 if type_path.path.segments.len() != 1 {
-                    return Ok(Generics::new(
+                    return Ok(FnGenerics::new(
                         FnDeps::Concrete(Box::new(ty.clone())),
-                        clone_type_generics(&func.fn_sig.generics),
+                        self.extract_type_generics(&func.fn_sig.generics),
                     ));
                 }
 
@@ -93,9 +97,9 @@ impl GenericsAnalyzer {
 
                 match self.find_deps_generic_bounds(span, func, &first_segment.ident) {
                     Some(generics) => Ok(generics),
-                    None => Ok(Generics::new(
+                    None => Ok(FnGenerics::new(
                         FnDeps::Concrete(Box::new(ty.clone())),
-                        clone_type_generics(&func.fn_sig.generics),
+                        self.extract_type_generics(&func.fn_sig.generics),
                     )),
                 }
             }
@@ -105,9 +109,9 @@ impl GenericsAnalyzer {
             syn::Type::Paren(paren) => {
                 self.extract_deps_from_type(span, func, arg_pat, paren.elem.as_ref())
             }
-            ty => Ok(Generics::new(
+            ty => Ok(FnGenerics::new(
                 FnDeps::Concrete(Box::new(ty.clone())),
-                clone_type_generics(&func.fn_sig.generics),
+                self.extract_type_generics(&func.fn_sig.generics),
             )),
         }
     }
@@ -117,7 +121,7 @@ impl GenericsAnalyzer {
         span: proc_macro2::Span,
         func: &InputFn,
         generic_param_ident: &syn::Ident,
-    ) -> Option<Generics> {
+    ) -> Option<FnGenerics> {
         let generics = &func.fn_sig.generics;
         let generic_params = &generics.params;
 
@@ -203,7 +207,7 @@ impl GenericsAnalyzer {
             gt_token: generics.gt_token.filter(|_| has_modified_generics),
         };
 
-        Some(Generics::new(
+        Some(FnGenerics::new(
             FnDeps::Generic {
                 generic_param: Some(generic_param_ident.clone()),
                 trait_bounds: deps_trait_bounds,
@@ -212,29 +216,41 @@ impl GenericsAnalyzer {
             modified_generics,
         ))
     }
+
+    fn extract_type_generics(&mut self, generics: &syn::Generics) -> syn::Generics {
+        if let Some(where_clause) = &generics.where_clause {
+            for predicate in &where_clause.predicates {
+                self.trait_generics.where_predicates.push(predicate.clone());
+            }
+        }
+
+        let mut type_generics = syn::Generics {
+            lt_token: generics.lt_token,
+            params: syn::punctuated::Punctuated::new(),
+            where_clause: generics.where_clause.clone(),
+            gt_token: generics.gt_token,
+        };
+
+        for param in &generics.params {
+            match param {
+                syn::GenericParam::Type(_) => {
+                    type_generics.params.push(param.clone());
+                    self.trait_generics.params.push(param.clone());
+                }
+                syn::GenericParam::Const(_) => {
+                    type_generics.params.push(param.clone());
+                    self.trait_generics.params.push(param.clone());
+                }
+                syn::GenericParam::Lifetime(_) => {}
+            }
+        }
+
+        type_generics
+    }
 }
 
 fn extract_trait_bounds(
     bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
 ) -> Vec<syn::TypeParamBound> {
     bounds.iter().cloned().collect()
-}
-
-fn clone_type_generics(generics: &syn::Generics) -> syn::Generics {
-    let mut type_generics = syn::Generics {
-        lt_token: generics.lt_token,
-        params: syn::punctuated::Punctuated::new(),
-        where_clause: generics.where_clause.clone(),
-        gt_token: generics.gt_token,
-    };
-
-    for param in &generics.params {
-        match param {
-            syn::GenericParam::Type(_) => type_generics.params.push(param.clone()),
-            syn::GenericParam::Const(_) => type_generics.params.push(param.clone()),
-            syn::GenericParam::Lifetime(_) => {}
-        }
-    }
-
-    type_generics
 }

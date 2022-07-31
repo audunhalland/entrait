@@ -59,7 +59,7 @@ pub fn output_tokens(
     attr: EntraitTraitAttr,
     item_trait: syn::ItemTrait,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let generics = generics::Generics::new(
+    let generics = generics::FnGenerics::new(
         generics::FnDeps::NoDeps {
             idents: generics::GenericIdents::new(item_trait.ident.span()),
         },
@@ -203,7 +203,7 @@ fn find_future_arguments(bound: &syn::TypeParamBound) -> Option<&syn::PathArgume
 struct ImplWhereClause<'g> {
     item_trait: &'g syn::ItemTrait,
     contains_async: bool,
-    generics: &'g generics::Generics,
+    generics: &'g generics::FnGenerics,
     generic_idents: &'g generics::GenericIdents,
     attr: &'g EntraitTraitAttr,
     span: proc_macro2::Span,

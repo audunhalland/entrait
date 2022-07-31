@@ -8,7 +8,7 @@ pub mod attr;
 mod analyze_generics;
 mod signature;
 
-use crate::generics;
+use crate::generics::{self, GenericIdents};
 use crate::input::InputFn;
 use crate::opt::*;
 use crate::token_util::{push_tokens, EmptyToken, Punctuator, TokenPair};
@@ -22,7 +22,7 @@ use quote::quote_spanned;
 
 struct OutputFn<'i> {
     source: &'i InputFn,
-    generics: generics::Generics,
+    generics: generics::FnGenerics,
     entrait_sig: signature::EntraitSignature,
 }
 
@@ -50,7 +50,15 @@ impl<'i> OutputFn<'i> {
 pub fn gen_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
     let output_fn = OutputFn::analyze(&input_fn, &mut generics_analyzer, attr)?;
-    let trait_def = gen_trait_def(attr, &output_fn)?;
+    let trait_generics = generics_analyzer.into_trait_generics();
+
+    let generic_idents = match &output_fn.generics.deps {
+        generics::FnDeps::Generic { idents, .. } => Some(idents),
+        generics::FnDeps::NoDeps { idents } => Some(idents),
+        generics::FnDeps::Concrete(_) => None,
+    };
+
+    let trait_def = gen_trait_def(attr, &trait_generics, &output_fn, generic_idents)?;
     let impl_block = gen_impl_block(attr, &output_fn);
 
     let InputFn {
@@ -68,7 +76,12 @@ pub fn gen_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<Tok
     })
 }
 
-fn gen_trait_def(attr: &EntraitFnAttr, output_fn: &OutputFn) -> syn::Result<TokenStream> {
+fn gen_trait_def(
+    attr: &EntraitFnAttr,
+    trait_generics: &generics::TraitGenerics,
+    output_fn: &OutputFn,
+    generic_idents: Option<&GenericIdents>,
+) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
     let opt_unimock_attr = attr.opt_unimock_attribute(output_fn);
@@ -85,6 +98,7 @@ fn gen_trait_def(attr: &EntraitFnAttr, output_fn: &OutputFn) -> syn::Result<Toke
     let trait_ident = &attr.trait_ident;
     let opt_associated_fut_decl = &output_fn.entrait_sig.associated_fut_decl;
     let trait_fn_sig = &output_fn.sig();
+    let params = trait_generics.trait_params();
     let generics = &output_fn.generics.trait_generics;
     let where_clause = &generics.where_clause;
 
@@ -93,7 +107,7 @@ fn gen_trait_def(attr: &EntraitFnAttr, output_fn: &OutputFn) -> syn::Result<Toke
         #opt_entrait_for_trait_attr
         #opt_mockall_automock_attr
         #opt_async_trait_attr
-        #trait_visibility trait #trait_ident #generics #where_clause {
+        #trait_visibility trait #trait_ident #params #where_clause {
             #opt_associated_fut_decl
             #trait_fn_sig;
         }
@@ -136,7 +150,7 @@ fn gen_impl_block(attr: &EntraitFnAttr, output_fn: &OutputFn) -> TokenStream {
     }
 }
 
-struct SelfTy<'g>(&'g generics::Generics, Span);
+struct SelfTy<'g>(&'g generics::FnGenerics, Span);
 
 impl<'g> quote::ToTokens for SelfTy<'g> {
     fn to_tokens(&self, stream: &mut TokenStream) {
@@ -153,7 +167,7 @@ impl<'g> quote::ToTokens for SelfTy<'g> {
 
 /// Join where clauses from the input function and the required ones for Impl<T>
 pub struct ImplWhereClause<'g> {
-    generics: &'g generics::Generics,
+    generics: &'g generics::FnGenerics,
     span: Span,
 }
 

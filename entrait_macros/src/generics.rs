@@ -1,18 +1,13 @@
 use crate::token_util::{push_tokens, Punctuator};
 
-pub struct Generics {
+pub struct FnGenerics {
     pub deps: FnDeps,
-    pub trait_generics: syn::Generics,
-}
-
-pub struct TraitGenerics {
-    pub params: syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
-    pub where_predicates: syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
+    pub trait_generics: syn::Generics, // TODO: Remove
 }
 
 pub struct UseAssociatedFuture(pub bool);
 
-impl Generics {
+impl FnGenerics {
     pub fn new(deps: FnDeps, trait_generics: syn::Generics) -> Self {
         Self {
             deps,
@@ -22,7 +17,7 @@ impl Generics {
 
     pub fn params_generator(&self, use_associated_future: UseAssociatedFuture) -> ParamsGenerator {
         ParamsGenerator {
-            trait_generics: &self.trait_generics,
+            params: &self.trait_generics.params,
             impl_t: match &self.deps {
                 FnDeps::Generic { idents, .. } => Some(&idents.impl_t),
                 FnDeps::NoDeps { idents } => Some(&idents.impl_t),
@@ -34,7 +29,7 @@ impl Generics {
 
     pub fn arguments_generator(&self) -> ArgumentsGenerator {
         ArgumentsGenerator {
-            trait_generics: &self.trait_generics,
+            params: &self.trait_generics.params,
         }
     }
 }
@@ -49,6 +44,39 @@ pub enum FnDeps {
     NoDeps {
         idents: GenericIdents,
     },
+}
+
+pub struct TraitGenerics {
+    pub params: syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
+    pub where_predicates: syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
+}
+
+impl TraitGenerics {
+    pub fn trait_params(&self) -> ParamsGenerator<'_> {
+        ParamsGenerator {
+            params: &self.params,
+            impl_t: None,
+            use_associated_future: UseAssociatedFuture(false),
+        }
+    }
+
+    pub fn impl_params<'s, 'i>(
+        &'i self,
+        generic_idents: Option<&'i GenericIdents>,
+        use_associated_future: UseAssociatedFuture,
+    ) -> ParamsGenerator<'_> {
+        ParamsGenerator {
+            params: &self.params,
+            impl_t: generic_idents.map(|idents| &idents.impl_t),
+            use_associated_future,
+        }
+    }
+
+    pub fn arguments_generator(&self) -> ArgumentsGenerator {
+        ArgumentsGenerator {
+            params: &self.params,
+        }
+    }
 }
 
 pub struct GenericIdents {
@@ -99,7 +127,7 @@ impl<'g> quote::ToTokens for ImplPath<'g> {
 
 // Params as in impl<..Param>
 pub struct ParamsGenerator<'g> {
-    trait_generics: &'g syn::Generics,
+    params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     impl_t: Option<&'g syn::Ident>,
     use_associated_future: UseAssociatedFuture,
 }
@@ -133,7 +161,7 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
             });
         }
 
-        for param in &self.trait_generics.params {
+        for param in self.params {
             punctuator.push(param);
         }
     }
@@ -141,7 +169,7 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
 
 // Args as in impl<..Param> T for U<..Arg>
 pub struct ArgumentsGenerator<'g> {
-    trait_generics: &'g syn::Generics,
+    params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
 }
 
 impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
@@ -153,7 +181,7 @@ impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
             syn::token::Gt::default(),
         );
 
-        for pair in self.trait_generics.params.pairs() {
+        for pair in self.params.pairs() {
             match pair.value() {
                 syn::GenericParam::Type(type_param) => {
                     punctuator.push(&type_param.ident);
