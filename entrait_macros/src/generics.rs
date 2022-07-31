@@ -60,6 +60,12 @@ impl TraitGenerics {
         }
     }
 
+    pub fn trait_where_clause(&self) -> WhereClauseGenerator<'_> {
+        WhereClauseGenerator {
+            where_predicates: &self.where_predicates,
+        }
+    }
+
     pub fn impl_params<'s, 'i>(
         &'i self,
         generic_idents: Option<&'i GenericIdents>,
@@ -72,7 +78,7 @@ impl TraitGenerics {
         }
     }
 
-    pub fn arguments_generator(&self) -> ArgumentsGenerator {
+    pub fn arguments(&self) -> ArgumentsGenerator {
         ArgumentsGenerator {
             params: &self.params,
         }
@@ -193,6 +199,24 @@ impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
                     punctuator.push(&const_param.ident);
                 }
             }
+        }
+    }
+}
+
+pub struct WhereClauseGenerator<'g> {
+    where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
+}
+
+impl<'g> quote::ToTokens for WhereClauseGenerator<'g> {
+    fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
+        if self.where_predicates.is_empty() {
+            return;
+        }
+
+        push_tokens!(stream, syn::token::Where::default());
+
+        for pair in self.where_predicates.pairs() {
+            push_tokens!(stream, pair);
         }
     }
 }

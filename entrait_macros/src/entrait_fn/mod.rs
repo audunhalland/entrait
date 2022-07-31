@@ -58,7 +58,7 @@ pub fn gen_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<Tok
         generics::FnDeps::Concrete(_) => None,
     };
 
-    let trait_def = gen_trait_def(attr, &trait_generics, &output_fn, generic_idents)?;
+    let trait_def = gen_trait_def(attr, &trait_generics, &output_fn)?;
     let impl_block = gen_impl_block(attr, &output_fn);
 
     let InputFn {
@@ -80,7 +80,6 @@ fn gen_trait_def(
     attr: &EntraitFnAttr,
     trait_generics: &generics::TraitGenerics,
     output_fn: &OutputFn,
-    generic_idents: Option<&GenericIdents>,
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
@@ -99,8 +98,7 @@ fn gen_trait_def(
     let opt_associated_fut_decl = &output_fn.entrait_sig.associated_fut_decl;
     let trait_fn_sig = &output_fn.sig();
     let params = trait_generics.trait_params();
-    let generics = &output_fn.generics.trait_generics;
-    let where_clause = &generics.where_clause;
+    let where_clause = trait_generics.trait_where_clause();
 
     Ok(quote_spanned! { span=>
         #opt_unimock_attr
