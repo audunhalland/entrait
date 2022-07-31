@@ -1,14 +1,19 @@
 use crate::token_util::{push_tokens, Punctuator};
 
 pub struct Generics {
-    pub deps: Deps,
+    pub deps: FnDeps,
     pub trait_generics: syn::Generics,
+}
+
+pub struct TraitGenerics {
+    pub params: syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
+    pub where_predicates: syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
 }
 
 pub struct UseAssociatedFuture(pub bool);
 
 impl Generics {
-    pub fn new(deps: Deps, trait_generics: syn::Generics) -> Self {
+    pub fn new(deps: FnDeps, trait_generics: syn::Generics) -> Self {
         Self {
             deps,
             trait_generics,
@@ -19,9 +24,9 @@ impl Generics {
         ParamsGenerator {
             trait_generics: &self.trait_generics,
             impl_t: match &self.deps {
-                Deps::Generic { idents, .. } => Some(&idents.impl_t),
-                Deps::NoDeps { idents } => Some(&idents.impl_t),
-                Deps::Concrete(_) => None,
+                FnDeps::Generic { idents, .. } => Some(&idents.impl_t),
+                FnDeps::NoDeps { idents } => Some(&idents.impl_t),
+                FnDeps::Concrete(_) => None,
             },
             use_associated_future,
         }
@@ -34,7 +39,7 @@ impl Generics {
     }
 }
 
-pub enum Deps {
+pub enum FnDeps {
     Generic {
         generic_param: Option<syn::Ident>,
         trait_bounds: Vec<syn::TypeParamBound>,

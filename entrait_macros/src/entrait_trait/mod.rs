@@ -60,13 +60,13 @@ pub fn output_tokens(
     item_trait: syn::ItemTrait,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let generics = generics::Generics::new(
-        generics::Deps::NoDeps {
+        generics::FnDeps::NoDeps {
             idents: generics::GenericIdents::new(item_trait.ident.span()),
         },
         item_trait.generics.clone(),
     );
     let generic_idents = match &generics.deps {
-        generics::Deps::NoDeps { idents } => idents,
+        generics::FnDeps::NoDeps { idents } => idents,
         _ => panic!(),
     };
     let trait_ident = &item_trait.ident;

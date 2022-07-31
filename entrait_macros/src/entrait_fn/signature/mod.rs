@@ -2,7 +2,7 @@ mod fn_params;
 mod lifetimes;
 
 use super::attr::EntraitFnAttr;
-use crate::generics::Deps;
+use crate::generics::FnDeps;
 use crate::input::InputFn;
 
 use proc_macro2::TokenStream;
@@ -36,7 +36,7 @@ pub struct UserProvidedLifetime(bool);
 pub struct SignatureConverter<'a> {
     attr: &'a EntraitFnAttr,
     input_fn: &'a InputFn,
-    deps: &'a Deps,
+    deps: &'a FnDeps,
 }
 
 #[derive(Clone, Copy)]
@@ -50,7 +50,7 @@ impl<'a> SignatureConverter<'a> {
     pub fn new(
         attr: &'a EntraitFnAttr,
         input_fn: &'a InputFn,
-        deps: &'a Deps,
+        deps: &'a FnDeps,
     ) -> SignatureConverter<'a> {
         Self {
             attr,
@@ -97,7 +97,7 @@ impl<'a> SignatureConverter<'a> {
 
     fn detect_receiver_generation(&self, sig: &syn::Signature) -> ReceiverGeneration {
         match self.deps {
-            Deps::NoDeps { .. } => ReceiverGeneration::Insert,
+            FnDeps::NoDeps { .. } => ReceiverGeneration::Insert,
             _ => {
                 if sig.inputs.is_empty() {
                     if self.input_fn.use_associated_future(self.attr) {
@@ -211,7 +211,7 @@ impl<'a> SignatureConverter<'a> {
 
     fn remove_generic_type_params(&self, sig: &mut syn::Signature) {
         let deps_ident = match &self.deps {
-            Deps::Generic { generic_param, .. } => generic_param.as_ref(),
+            FnDeps::Generic { generic_param, .. } => generic_param.as_ref(),
             _ => None,
         };
 
