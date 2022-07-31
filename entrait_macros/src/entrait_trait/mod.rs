@@ -1,6 +1,7 @@
 //! Implementation for invoking entrait on a trait!
 
 use crate::generics;
+use crate::generics::GenericIdents;
 use crate::opt::*;
 use crate::token_util::*;
 
@@ -59,16 +60,16 @@ pub fn output_tokens(
     attr: EntraitTraitAttr,
     item_trait: syn::ItemTrait,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let generics = generics::FnGenerics::new(
-        generics::FnDeps::NoDeps {
-            idents: generics::GenericIdents::new(item_trait.ident.span()),
-        },
-        item_trait.generics.clone(),
-    );
-    let generic_idents = match &generics.deps {
-        generics::FnDeps::NoDeps { idents } => idents,
-        _ => panic!(),
+    let generics = generics::TraitGenerics {
+        params: item_trait.generics.params.clone(),
+        where_predicates: item_trait
+            .generics
+            .where_clause
+            .as_ref()
+            .map(|where_clause| where_clause.predicates.clone())
+            .unwrap_or_default(),
     };
+    let generic_idents = GenericIdents::new(item_trait.ident.span());
     let trait_ident = &item_trait.ident;
 
     // NOTE: all of the trait _input attributes_ are outputted, unchanged
@@ -102,14 +103,15 @@ pub fn output_tokens(
         })
         .collect::<Vec<_>>();
 
-    let params = generics.params_generator(generics::UseAssociatedFuture(false));
-    let args = generics.arguments_generator();
+    let params =
+        generics.impl_params_from_idents(&generic_idents, generics::UseAssociatedFuture(false));
+    let args = generics.arguments();
     let self_ty = generic_idents.impl_path(item_trait.ident.span());
     let where_clause = ImplWhereClause {
         item_trait: &item_trait,
         contains_async,
-        generics: &generics,
-        generic_idents,
+        trait_generics: &generics,
+        generic_idents: &generic_idents,
         attr: &attr,
         span: item_trait.ident.span(),
     };
@@ -203,7 +205,7 @@ fn find_future_arguments(bound: &syn::TypeParamBound) -> Option<&syn::PathArgume
 struct ImplWhereClause<'g> {
     item_trait: &'g syn::ItemTrait,
     contains_async: bool,
-    generics: &'g generics::FnGenerics,
+    trait_generics: &'g generics::TraitGenerics,
     generic_idents: &'g generics::GenericIdents,
     attr: &'g EntraitTraitAttr,
     span: proc_macro2::Span,
@@ -250,7 +252,7 @@ impl<'g> ImplWhereClause<'g> {
     }
 
     fn trait_with_arguments(&self) -> TokenPair<impl ToTokens + '_, impl ToTokens + '_> {
-        TokenPair(&self.item_trait.ident, self.generics.arguments_generator())
+        TokenPair(&self.item_trait.ident, self.trait_generics.arguments())
     }
 
     fn plus_static(&self) -> TokenPair<impl ToTokens, impl ToTokens> {
@@ -289,10 +291,8 @@ impl<'g> quote::ToTokens for ImplWhereClause<'g> {
             self.impl_t_bounds(stream);
         });
 
-        if let Some(where_clause) = &self.generics.trait_generics.where_clause {
-            for predicate in &where_clause.predicates {
-                punctuator.push(predicate);
-            }
+        for predicate in &self.trait_generics.where_predicates {
+            punctuator.push(predicate);
         }
     }
 }

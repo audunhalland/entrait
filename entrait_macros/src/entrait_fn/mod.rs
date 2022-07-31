@@ -24,7 +24,7 @@ use self::analyze_generics::detect_trait_dependency_mode;
 
 pub struct OutputFn<'i> {
     source: &'i InputFn,
-    pub generics: generics::FnGenerics,
+    pub deps: generics::FnDeps,
     entrait_sig: signature::EntraitSignature,
 }
 
@@ -34,12 +34,11 @@ impl<'i> OutputFn<'i> {
         analyzer: &mut GenericsAnalyzer,
         attr: &EntraitFnAttr,
     ) -> syn::Result<Self> {
-        let generics = analyzer.analyze_fn(&source, attr)?;
-        let entrait_sig =
-            signature::SignatureConverter::new(attr, &source, &generics.deps).convert();
+        let deps = analyzer.analyze_fn_deps(&source, attr)?;
+        let entrait_sig = signature::SignatureConverter::new(attr, &source, &deps).convert();
         Ok(Self {
             source,
-            generics,
+            deps,
             entrait_sig,
         })
     }
@@ -201,7 +200,7 @@ impl<'g> quote::ToTokens for SelfTy<'g> {
 fn gen_delegating_fn_item(output_fn: &OutputFn, span: Span) -> TokenStream {
     let entrait_sig = &output_fn.entrait_sig;
     let trait_fn_sig = &output_fn.sig();
-    let deps = &output_fn.generics.deps;
+    let deps = &output_fn.deps;
 
     let mut fn_ident = output_fn.source.fn_sig.ident.clone();
     fn_ident.set_span(span);
@@ -250,7 +249,7 @@ impl EntraitFnAttr {
                     output_fns.iter().map(|output_fn| {
                         let fn_ident = &output_fn.sig().ident;
 
-                        match &output_fn.generics.deps {
+                        match &output_fn.deps {
                             generics::FnDeps::Generic { .. } => quote! { #fn_ident },
                             generics::FnDeps::Concrete(_) => quote! { _ },
                             generics::FnDeps::NoDeps { .. } => {

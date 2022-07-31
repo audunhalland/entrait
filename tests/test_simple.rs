@@ -11,6 +11,17 @@ mod bounds {
         }
     }
 
+    mod inline_bounds {
+        use super::*;
+
+        #[entrait(pub Foo)]
+        fn foo<A: Bar + Baz>(app: &A) -> u32 {
+            println!("Foo");
+            app.bar();
+            app.baz("from foo")
+        }
+    }
+
     mod where_bounds {
         use super::*;
 
@@ -65,6 +76,13 @@ mod bounds {
         let impl_state = Impl::new(app::State { number: 42 });
         let result = impl_state.foo();
         assert_eq!(42, result);
+    }
+
+    mod mixed_inline_bounds {
+        use super::*;
+
+        #[entrait(pub Foo)]
+        fn foo<D, E>(deps: &D, arg: &E) {}
     }
 }
 

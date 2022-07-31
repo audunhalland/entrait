@@ -3,50 +3,15 @@ use crate::{
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
 
-pub struct FnGenerics {
-    pub deps: FnDeps,
-    pub trait_generics: syn::Generics, // TODO: Remove
-}
-
 pub struct UseAssociatedFuture(pub bool);
-
-impl FnGenerics {
-    pub fn new(deps: FnDeps, trait_generics: syn::Generics) -> Self {
-        Self {
-            deps,
-            trait_generics,
-        }
-    }
-
-    pub fn params_generator(&self, use_associated_future: UseAssociatedFuture) -> ParamsGenerator {
-        ParamsGenerator {
-            params: &self.trait_generics.params,
-            impl_t: match &self.deps {
-                FnDeps::Generic { idents, .. } => Some(&idents.impl_t),
-                FnDeps::NoDeps { idents } => Some(&idents.impl_t),
-                FnDeps::Concrete(_) => None,
-            },
-            use_associated_future,
-        }
-    }
-
-    pub fn arguments_generator(&self) -> ArgumentsGenerator {
-        ArgumentsGenerator {
-            params: &self.trait_generics.params,
-        }
-    }
-}
 
 pub enum FnDeps {
     Generic {
         generic_param: Option<syn::Ident>,
         trait_bounds: Vec<syn::TypeParamBound>,
-        idents: GenericIdents,
     },
     Concrete(Box<syn::Type>),
-    NoDeps {
-        idents: GenericIdents,
-    },
+    NoDeps,
 }
 
 pub enum TraitDependencyMode<'t> {
@@ -85,6 +50,18 @@ impl TraitGenerics {
                 TraitDependencyMode::Generic(idents) => Some(&idents.impl_t),
                 TraitDependencyMode::Concrete(_) => None,
             },
+            use_associated_future,
+        }
+    }
+
+    pub fn impl_params_from_idents<'s, 'i>(
+        &'i self,
+        idents: &'i GenericIdents,
+        use_associated_future: UseAssociatedFuture,
+    ) -> ParamsGenerator<'_> {
+        ParamsGenerator {
+            params: &self.params,
+            impl_t: Some(&idents.impl_t),
             use_associated_future,
         }
     }
@@ -267,13 +244,13 @@ impl<'g, 's> quote::ToTokens for ImplWhereClauseGenerator<'g, 's> {
             TraitDependencyMode::Generic(_) => {
                 // Self bounds
 
-                let has_bounds =
-                    self.output_fns
-                        .iter()
-                        .any(|output_fn| match &output_fn.generics.deps {
-                            FnDeps::Generic { trait_bounds, .. } => !trait_bounds.is_empty(),
-                            _ => false,
-                        });
+                let has_bounds = self
+                    .output_fns
+                    .iter()
+                    .any(|output_fn| match &output_fn.deps {
+                        FnDeps::Generic { trait_bounds, .. } => !trait_bounds.is_empty(),
+                        _ => false,
+                    });
 
                 if has_bounds {
                     punctuator.push_fn(|stream| {
@@ -288,7 +265,7 @@ impl<'g, 's> quote::ToTokens for ImplWhereClauseGenerator<'g, 's> {
                         );
 
                         for output_fn in self.output_fns {
-                            if let FnDeps::Generic { trait_bounds, .. } = &output_fn.generics.deps {
+                            if let FnDeps::Generic { trait_bounds, .. } = &output_fn.deps {
                                 for bound in trait_bounds {
                                     bound_punctuator.push(bound);
                                 }

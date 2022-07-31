@@ -1,6 +1,6 @@
 use super::InputFn;
 use super::{attr::EntraitFnAttr, OutputFn};
-use crate::generics::{FnDeps, FnGenerics, GenericIdents, TraitDependencyMode, TraitGenerics};
+use crate::generics::{FnDeps, GenericIdents, TraitDependencyMode, TraitGenerics};
 
 use syn::spanned::Spanned;
 
@@ -9,7 +9,7 @@ pub fn detect_trait_dependency_mode<'t>(
     span: proc_macro2::Span,
 ) -> TraitDependencyMode<'t> {
     for output_fn in output_fns {
-        if let FnDeps::Concrete(ty) = &output_fn.generics.deps {
+        if let FnDeps::Concrete(ty) = &output_fn.deps {
             return TraitDependencyMode::Concrete(ty.as_ref());
         }
     }
@@ -36,15 +36,10 @@ impl GenericsAnalyzer {
     }
 
     // TODO: Should return FnDeps
-    pub fn analyze_fn(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<FnGenerics> {
+    pub fn analyze_fn_deps(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<FnDeps> {
         let span = attr.trait_ident.span();
         if attr.no_deps_value() {
-            return Ok(FnGenerics::new(
-                FnDeps::NoDeps {
-                    idents: GenericIdents::new(span),
-                },
-                self.extract_type_generics(&func.fn_sig.generics),
-            ));
+            return self.deps_with_generics(FnDeps::NoDeps, &func.fn_sig.generics);
         }
 
         let first_input =
@@ -75,18 +70,17 @@ impl GenericsAnalyzer {
         func: &'f InputFn,
         arg_pat: &'f syn::PatType,
         ty: &'f syn::Type,
-    ) -> syn::Result<FnGenerics> {
+    ) -> syn::Result<FnDeps> {
         match ty {
             syn::Type::ImplTrait(type_impl_trait) => {
                 // Simple case, bounds are actually inline, no lookup necessary
-                Ok(FnGenerics::new(
+                self.deps_with_generics(
                     FnDeps::Generic {
                         generic_param: None,
                         trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
-                        idents: GenericIdents::new(span),
                     },
-                    self.extract_type_generics(&func.fn_sig.generics),
-                ))
+                    &func.fn_sig.generics,
+                )
             }
             syn::Type::Path(type_path) => {
                 // Type path. Should be defined as a generic parameter.
@@ -100,20 +94,20 @@ impl GenericsAnalyzer {
                     ));
                 }
                 if type_path.path.segments.len() != 1 {
-                    return Ok(FnGenerics::new(
+                    return self.deps_with_generics(
                         FnDeps::Concrete(Box::new(ty.clone())),
-                        self.extract_type_generics(&func.fn_sig.generics),
-                    ));
+                        &func.fn_sig.generics,
+                    );
                 }
 
                 let first_segment = type_path.path.segments.first().unwrap();
 
-                match self.find_deps_generic_bounds(span, func, &first_segment.ident) {
+                match self.find_deps_generic_bounds(func, &first_segment.ident) {
                     Some(generics) => Ok(generics),
-                    None => Ok(FnGenerics::new(
+                    None => self.deps_with_generics(
                         FnDeps::Concrete(Box::new(ty.clone())),
-                        self.extract_type_generics(&func.fn_sig.generics),
-                    )),
+                        &func.fn_sig.generics,
+                    ),
                 }
             }
             syn::Type::Reference(type_reference) => {
@@ -122,19 +116,18 @@ impl GenericsAnalyzer {
             syn::Type::Paren(paren) => {
                 self.extract_deps_from_type(span, func, arg_pat, paren.elem.as_ref())
             }
-            ty => Ok(FnGenerics::new(
+            ty => self.deps_with_generics(
                 FnDeps::Concrete(Box::new(ty.clone())),
-                self.extract_type_generics(&func.fn_sig.generics),
-            )),
+                &func.fn_sig.generics,
+            ),
         }
     }
 
     fn find_deps_generic_bounds(
         &mut self,
-        span: proc_macro2::Span,
         func: &InputFn,
         generic_param_ident: &syn::Ident,
-    ) -> Option<FnGenerics> {
+    ) -> Option<FnDeps> {
         let generics = &func.fn_sig.generics;
         let generic_params = &generics.params;
 
@@ -152,33 +145,26 @@ impl GenericsAnalyzer {
                 _ => None,
             })?;
 
-        let mut remaining_params =
-            syn::punctuated::Punctuated::<syn::GenericParam, syn::token::Comma>::new();
-
         for (index, param) in generic_params.iter().enumerate() {
             if index != matching_index {
-                remaining_params.push(param.clone());
+                self.trait_generics.params.push(param.clone());
             }
         }
 
         // Extract "direct" bounds, not from where clause
         let mut deps_trait_bounds = extract_trait_bounds(&matching_type_param.bounds);
 
-        // Check the where clause too
-        let new_where_clause = if let Some(where_clause) = &generics.where_clause {
-            let mut new_predicates =
-                syn::punctuated::Punctuated::<syn::WherePredicate, syn::token::Comma>::new();
-
+        if let Some(where_clause) = &generics.where_clause {
             for predicate in &where_clause.predicates {
                 match predicate {
                     syn::WherePredicate::Type(predicate_type) => match &predicate_type.bounded_ty {
                         syn::Type::Path(type_path) => {
                             if type_path.qself.is_some() || type_path.path.leading_colon.is_some() {
-                                new_predicates.push(predicate.clone());
+                                self.trait_generics.where_predicates.push(predicate.clone());
                                 continue;
                             }
                             if type_path.path.segments.len() != 1 {
-                                new_predicates.push(predicate.clone());
+                                self.trait_generics.where_predicates.push(predicate.clone());
                                 continue;
                             }
                             let first_segment = type_path.path.segments.first().unwrap();
@@ -190,75 +176,46 @@ impl GenericsAnalyzer {
                             }
                         }
                         _ => {
-                            new_predicates.push(predicate.clone());
+                            self.trait_generics.where_predicates.push(predicate.clone());
                         }
                     },
                     _ => {
-                        new_predicates.push(predicate.clone());
+                        self.trait_generics.where_predicates.push(predicate.clone());
                     }
                 }
             }
-
-            if !new_predicates.is_empty() {
-                Some(syn::WhereClause {
-                    where_token: where_clause.where_token,
-                    predicates: new_predicates,
-                })
-            } else {
-                None
-            }
-        } else {
-            None
         };
 
-        let has_modified_generics = !remaining_params.is_empty() || new_where_clause.is_some();
-
-        let modified_generics = syn::Generics {
-            lt_token: generics.lt_token.filter(|_| has_modified_generics),
-            params: remaining_params,
-            where_clause: new_where_clause,
-            gt_token: generics.gt_token.filter(|_| has_modified_generics),
-        };
-
-        Some(FnGenerics::new(
-            FnDeps::Generic {
-                generic_param: Some(generic_param_ident.clone()),
-                trait_bounds: deps_trait_bounds,
-                idents: GenericIdents::new(span),
-            },
-            modified_generics,
-        ))
+        Some(FnDeps::Generic {
+            generic_param: Some(generic_param_ident.clone()),
+            trait_bounds: deps_trait_bounds,
+        })
     }
 
-    fn extract_type_generics(&mut self, generics: &syn::Generics) -> syn::Generics {
-        if let Some(where_clause) = &generics.where_clause {
-            for predicate in &where_clause.predicates {
-                self.trait_generics.where_predicates.push(predicate.clone());
-            }
-        }
-
-        let mut type_generics = syn::Generics {
-            lt_token: generics.lt_token,
-            params: syn::punctuated::Punctuated::new(),
-            where_clause: generics.where_clause.clone(),
-            gt_token: generics.gt_token,
-        };
-
+    fn deps_with_generics(
+        &mut self,
+        deps: FnDeps,
+        generics: &syn::Generics,
+    ) -> syn::Result<FnDeps> {
         for param in &generics.params {
             match param {
                 syn::GenericParam::Type(_) => {
-                    type_generics.params.push(param.clone());
                     self.trait_generics.params.push(param.clone());
                 }
                 syn::GenericParam::Const(_) => {
-                    type_generics.params.push(param.clone());
                     self.trait_generics.params.push(param.clone());
                 }
                 syn::GenericParam::Lifetime(_) => {}
             }
         }
 
-        type_generics
+        if let Some(where_clause) = &generics.where_clause {
+            for predicate in &where_clause.predicates {
+                self.trait_generics.where_predicates.push(predicate.clone());
+            }
+        }
+
+        Ok(deps)
     }
 }
 
