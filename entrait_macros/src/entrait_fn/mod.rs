@@ -11,7 +11,7 @@ mod signature;
 use crate::generics;
 use crate::input::InputFn;
 use crate::opt::*;
-use crate::token_util::{push_tokens, EmptyToken, Punctuator};
+use crate::token_util::{push_tokens, EmptyToken, Punctuator, TokenPair};
 use attr::*;
 
 use proc_macro2::Span;
@@ -206,21 +206,12 @@ fn gen_delegating_fn_item(output_fn: &OutputFn, span: Span) -> TokenStream {
     let mut fn_ident = output_fn.source.fn_sig.ident.clone();
     fn_ident.set_span(span);
 
-    struct SelfComma(Span);
-
-    impl quote::ToTokens for SelfComma {
-        fn to_tokens(&self, stream: &mut TokenStream) {
-            push_tokens!(
-                stream,
-                syn::token::SelfValue(self.0),
-                syn::token::Comma(self.0)
-            );
-        }
-    }
-
     let opt_self_comma = match (deps, entrait_sig.sig.inputs.first()) {
         (generics::Deps::NoDeps { .. }, _) | (_, None) => None,
-        (_, Some(_)) => Some(SelfComma(span)),
+        (_, Some(_)) => Some(TokenPair(
+            syn::token::SelfValue(span),
+            syn::token::Comma(span),
+        )),
     };
 
     let arguments = entrait_sig
