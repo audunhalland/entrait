@@ -529,7 +529,7 @@ It is also possible to reduce noise by doing `use entrait::entrait_export as ent
 
 
 # "Philosophy"
-The `entrait` crate is central to the _entrait pattern_, an opinionated yet flexible way to build testable applications/business logic.
+The `entrait` crate is central to the _entrait pattern_, an opinionated yet flexible and _Rusty_ way to build testable applications/business logic.
 
 To understand the entrait model and how to achieve Dependency Injection (DI) with it, we can compare it with a more widely used and classical alternative pattern:
     _Object-Oriented DI_.
@@ -552,9 +552,8 @@ Entrait was built to address two drawbacks inherent to this design:
 `entrait` solves this by:
 
 * Representing dependencies as _traits_ instead of types, automatically profiting from Rust's builtin zero-cost abstraction tool.
-* Having each dependency do only one thing, by abstracting over _functions_ instead of _modules_.
-    This is possible because we do not pay anything extra for having more detailed dependency graphs.
-
+* Giving users a choice between fine and coarse dependency granularity, by enabling both single-function traits and module-based traits.
+* Always declaring dependencies at the function signature level, close to call sites, instead of at module level.
 
 
 # Limitations
