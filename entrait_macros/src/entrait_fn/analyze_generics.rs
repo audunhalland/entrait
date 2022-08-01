@@ -1,15 +1,15 @@
 use super::InputFn;
-use super::{attr::EntraitFnAttr, OutputFn};
+use super::{attr::EntraitFnAttr, TraitFn};
 use crate::generics::{FnDeps, GenericIdents, TraitDependencyMode, TraitGenerics};
 
 use syn::spanned::Spanned;
 
 pub fn detect_trait_dependency_mode<'t>(
-    output_fns: &'t [OutputFn],
+    trait_fns: &'t [TraitFn],
     span: proc_macro2::Span,
 ) -> TraitDependencyMode<'t> {
-    for output_fn in output_fns {
-        if let FnDeps::Concrete(ty) = &output_fn.deps {
+    for trait_fn in trait_fns {
+        if let FnDeps::Concrete(ty) = &trait_fn.deps {
             return TraitDependencyMode::Concrete(ty.as_ref());
         }
     }
@@ -64,12 +64,12 @@ impl GenericsAnalyzer {
         self.extract_deps_from_type(span, func, pat_type, pat_type.ty.as_ref())
     }
 
-    fn extract_deps_from_type<'f>(
+    fn extract_deps_from_type(
         &mut self,
         span: proc_macro2::Span,
-        func: &'f InputFn,
-        arg_pat: &'f syn::PatType,
-        ty: &'f syn::Type,
+        func: &InputFn,
+        arg_pat: &syn::PatType,
+        ty: &syn::Type,
     ) -> syn::Result<FnDeps> {
         match ty {
             syn::Type::ImplTrait(type_impl_trait) => {

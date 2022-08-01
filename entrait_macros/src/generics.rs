@@ -1,5 +1,5 @@
 use crate::{
-    entrait_fn::OutputFn,
+    entrait_fn::TraitFn,
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
 
@@ -68,14 +68,14 @@ impl TraitGenerics {
 
     pub fn impl_where_clause<'g, 's>(
         &'g self,
-        output_fns: &'s [OutputFn],
+        trait_fns: &'s [TraitFn],
         trait_dependency_mode: &'s TraitDependencyMode<'s>,
         span: proc_macro2::Span,
     ) -> ImplWhereClauseGenerator<'g, 's> {
         ImplWhereClauseGenerator {
             trait_where_predicates: &self.where_predicates,
             trait_dependency_mode,
-            output_fns,
+            trait_fns,
             span,
         }
     }
@@ -226,7 +226,7 @@ impl<'g> quote::ToTokens for TraitWhereClauseGenerator<'g> {
 pub struct ImplWhereClauseGenerator<'g, 's> {
     trait_where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
     trait_dependency_mode: &'s TraitDependencyMode<'s>,
-    output_fns: &'s [OutputFn<'s>],
+    trait_fns: &'s [TraitFn<'s>],
     span: proc_macro2::Span,
 }
 
@@ -244,13 +244,10 @@ impl<'g, 's> quote::ToTokens for ImplWhereClauseGenerator<'g, 's> {
             TraitDependencyMode::Generic(_) => {
                 // Self bounds
 
-                let has_bounds = self
-                    .output_fns
-                    .iter()
-                    .any(|output_fn| match &output_fn.deps {
-                        FnDeps::Generic { trait_bounds, .. } => !trait_bounds.is_empty(),
-                        _ => false,
-                    });
+                let has_bounds = self.trait_fns.iter().any(|trait_fn| match &trait_fn.deps {
+                    FnDeps::Generic { trait_bounds, .. } => !trait_bounds.is_empty(),
+                    _ => false,
+                });
 
                 if has_bounds {
                     punctuator.push_fn(|stream| {
@@ -264,8 +261,8 @@ impl<'g, 's> quote::ToTokens for ImplWhereClauseGenerator<'g, 's> {
                             EmptyToken,
                         );
 
-                        for output_fn in self.output_fns {
-                            if let FnDeps::Generic { trait_bounds, .. } = &output_fn.deps {
+                        for trait_fn in self.trait_fns {
+                            if let FnDeps::Generic { trait_bounds, .. } = &trait_fn.deps {
                                 for bound in trait_bounds {
                                     bound_punctuator.push(bound);
                                 }

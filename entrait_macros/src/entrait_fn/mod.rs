@@ -29,11 +29,9 @@ enum Mode<'a> {
 
 pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
-    let output_fn = OutputFn::analyze(&input_fn, &mut generics_analyzer, attr)?;
+    let trait_fns = [TraitFn::analyze(&input_fn, &mut generics_analyzer, attr)?];
 
-    let output_fns = [output_fn];
-
-    let trait_dependency_mode = detect_trait_dependency_mode(&output_fns, attr.trait_ident.span());
+    let trait_dependency_mode = detect_trait_dependency_mode(&trait_fns, attr.trait_ident.span());
     let use_associated_future = detect_use_associated_future(attr, [&input_fn].into_iter());
 
     let trait_generics = generics_analyzer.into_trait_generics();
@@ -41,14 +39,14 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         attr,
         &trait_generics,
         &trait_dependency_mode,
-        &output_fns,
+        &trait_fns,
         &Mode::SingleFn(&input_fn.fn_sig.ident),
     )?;
     let impl_block = gen_impl_block(
         attr,
         &trait_generics,
-        &output_fns,
         &trait_dependency_mode,
+        &trait_fns,
         use_associated_future,
     );
 
@@ -69,14 +67,14 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
 
 pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result<TokenStream> {
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
-    let output_fns = input_mod
+    let trait_fns = input_mod
         .items
         .iter()
         .filter_map(ModItem::filter_pub_fn)
-        .map(|input_fn| OutputFn::analyze(input_fn, &mut generics_analyzer, attr))
+        .map(|input_fn| TraitFn::analyze(input_fn, &mut generics_analyzer, attr))
         .collect::<syn::Result<Vec<_>>>()?;
 
-    let trait_dependency_mode = detect_trait_dependency_mode(&output_fns, attr.trait_ident.span());
+    let trait_dependency_mode = detect_trait_dependency_mode(&trait_fns, attr.trait_ident.span());
     let use_associated_future = detect_use_associated_future(
         attr,
         input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
@@ -87,14 +85,14 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         attr,
         &trait_generics,
         &trait_dependency_mode,
-        &output_fns,
+        &trait_fns,
         &Mode::Module,
     )?;
     let impl_block = gen_impl_block(
         attr,
         &trait_generics,
-        &output_fns,
         &trait_dependency_mode,
+        &trait_fns,
         use_associated_future,
     );
 
@@ -129,13 +127,13 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
     })
 }
 
-pub struct OutputFn<'i> {
+pub struct TraitFn<'i> {
     source: &'i InputFn,
     pub deps: generics::FnDeps,
     entrait_sig: signature::EntraitSignature,
 }
 
-impl<'i> OutputFn<'i> {
+impl<'i> TraitFn<'i> {
     fn analyze(
         source: &'i InputFn,
         analyzer: &mut GenericsAnalyzer,
@@ -159,12 +157,12 @@ fn gen_trait_def(
     attr: &EntraitFnAttr,
     trait_generics: &generics::TraitGenerics,
     trait_dependency_mode: &TraitDependencyMode,
-    output_fns: &[OutputFn],
+    trait_fns: &[TraitFn],
     mode: &Mode<'_>,
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
-    let opt_unimock_attr = attr.opt_unimock_attribute(output_fns, mode);
+    let opt_unimock_attr = attr.opt_unimock_attribute(trait_fns, mode);
     let opt_entrait_for_trait_attr = match trait_dependency_mode {
         TraitDependencyMode::Concrete(_) => {
             Some(quote! { #[::entrait::entrait(unimock = false, mockall = false)] })
@@ -172,14 +170,14 @@ fn gen_trait_def(
         _ => None,
     };
     let opt_mockall_automock_attr = attr.opt_mockall_automock_attribute();
-    let opt_async_trait_attr = opt_async_trait_attribute(attr, output_fns.iter());
+    let opt_async_trait_attr = opt_async_trait_attribute(attr, trait_fns.iter());
 
     let trait_visibility = &attr.trait_visibility;
     let trait_ident = &attr.trait_ident;
 
-    let fn_defs = output_fns.iter().map(|output_fn| {
-        let opt_associated_fut_decl = &output_fn.entrait_sig.associated_fut_decl;
-        let trait_fn_sig = output_fn.sig();
+    let fn_defs = trait_fns.iter().map(|trait_fn| {
+        let opt_associated_fut_decl = &trait_fn.entrait_sig.associated_fut_decl;
+        let trait_fn_sig = trait_fn.sig();
 
         quote! {
             #opt_associated_fut_decl
@@ -215,23 +213,23 @@ fn gen_trait_def(
 fn gen_impl_block(
     attr: &EntraitFnAttr,
     trait_generics: &generics::TraitGenerics,
-    output_fns: &[OutputFn],
     trait_dependency_mode: &TraitDependencyMode,
+    trait_fns: &[TraitFn],
     use_associated_future: generics::UseAssociatedFuture,
 ) -> TokenStream {
     let span = attr.trait_ident.span();
 
-    let async_trait_attribute = opt_async_trait_attribute(attr, output_fns.iter());
+    let async_trait_attribute = opt_async_trait_attribute(attr, trait_fns.iter());
     let params = trait_generics.impl_params(trait_dependency_mode, use_associated_future);
     let trait_ident = &attr.trait_ident;
     let args = trait_generics.arguments();
     let self_ty = SelfTy(trait_dependency_mode, span);
-    let where_clause = trait_generics.impl_where_clause(output_fns, trait_dependency_mode, span);
+    let where_clause = trait_generics.impl_where_clause(trait_fns, trait_dependency_mode, span);
 
-    let items = output_fns.iter().map(|output_fn| {
-        let associated_fut_impl = &output_fn.entrait_sig.associated_fut_impl;
+    let items = trait_fns.iter().map(|trait_fn| {
+        let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl;
 
-        let fn_item = gen_delegating_fn_item(output_fn, span);
+        let fn_item = gen_delegating_fn_item(trait_fn, span);
 
         quote! {
             #associated_fut_impl
@@ -264,12 +262,12 @@ impl<'g> quote::ToTokens for SelfTy<'g> {
 }
 
 /// Generate the fn (in the impl block) that calls the entraited fn
-fn gen_delegating_fn_item(output_fn: &OutputFn, span: Span) -> TokenStream {
-    let entrait_sig = &output_fn.entrait_sig;
-    let trait_fn_sig = &output_fn.sig();
-    let deps = &output_fn.deps;
+fn gen_delegating_fn_item(trait_fn: &TraitFn, span: Span) -> TokenStream {
+    let entrait_sig = &trait_fn.entrait_sig;
+    let trait_fn_sig = &trait_fn.sig();
+    let deps = &trait_fn.deps;
 
-    let mut fn_ident = output_fn.source.fn_sig.ident.clone();
+    let mut fn_ident = trait_fn.source.fn_sig.ident.clone();
     fn_ident.set_span(span);
 
     let opt_self_comma = match (deps, entrait_sig.sig.inputs.first()) {
@@ -292,7 +290,7 @@ fn gen_delegating_fn_item(output_fn: &OutputFn, span: Span) -> TokenStream {
             },
         });
 
-    let mut opt_dot_await = output_fn.source.opt_dot_await(span);
+    let mut opt_dot_await = trait_fn.source.opt_dot_await(span);
     if entrait_sig.associated_fut_decl.is_some() {
         opt_dot_await = None;
     }
@@ -305,34 +303,31 @@ fn gen_delegating_fn_item(output_fn: &OutputFn, span: Span) -> TokenStream {
 }
 
 impl EntraitFnAttr {
-    fn opt_unimock_attribute(
-        &self,
-        output_fns: &[OutputFn],
-        mode: &Mode<'_>,
-    ) -> Option<TokenStream> {
+    fn opt_unimock_attribute(&self, trait_fns: &[TraitFn], mode: &Mode<'_>) -> Option<TokenStream> {
         match self.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => {
                 let unmocked =
-                    output_fns.iter().map(|output_fn| {
-                        let fn_ident = &output_fn.sig().ident;
+                    trait_fns.iter().map(|trait_fn| {
+                        let fn_ident = &trait_fn.sig().ident;
 
-                        match &output_fn.deps {
+                        match &trait_fn.deps {
                             generics::FnDeps::Generic { .. } => quote! { #fn_ident },
                             generics::FnDeps::Concrete(_) => quote! { _ },
                             generics::FnDeps::NoDeps { .. } => {
-                                let arguments = output_fn.sig().inputs.iter().filter_map(
-                                    |fn_arg| match fn_arg {
-                                        syn::FnArg::Receiver(_) => None,
-                                        syn::FnArg::Typed(pat_type) => {
-                                            match pat_type.pat.as_ref() {
-                                                syn::Pat::Ident(pat_ident) => {
-                                                    Some(&pat_ident.ident)
+                                let arguments =
+                                    trait_fn.sig().inputs.iter().filter_map(
+                                        |fn_arg| match fn_arg {
+                                            syn::FnArg::Receiver(_) => None,
+                                            syn::FnArg::Typed(pat_type) => {
+                                                match pat_type.pat.as_ref() {
+                                                    syn::Pat::Ident(pat_ident) => {
+                                                        Some(&pat_ident.ident)
+                                                    }
+                                                    _ => None,
                                                 }
-                                                _ => None,
                                             }
-                                        }
-                                    },
-                                );
+                                        },
+                                    );
 
                                 quote! { #fn_ident(#(#arguments),*) }
                             }
@@ -393,11 +388,11 @@ impl InputFn {
 
 fn opt_async_trait_attribute<'o>(
     attr: &EntraitFnAttr,
-    output_fns: impl Iterator<Item = &'o OutputFn<'o>>,
+    trait_fns: impl Iterator<Item = &'o TraitFn<'o>>,
 ) -> Option<TokenStream> {
     match (
         attr.async_strategy(),
-        has_any_async(output_fns.map(|output_fn| output_fn.sig())),
+        has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
     ) {
         (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
             Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })
