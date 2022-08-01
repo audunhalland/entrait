@@ -48,7 +48,7 @@ impl ToTokens for InputMod {
 }
 
 pub enum ModItem {
-    Fn(Box<InputFn>),
+    PubFn(Box<InputFn>),
     Unknown(ItemUnknown),
 }
 
@@ -56,12 +56,7 @@ impl ModItem {
     // We include all functions that have a visibility keyword into the trait
     pub fn filter_pub_fn(&self) -> Option<&InputFn> {
         match self {
-            Self::Fn(input_fn) => match input_fn.fn_vis {
-                syn::Visibility::Public(_)
-                | syn::Visibility::Crate(_)
-                | syn::Visibility::Restricted(_) => Some(input_fn),
-                syn::Visibility::Inherited => None,
-            },
+            Self::PubFn(input_fn) => Some(input_fn),
             _ => None,
         }
     }
@@ -70,7 +65,7 @@ impl ModItem {
 impl ToTokens for ModItem {
     fn to_tokens(&self, stream: &mut TokenStream) {
         match self {
-            ModItem::Fn(input_fn) => {
+            ModItem::PubFn(input_fn) => {
                 let InputFn {
                     fn_attrs,
                     fn_vis,
@@ -163,9 +158,8 @@ impl Parse for ModItem {
         let attrs = input.call(syn::Attribute::parse_outer)?;
         let vis: syn::Visibility = input.parse()?;
         let unknown = input.fork();
-        let ahead = input.fork();
 
-        if input.peek(syn::token::Fn) || peek_signature(&ahead) {
+        if peek_pub_fn(input, &vis) {
             let sig: syn::Signature = input.parse()?;
             if input.peek(syn::token::Semi) {
                 let _ = input.parse::<syn::token::Semi>()?;
@@ -176,7 +170,7 @@ impl Parse for ModItem {
                 }))
             } else {
                 let fn_body = parse_matched_braces_or_ending_semi(input)?;
-                Ok(ModItem::Fn(Box::new(InputFn {
+                Ok(ModItem::PubFn(Box::new(InputFn {
                     fn_attrs: attrs,
                     fn_vis: vis,
                     fn_sig: sig,
@@ -190,7 +184,16 @@ impl Parse for ModItem {
     }
 }
 
-fn peek_signature(input: ParseStream) -> bool {
+fn peek_pub_fn(input: ParseStream, vis: &syn::Visibility) -> bool {
+    if let syn::Visibility::Inherited = vis {
+        // 'private' functions aren't interesting
+        return false;
+    }
+
+    if input.peek(syn::token::Fn) {
+        return true;
+    }
+
     let fork = input.fork();
     fork.parse::<Option<syn::token::Const>>().is_ok()
         && fork.parse::<Option<syn::token::Async>>().is_ok()
