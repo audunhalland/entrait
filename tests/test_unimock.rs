@@ -542,7 +542,7 @@ mod module_async {
         let _ = deps.bar_async();
     }
 
-    #[entrait(pub MultiAsync, debug)]
+    #[entrait(pub MultiAsync)]
     mod multi_async {
         use std::any::Any;
 

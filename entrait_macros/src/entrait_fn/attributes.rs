@@ -175,15 +175,9 @@ impl<'s, 'i> UnimockAttrParams<'s, 'i> {
                             Paren(span).surround(stream, |stream| {
                                 let mut punctuator = comma_sep(stream, span);
                                 for fn_arg in trait_fn.sig().inputs.iter() {
-                                    match fn_arg {
-                                        syn::FnArg::Receiver(_) => {}
-                                        syn::FnArg::Typed(pat_type) => {
-                                            match pat_type.pat.as_ref() {
-                                                syn::Pat::Ident(pat_ident) => {
-                                                    punctuator.push(&pat_ident.ident);
-                                                }
-                                                _ => {}
-                                            }
+                                    if let syn::FnArg::Typed(pat_type) = fn_arg {
+                                        if let syn::Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
+                                            punctuator.push(&pat_ident.ident);
                                         }
                                     }
                                 }
