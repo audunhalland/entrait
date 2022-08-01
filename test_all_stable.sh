@@ -1,4 +1,5 @@
 #! /bin/sh
+set -e
 set -x
 
 cargo hack --feature-powerset --optional-deps "unimock" --exclude-features "default use-associated-future" --exclude-no-default-features test
