@@ -1,7 +1,7 @@
 //! Implementation for invoking entrait on a trait!
 
 use crate::generics;
-use crate::generics::GenericIdents;
+use crate::idents::{CrateIdents, GenericIdents};
 use crate::opt::*;
 use crate::token_util::*;
 
@@ -13,10 +13,13 @@ use syn::parse::{Parse, ParseStream};
 pub struct EntraitTraitAttr {
     pub opts: Opts,
     pub delegation_kind: Option<SpanOpt<DelegationKind>>,
+    pub crate_idents: CrateIdents,
 }
 
 impl Parse for EntraitTraitAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let span = input.span();
+
         let mut debug = None;
         let mut unimock = None;
         let mut mockall = None;
@@ -52,6 +55,7 @@ impl Parse for EntraitTraitAttr {
                 mockall,
             },
             delegation_kind,
+            crate_idents: CrateIdents::new(span),
         })
     }
 }
@@ -69,7 +73,7 @@ pub fn output_tokens(
             .map(|where_clause| where_clause.predicates.clone())
             .unwrap_or_default(),
     };
-    let generic_idents = GenericIdents::new(item_trait.ident.span());
+    let generic_idents = GenericIdents::new(&attr.crate_idents, item_trait.ident.span());
     let trait_ident = &item_trait.ident;
 
     // NOTE: all of the trait _input attributes_ are outputted, unchanged
@@ -202,16 +206,16 @@ fn find_future_arguments(bound: &syn::TypeParamBound) -> Option<&syn::PathArgume
     }
 }
 
-struct ImplWhereClause<'g> {
+struct ImplWhereClause<'g, 'c> {
     item_trait: &'g syn::ItemTrait,
     contains_async: bool,
     trait_generics: &'g generics::TraitGenerics,
-    generic_idents: &'g generics::GenericIdents,
+    generic_idents: &'g GenericIdents<'c>,
     attr: &'g EntraitTraitAttr,
     span: proc_macro2::Span,
 }
 
-impl<'g> ImplWhereClause<'g> {
+impl<'g, 'c> ImplWhereClause<'g, 'c> {
     fn impl_t_bounds(&self, stream: &mut TokenStream) {
         push_tokens!(
             stream,
@@ -277,7 +281,7 @@ impl<'g> ImplWhereClause<'g> {
     }
 }
 
-impl<'g> quote::ToTokens for ImplWhereClause<'g> {
+impl<'g, 'c> quote::ToTokens for ImplWhereClause<'g, 'c> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let mut punctuator = Punctuator::new(
             stream,

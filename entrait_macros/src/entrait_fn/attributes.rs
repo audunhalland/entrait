@@ -42,21 +42,21 @@ impl<'a, P: ToTokens> ToTokens for ExportGatedAttr<'a, P> {
     }
 }
 
-pub struct EntraitForTraitParams;
+pub struct EntraitForTraitParams<'a> {
+    pub attr: &'a EntraitFnAttr,
+}
 
-impl ToTokens for EntraitForTraitParams {
+impl<'a> ToTokens for EntraitForTraitParams<'a> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         use syn::token::*;
         use syn::Ident;
 
-        let entrait = Ident::new("entrait", Span::call_site());
-
         push_tokens!(
             stream,
             Colon2::default(),
-            entrait,
+            self.attr.crate_idents.entrait,
             Colon2::default(),
-            entrait
+            self.attr.crate_idents.entrait
         );
         Paren::default().surround(stream, |stream| {
             push_tokens!(
@@ -74,6 +74,7 @@ impl ToTokens for EntraitForTraitParams {
 }
 
 pub struct UnimockAttrParams<'s, 'i> {
+    pub attr: &'s EntraitFnAttr,
     pub trait_fns: &'s [TraitFn<'i>],
     pub(super) mode: &'s Mode<'s>,
     pub span: Span,
@@ -85,17 +86,16 @@ impl<'s, 'i> ToTokens for UnimockAttrParams<'s, 'i> {
         use syn::Ident;
 
         let span = self.span;
-        let entrait_ident = Ident::new("entrait", span);
         let __unimock_ident = Ident::new("__unimock", span);
 
         push_tokens!(
             stream,
             Colon2(span),
-            entrait_ident,
+            self.attr.crate_idents.entrait,
             Colon2(span),
             __unimock_ident,
             Colon2(span),
-            Ident::new("unimock", span) // ::entrait::__unimock::unimock(prefix=::entrait::__unimock #mock_mod #opt_unmocked)
+            Ident::new("unimock", span)
         );
 
         Paren(span).surround(stream, |stream| {
@@ -108,7 +108,7 @@ impl<'s, 'i> ToTokens for UnimockAttrParams<'s, 'i> {
                     Ident::new("prefix", span),
                     Eq(span),
                     Colon2(span),
-                    entrait_ident,
+                    self.attr.crate_idents.entrait,
                     Colon2(span),
                     __unimock_ident
                 );
@@ -205,17 +205,18 @@ impl ToTokens for MockallAutomockParams {
     }
 }
 
-pub struct AsyncTraitParams {
+pub struct AsyncTraitParams<'a> {
+    pub attr: &'a EntraitFnAttr,
     pub span: Span,
 }
 
-impl ToTokens for AsyncTraitParams {
+impl<'a> ToTokens for AsyncTraitParams<'a> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.span;
         push_tokens!(
             stream,
             syn::token::Colon2(span),
-            syn::Ident::new("entrait", span),
+            self.attr.crate_idents.entrait,
             syn::token::Colon2(span),
             syn::Ident::new("__async_trait", span),
             syn::token::Colon2(span),

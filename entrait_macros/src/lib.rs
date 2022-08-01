@@ -11,6 +11,7 @@ use proc_macro::TokenStream;
 mod entrait_fn;
 mod entrait_trait;
 mod generics;
+mod idents;
 mod input;
 mod opt;
 mod token_util;

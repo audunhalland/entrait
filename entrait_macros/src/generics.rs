@@ -1,5 +1,6 @@
 use crate::{
     entrait_fn::TraitFn,
+    idents::GenericIdents,
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
 
@@ -14,8 +15,8 @@ pub enum FnDeps {
     NoDeps,
 }
 
-pub enum TraitDependencyMode<'t> {
-    Generic(GenericIdents),
+pub enum TraitDependencyMode<'t, 'c> {
+    Generic(GenericIdents<'c>),
     Concrete(&'t syn::Type),
 }
 
@@ -41,7 +42,7 @@ impl TraitGenerics {
 
     pub fn impl_params<'i>(
         &'i self,
-        trait_dependency_mode: &'i TraitDependencyMode<'i>,
+        trait_dependency_mode: &'i TraitDependencyMode<'i, '_>,
         use_associated_future: UseAssociatedFuture,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
@@ -66,12 +67,12 @@ impl TraitGenerics {
         }
     }
 
-    pub fn impl_where_clause<'g, 's>(
+    pub fn impl_where_clause<'g, 's, 'c>(
         &'g self,
         trait_fns: &'s [TraitFn],
-        trait_dependency_mode: &'s TraitDependencyMode<'s>,
+        trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
         span: proc_macro2::Span,
-    ) -> ImplWhereClauseGenerator<'g, 's> {
+    ) -> ImplWhereClauseGenerator<'g, 's, 'c> {
         ImplWhereClauseGenerator {
             trait_where_predicates: &self.where_predicates,
             trait_dependency_mode,
@@ -87,43 +88,24 @@ impl TraitGenerics {
     }
 }
 
-pub struct GenericIdents {
-    /// "entrait"
-    pub entrait_crate: syn::Ident,
-
-    /// "Impl"
-    pub impl_self: syn::Ident,
-
-    /// The "T" in `Impl<T>`
-    pub impl_t: syn::Ident,
-}
-
-impl GenericIdents {
-    pub fn new(span: proc_macro2::Span) -> Self {
-        Self {
-            entrait_crate: syn::Ident::new("entrait", span),
-            impl_self: syn::Ident::new("Impl", span),
-            impl_t: syn::Ident::new("EntraitT", span),
-        }
-    }
-
+impl<'c> GenericIdents<'c> {
     /// `::entrait::Impl<EntraitT>`
-    pub fn impl_path(&self, span: proc_macro2::Span) -> ImplPath<'_> {
+    pub fn impl_path<'s>(&'s self, span: proc_macro2::Span) -> ImplPath<'s, 'c> {
         ImplPath(self, span)
     }
 }
 
 /// `::entrait::Impl<EntraitT>`
-pub struct ImplPath<'g>(&'g GenericIdents, proc_macro2::Span);
+pub struct ImplPath<'g, 'c>(&'g GenericIdents<'c>, proc_macro2::Span);
 
-impl<'g> quote::ToTokens for ImplPath<'g> {
+impl<'g, 'c> quote::ToTokens for ImplPath<'g, 'c> {
     fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let span = self.1;
 
         push_tokens!(
             stream,
             syn::token::Colon2(span),
-            self.0.entrait_crate,
+            self.0.crate_idents.entrait,
             syn::token::Colon2(span),
             self.0.impl_self,
             syn::token::Lt(span),
@@ -223,14 +205,14 @@ impl<'g> quote::ToTokens for TraitWhereClauseGenerator<'g> {
     }
 }
 
-pub struct ImplWhereClauseGenerator<'g, 's> {
+pub struct ImplWhereClauseGenerator<'g, 's, 'c> {
     trait_where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
-    trait_dependency_mode: &'s TraitDependencyMode<'s>,
+    trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
     trait_fns: &'s [TraitFn<'s>],
     span: proc_macro2::Span,
 }
 
-impl<'g, 's> quote::ToTokens for ImplWhereClauseGenerator<'g, 's> {
+impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
     fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let mut punctuator = Punctuator::new(
             stream,

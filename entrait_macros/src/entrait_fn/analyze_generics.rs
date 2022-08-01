@@ -1,20 +1,22 @@
 use super::input_attr::EntraitFnAttr;
 use super::{InputFn, TraitFn};
-use crate::generics::{FnDeps, GenericIdents, TraitDependencyMode, TraitGenerics};
+use crate::generics::{FnDeps, TraitDependencyMode, TraitGenerics};
+use crate::idents::{CrateIdents, GenericIdents};
 
 use syn::spanned::Spanned;
 
-pub fn detect_trait_dependency_mode<'t>(
+pub fn detect_trait_dependency_mode<'t, 'c>(
     trait_fns: &'t [TraitFn],
+    crate_idents: &'c CrateIdents,
     span: proc_macro2::Span,
-) -> TraitDependencyMode<'t> {
+) -> TraitDependencyMode<'t, 'c> {
     for trait_fn in trait_fns {
         if let FnDeps::Concrete(ty) = &trait_fn.deps {
             return TraitDependencyMode::Concrete(ty.as_ref());
         }
     }
 
-    TraitDependencyMode::Generic(GenericIdents::new(span))
+    TraitDependencyMode::Generic(GenericIdents::new(crate_idents, span))
 }
 
 pub struct GenericsAnalyzer {

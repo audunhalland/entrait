@@ -37,7 +37,8 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         attr,
     )?];
 
-    let trait_dependency_mode = detect_trait_dependency_mode(&trait_fns, attr.trait_ident.span());
+    let trait_dependency_mode =
+        detect_trait_dependency_mode(&trait_fns, &attr.crate_idents, attr.trait_ident.span());
     let use_associated_future = detect_use_associated_future(attr, [&input_fn].into_iter());
 
     let trait_generics = generics_analyzer.into_trait_generics();
@@ -88,7 +89,8 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         })
         .collect::<syn::Result<Vec<_>>>()?;
 
-    let trait_dependency_mode = detect_trait_dependency_mode(&trait_fns, attr.trait_ident.span());
+    let trait_dependency_mode =
+        detect_trait_dependency_mode(&trait_fns, &attr.crate_idents, attr.trait_ident.span());
     let use_associated_future = detect_use_associated_future(
         attr,
         input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
@@ -175,6 +177,7 @@ fn gen_trait_def(
     let opt_unimock_attr = match attr.default_option(attr.opts.unimock, false) {
         SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
             params: attributes::UnimockAttrParams {
+                attr,
                 trait_fns,
                 mode,
                 span,
@@ -187,7 +190,7 @@ fn gen_trait_def(
     // let opt_unimock_attr = attr.opt_unimock_attribute(trait_fns, mode);
     let opt_entrait_for_trait_attr = match trait_dependency_mode {
         TraitDependencyMode::Concrete(_) => {
-            Some(attributes::Attr(attributes::EntraitForTraitParams))
+            Some(attributes::Attr(attributes::EntraitForTraitParams { attr }))
         }
         _ => None,
     };
@@ -274,9 +277,9 @@ fn gen_impl_block(
     }
 }
 
-struct SelfTy<'g>(&'g TraitDependencyMode<'g>, Span);
+struct SelfTy<'g, 'c>(&'g TraitDependencyMode<'g, 'c>, Span);
 
-impl<'g> quote::ToTokens for SelfTy<'g> {
+impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.1;
         match &self.0 {
@@ -348,16 +351,19 @@ impl InputFn {
     }
 }
 
-fn opt_async_trait_attribute<'o>(
-    attr: &EntraitFnAttr,
+fn opt_async_trait_attribute<'a, 'o>(
+    attr: &'a EntraitFnAttr,
     trait_fns: impl Iterator<Item = &'o TraitFn<'o>>,
-) -> Option<impl ToTokens> {
+) -> Option<impl ToTokens + 'a> {
     match (
         attr.async_strategy(),
         has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
     ) {
         (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
-            Some(attributes::Attr(attributes::AsyncTraitParams { span }))
+            Some(attributes::Attr(attributes::AsyncTraitParams {
+                attr,
+                span,
+            }))
         }
         _ => None,
     }
