@@ -214,7 +214,7 @@ fn gen_trait_def(
     };
     let opt_async_trait_attr = opt_async_trait_attribute(attr, trait_fns.iter());
 
-    let trait_visibility = &attr.trait_visibility;
+    let trait_visibility = TraitVisibility { attr, mode };
     let trait_ident = &attr.trait_ident;
 
     let fn_defs = trait_fns.iter().map(|trait_fn| {
@@ -239,6 +239,39 @@ fn gen_trait_def(
             #(#fn_defs)*
         }
     })
+}
+
+struct TraitVisibility<'a> {
+    attr: &'a EntraitFnAttr,
+    mode: &'a InputMode<'a>,
+}
+
+impl<'a> ToTokens for TraitVisibility<'a> {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        match &self.mode {
+            InputMode::Module => {
+                push_tokens!(stream, syn::token::Pub(Span::call_site()));
+                match &self.attr.trait_visibility {
+                    syn::Visibility::Inherited => {
+                        // When the trait is "private", it should only be accessible to the module outside,
+                        // so use `pub(super)`.
+                        // This is because the trait is syntacitally "defined" outside the module, because
+                        // the attribute is an outer attribute.
+                        // If proc-macros supported inner attributes, and this was invoked with that, we wouldn't do this.
+                        syn::token::Paren::default().surround(stream, |stream| {
+                            push_tokens!(stream, syn::token::Super::default());
+                        });
+                    }
+                    _ => {
+                        // Else, it's public without constraints
+                    }
+                }
+            }
+            InputMode::SingleFn(_) => {
+                push_tokens!(stream, self.attr.trait_visibility);
+            }
+        }
+    }
 }
 
 ///

@@ -204,4 +204,7 @@ mod module {
         let app = Impl::new(());
         takes_foo_bar_baz_qux(&app);
     }
+
+    #[entrait(PrivateTrait)]
+    mod private_trait {}
 }
