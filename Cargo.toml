@@ -1,6 +1,6 @@
 [package]
 name = "entrait"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
@@ -17,7 +17,7 @@ use-associated-future = []
 async-trait = ["dep:async-trait"]
 
 [dependencies]
-entrait_macros = { path = "entrait_macros", version = "0.4.2" }
+entrait_macros = { path = "entrait_macros", version = "0.4.3" }
 implementation = "0.1"
 async-trait = { version = "0.1", optional = true }
 unimock = { version = "0.3", optional = true }
