@@ -8,7 +8,7 @@
 
 A proc macro for designing loosely coupled Rust applications.
 
-[`entrait`](entrait) is used to generate an _implemented trait_ from the definition of a regular function.
+[`entrait`](entrait) is used to generate an _implemented trait_ from the definition of regular functions.
 The emergent pattern that results from its use enable the following things:
 * Zero-cost loose coupling and inversion of control
 * Dependency graph as a compile time concept
@@ -61,6 +61,7 @@ But a reference to what, exactly?
 This is what we have managed to abstract away, which is the [whole point](#testing).
 
 
+
 ### Runtime and implementation
 When we want to compile a working application, we need an actual type to inject into the various entrait entrypoints.
 Two things will be important:
@@ -102,6 +103,22 @@ impl<T: Sync> Foo for Impl<T> where Self: Bar {
 `Impl` is generic, so we can put whatever type we want into it.
 Normally this would be some type that represents the global state/configuration of the running application.
 But if dependencies can only be traits, and we always abstract away this type, how can this state ever be accessed?
+
+
+### Module support
+To reduce the number of generated traits, entrait can be used as a `mod` attribute.
+When used in this mode, the macro will look for non-private functions directly within the module scope, to be represented as methods on the resulting trait.
+This mode works mostly identically to the standalone function mode.
+
+```rust
+#[entrait(pub MyModule)]
+mod my_module {
+    pub fn foo(deps: &impl super::SomeTrait) {}
+    pub fn bar(deps: &impl super::OtherTrait) {}
+}
+```
+This examples generates a `MyModule` trait containing the methods `foo` and `bar`.
+
 
 ### Concrete dependencies
 So far we have only seen generic trait-based dependencies, but the dependency can also be a _concrete type_:
@@ -145,6 +162,7 @@ Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimoc
 Unimock exports a single mock struct which can be passed as argument to every function that accept a generic `deps` parameter
   (given that entrait is used with unimock support everywhere).
 To enable mocking of entraited functions, they get reified and defined as a type called `Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
+This works the same way for entraited modules, only that we already _have_ a module to export from.
 
 Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
 
@@ -153,18 +171,20 @@ Unimock support is enabled by passing the `unimock` option to entrait (`#[entrai
 fn foo<D>(_: &D) -> i32 {
     unimplemented!()
 }
-#[entrait(Bar)]
-fn bar<D>(_: &D) -> i32 {
-    unimplemented!()
+#[entrait(MyMod)]
+mod my_mod {
+    pub fn bar<D>(_: &D) -> i32 {
+        unimplemented!()
+    }
 }
 
-fn my_func(deps: &(impl Foo + Bar)) -> i32 {
+fn my_func(deps: &(impl Foo + MyMod)) -> i32 {
     deps.foo() + deps.bar()
 }
 
 let mocked_deps = unimock::mock([
     foo::Fn.each_call(matching!()).returns(40).in_any_order(),
-    bar::Fn.each_call(matching!()).returns(2).in_any_order(),
+    my_mod::bar::Fn.each_call(matching!()).returns(2).in_any_order(),
 ]);
 
 assert_eq!(42, my_func(&mocked_deps));
