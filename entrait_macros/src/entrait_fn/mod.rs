@@ -18,8 +18,8 @@ use attr::*;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
-use quote::quote;
 use quote::quote_spanned;
+use quote::{quote, ToTokens};
 
 use self::analyze_generics::detect_trait_dependency_mode;
 
@@ -178,11 +178,18 @@ fn gen_trait_def(
     // let opt_unimock_attr = attr.opt_unimock_attribute(trait_fns, mode);
     let opt_entrait_for_trait_attr = match trait_dependency_mode {
         TraitDependencyMode::Concrete(_) => {
-            Some(quote! { #[::entrait::entrait(unimock = false, mockall = false)] })
+            Some(attributes::Attr(attributes::EntraitForTraitParams))
         }
         _ => None,
     };
-    let opt_mockall_automock_attr = attr.opt_mockall_automock_attribute();
+
+    let opt_mockall_automock_attr = match attr.default_option(attr.opts.mockall, false) {
+        SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
+            params: attributes::MockallAutomockParams { span },
+            attr,
+        }),
+        _ => None,
+    };
     let opt_async_trait_attr = opt_async_trait_attribute(attr, trait_fns.iter());
 
     let trait_visibility = &attr.trait_visibility;
@@ -315,32 +322,10 @@ fn gen_delegating_fn_item(trait_fn: &TraitFn, span: Span) -> TokenStream {
     }
 }
 
-impl EntraitFnAttr {
-    pub fn opt_mockall_automock_attribute(&self) -> Option<TokenStream> {
-        match self.default_option(self.opts.mockall, false) {
-            SpanOpt(true, span) => {
-                Some(self.gated_mock_attr(span, quote_spanned! { span=> ::mockall::automock }))
-            }
-            _ => None,
-        }
-    }
-
-    fn gated_mock_attr(&self, span: Span, attr: TokenStream) -> TokenStream {
-        match self.export_value() {
-            true => quote_spanned! {span=>
-                #[#attr]
-            },
-            false => quote_spanned! {span=>
-                #[cfg_attr(test, #attr)]
-            },
-        }
-    }
-}
-
 impl InputFn {
-    fn opt_dot_await(&self, span: Span) -> Option<TokenStream> {
+    fn opt_dot_await(&self, span: Span) -> Option<impl ToTokens> {
         if self.fn_sig.asyncness.is_some() {
-            Some(quote_spanned! { span=> .await })
+            Some(TokenPair(syn::token::Dot(span), syn::token::Await(span)))
         } else {
             None
         }
@@ -357,13 +342,13 @@ impl InputFn {
 fn opt_async_trait_attribute<'o>(
     attr: &EntraitFnAttr,
     trait_fns: impl Iterator<Item = &'o TraitFn<'o>>,
-) -> Option<TokenStream> {
+) -> Option<impl ToTokens> {
     match (
         attr.async_strategy(),
         has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
     ) {
         (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
-            Some(quote_spanned! { span=> #[::entrait::__async_trait::async_trait] })
+            Some(attributes::Attr(attributes::AsyncTraitParams { span }))
         }
         _ => None,
     }
