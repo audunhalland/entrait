@@ -306,10 +306,10 @@ impl EntraitFnAttr {
     fn opt_unimock_attribute(&self, trait_fns: &[TraitFn], mode: &Mode<'_>) -> Option<TokenStream> {
         match self.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => {
-                let opt_mock_mod = if let Mode::SingleFn(fn_ident) = mode {
-                    Some(quote! { , mod=#fn_ident, as=Fn })
+                let mock_mod = if let Mode::SingleFn(fn_ident) = mode {
+                    quote! { , mod=#fn_ident, as=Fn }
                 } else {
-                    Some(quote! { , mod=*, as=Fn })
+                    quote! { , mod=*, as=Fn }
                 };
 
                 let opt_unmocked = if !trait_fns.is_empty() {
@@ -348,7 +348,7 @@ impl EntraitFnAttr {
                 };
 
                 Some(self.gated_mock_attr(span, quote_spanned! {span=>
-                    ::entrait::__unimock::unimock(prefix=::entrait::__unimock #opt_mock_mod #opt_unmocked)
+                    ::entrait::__unimock::unimock(prefix=::entrait::__unimock #mock_mod #opt_unmocked)
                 }))
             }
             _ => None,
