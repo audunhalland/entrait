@@ -207,4 +207,24 @@ mod module {
 
     #[entrait(PrivateTrait)]
     mod private_trait {}
+
+    // This test is behind this flag because
+    // we cannot have private/crate-private types in interfaces
+    // implemented by external crates
+    #[cfg(not(feature = "unimock"))]
+    mod crate_private {
+        use entrait::*;
+
+        pub(crate) struct PrivateType;
+
+        #[entrait(pub(crate) PubCrateTrait)]
+        mod pub_crate_trait {
+            pub(crate) fn foo<D>(_: &D) -> super::PrivateType {
+                super::PrivateType
+            }
+        }
+    }
+
+    // Note: pub(super) things will never work well, probably.
+    // The macro cannot just append a another `::super`, because `pub(super::super)` is invalid syntax.
 }
