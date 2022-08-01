@@ -5,18 +5,28 @@ use crate::idents::{CrateIdents, GenericIdents};
 
 use syn::spanned::Spanned;
 
-pub fn detect_trait_dependency_mode<'t, 'c>(
+pub(super) fn detect_trait_dependency_mode<'t, 'c>(
+    input_mode: &super::InputMode,
     trait_fns: &'t [TraitFn],
     crate_idents: &'c CrateIdents,
     span: proc_macro2::Span,
-) -> TraitDependencyMode<'t, 'c> {
+) -> syn::Result<TraitDependencyMode<'t, 'c>> {
     for trait_fn in trait_fns {
         if let FnDeps::Concrete(ty) = &trait_fn.deps {
-            return TraitDependencyMode::Concrete(ty.as_ref());
+            return match input_mode {
+                super::InputMode::SingleFn(_) => Ok(TraitDependencyMode::Concrete(ty.as_ref())),
+                super::InputMode::Module => Err(syn::Error::new(
+                    ty.span(),
+                    "Using concrete dependencies in a module is an anti-pattern. Instead, write a trait manually, use the #[entrait] attribute on it, and implement it for your application type",
+                )),
+            };
         }
     }
 
-    TraitDependencyMode::Generic(GenericIdents::new(crate_idents, span))
+    Ok(TraitDependencyMode::Generic(GenericIdents::new(
+        crate_idents,
+        span,
+    )))
 }
 
 pub struct GenericsAnalyzer {
