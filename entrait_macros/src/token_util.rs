@@ -16,9 +16,8 @@ pub(crate) use push_tokens;
 pub struct TokenPair<T, U>(pub T, pub U);
 
 impl<T: ToTokens, U: ToTokens> quote::ToTokens for TokenPair<T, U> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.0.to_tokens(tokens);
-        self.1.to_tokens(tokens);
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        push_tokens!(stream, self.0, self.1);
     }
 }
 
@@ -34,6 +33,13 @@ pub struct Punctuator<'s, S, P, E: ToTokens> {
     start: S,
     punct: P,
     end: E,
+}
+
+pub fn comma_sep(
+    stream: &mut TokenStream,
+    span: proc_macro2::Span,
+) -> Punctuator<EmptyToken, syn::token::Comma, EmptyToken> {
+    Punctuator::new(stream, EmptyToken, syn::token::Comma(span), EmptyToken)
 }
 
 impl<'s, S, P, E> Punctuator<'s, S, P, E>

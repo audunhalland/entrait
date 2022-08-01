@@ -1,6 +1,7 @@
 #![cfg(feature = "unimock")]
 #![cfg_attr(feature = "use-associated-future", feature(generic_associated_types))]
 #![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
+#![allow(dead_code)]
 #![allow(unused_variables)]
 
 mod sync {
@@ -489,4 +490,68 @@ mod naming_conflict_between_fn_and_param {
 
     #[entrait(Foo)]
     fn foo<T>(_: &T, foo: i32) {}
+}
+
+mod module {
+    use entrait::*;
+    use std::any::Any;
+    use unimock::*;
+
+    #[entrait(pub Foo)]
+    fn foo(_: &impl Any) -> i32 {
+        7
+    }
+
+    #[entrait(pub BarBaz)]
+    mod bar_baz {
+        pub fn bar(deps: &impl super::Foo) -> i32 {
+            deps.foo()
+        }
+    }
+
+    fn takes_barbaz(deps: &impl BarBaz) -> i32 {
+        deps.bar()
+    }
+
+    #[test]
+    fn test_it() {
+        let deps = mock(Some(
+            bar_baz::bar::Fn
+                .each_call(matching!())
+                .returns(42)
+                .in_any_order(),
+        ));
+        assert_eq!(42, takes_barbaz(&deps));
+    }
+}
+
+#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+mod module_async {
+    use entrait::*;
+
+    #[entrait(pub Mixed)]
+    mod mixed {
+        use std::any::Any;
+
+        pub fn bar(_: &impl Any) {}
+        pub async fn bar_async(_: &impl Any) {}
+    }
+
+    fn takes_mixed(deps: &impl Mixed) {
+        let _ = deps.bar();
+        let _ = deps.bar_async();
+    }
+
+    #[entrait(pub MultiAsync)]
+    mod multi_async {
+        use std::any::Any;
+
+        pub async fn foo(_: &impl Any) {}
+        pub async fn bar(_: &impl Any) {}
+    }
+
+    async fn takes_multi_async(deps: &impl MultiAsync) {
+        deps.foo().await;
+        deps.bar().await;
+    }
 }

@@ -1,4 +1,5 @@
-#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(unused)]
 #![cfg_attr(feature = "use-associated-future", feature(generic_associated_types))]
 #![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
 
@@ -8,6 +9,17 @@ mod bounds {
     mod app {
         pub struct State {
             pub number: u32,
+        }
+    }
+
+    mod inline_bounds {
+        use super::*;
+
+        #[entrait(pub Foo)]
+        fn foo<A: Bar + Baz>(app: &A) -> u32 {
+            println!("Foo");
+            app.bar();
+            app.baz("from foo")
         }
     }
 
@@ -65,6 +77,13 @@ mod bounds {
         let impl_state = Impl::new(app::State { number: 42 });
         let result = impl_state.foo();
         assert_eq!(42, result);
+    }
+
+    mod mixed_inline_bounds {
+        use super::*;
+
+        #[entrait(pub Foo)]
+        fn foo<D, E>(deps: &D, arg: &E) {}
     }
 }
 
@@ -133,4 +152,79 @@ mod test_entrait_for_trait {
         assert_eq!(1337, Impl::new(()).method0(0));
         assert_eq!(42, Impl::new("app").method0(0));
     }
+}
+
+mod module {
+    use entrait::*;
+    use std::any::Any;
+
+    #[entrait(pub Dep1)]
+    fn dep1(_: &impl Any) {}
+
+    #[entrait(pub Dep2)]
+    fn dep2(_: &impl Any) {}
+
+    #[entrait(pub EmptyModule)]
+    mod empty_module {}
+
+    #[entrait(pub FooBarBazQux)]
+    mod foo_bar_baz_qux {
+        use super::Dep1;
+
+        pub fn foo(deps: &impl Dep1, arg: i32) {}
+
+        struct Foo {}
+
+        pub fn bar(deps: &impl super::Dep2, arg: &str) {}
+
+        mod hei {}
+
+        pub(super) fn baz(deps: &impl Dep1) {}
+
+        const _: () = {};
+
+        pub(crate) fn qux(deps: &impl super::Dep2) {
+            not_included();
+        }
+
+        static S: &'static str = "";
+
+        fn not_included() {}
+    }
+
+    // There should be an automatic `pub use foo_bar_baz_qux::FooBarBazQux`;
+    fn takes_foo_bar_baz_qux(deps: &impl FooBarBazQux) {
+        deps.foo(42);
+        deps.bar("");
+        deps.baz();
+        deps.qux();
+    }
+
+    fn test() {
+        let app = Impl::new(());
+        takes_foo_bar_baz_qux(&app);
+    }
+
+    #[entrait(PrivateTrait)]
+    mod private_trait {}
+
+    // This test is behind this flag because
+    // we cannot have private/crate-private types in interfaces
+    // implemented by external crates
+    #[cfg(not(feature = "unimock"))]
+    mod crate_private {
+        use entrait::*;
+
+        pub(crate) struct PrivateType;
+
+        #[entrait(pub(crate) PubCrateTrait)]
+        mod pub_crate_trait {
+            pub(crate) fn foo<D>(_: &D) -> super::PrivateType {
+                super::PrivateType
+            }
+        }
+    }
+
+    // Note: pub(super) things will never work well, probably.
+    // The macro cannot just append a another `::super`, because `pub(super::super)` is invalid syntax.
 }

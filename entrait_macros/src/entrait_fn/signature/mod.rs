@@ -1,13 +1,15 @@
 mod fn_params;
 mod lifetimes;
 
-use super::attr::EntraitFnAttr;
-use crate::generics::Deps;
+use super::input_attr::EntraitFnAttr;
+use crate::generics::FnDeps;
 use crate::input::InputFn;
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
+
+pub struct FnIndex(pub usize);
 
 /// The fn signature inside the trait
 pub struct EntraitSignature {
@@ -36,7 +38,8 @@ pub struct UserProvidedLifetime(bool);
 pub struct SignatureConverter<'a> {
     attr: &'a EntraitFnAttr,
     input_fn: &'a InputFn,
-    deps: &'a Deps,
+    deps: &'a FnDeps,
+    fn_index: FnIndex,
 }
 
 #[derive(Clone, Copy)]
@@ -50,12 +53,14 @@ impl<'a> SignatureConverter<'a> {
     pub fn new(
         attr: &'a EntraitFnAttr,
         input_fn: &'a InputFn,
-        deps: &'a Deps,
+        deps: &'a FnDeps,
+        fn_index: FnIndex,
     ) -> SignatureConverter<'a> {
         Self {
             attr,
             input_fn,
             deps,
+            fn_index,
         }
     }
 
@@ -97,7 +102,7 @@ impl<'a> SignatureConverter<'a> {
 
     fn detect_receiver_generation(&self, sig: &syn::Signature) -> ReceiverGeneration {
         match self.deps {
-            Deps::NoDeps { .. } => ReceiverGeneration::Insert,
+            FnDeps::NoDeps { .. } => ReceiverGeneration::Insert,
             _ => {
                 if sig.inputs.is_empty() {
                     if self.input_fn.use_associated_future(self.attr) {
@@ -192,18 +197,20 @@ impl<'a> SignatureConverter<'a> {
                 }));
         }
 
+        let fut = quote::format_ident!("Fut{}", self.fn_index.0);
+
         entrait_sig.sig.output = syn::parse_quote_spanned! {span =>
-            -> Self::Fut<#(#fut_lifetimes),*>
+            -> Self::#fut<#(#fut_lifetimes),*>
         };
 
         entrait_sig.associated_fut_decl = Some(quote_spanned! { span=>
-            type Fut<#(#fut_lifetimes),*>: ::core::future::Future<Output = #output_ty> + Send
+            type #fut<#(#fut_lifetimes),*>: ::core::future::Future<Output = #output_ty> + Send
             where
                 Self: #(#self_lifetimes)+*;
         });
 
         entrait_sig.associated_fut_impl = Some(quote_spanned! { span=>
-            type Fut<#(#fut_lifetimes),*> = impl ::core::future::Future<Output = #output_ty>
+            type #fut<#(#fut_lifetimes),*> = impl ::core::future::Future<Output = #output_ty>
             where
                 Self: #(#self_lifetimes)+*;
         });
@@ -211,7 +218,7 @@ impl<'a> SignatureConverter<'a> {
 
     fn remove_generic_type_params(&self, sig: &mut syn::Signature) {
         let deps_ident = match &self.deps {
-            Deps::Generic { generic_param, .. } => generic_param.as_ref(),
+            FnDeps::Generic { generic_param, .. } => generic_param.as_ref(),
             _ => None,
         };
 

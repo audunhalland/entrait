@@ -11,6 +11,7 @@ use proc_macro::TokenStream;
 mod entrait_fn;
 mod entrait_trait;
 mod generics;
+mod idents;
 mod input;
 mod opt;
 mod token_util;
@@ -143,11 +144,20 @@ fn invoke(
 
     let (result, debug) = match input {
         Input::Fn(input_fn) => {
-            let mut attr = syn::parse_macro_input!(attr as entrait_fn::attr::EntraitFnAttr);
+            let mut attr = syn::parse_macro_input!(attr as entrait_fn::input_attr::EntraitFnAttr);
             opts_modifier(&mut attr.opts);
 
             (
-                entrait_fn::output_tokens(&attr, input_fn),
+                entrait_fn::entrait_for_single_fn(&attr, input_fn),
+                attr.debug_value(),
+            )
+        }
+        Input::Mod(input_mod) => {
+            let mut attr = syn::parse_macro_input!(attr as entrait_fn::input_attr::EntraitFnAttr);
+            opts_modifier(&mut attr.opts);
+
+            (
+                entrait_fn::entrait_for_mod(&attr, input_mod),
                 attr.debug_value(),
             )
         }

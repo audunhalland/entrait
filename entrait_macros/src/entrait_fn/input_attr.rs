@@ -1,3 +1,4 @@
+use crate::idents::CrateIdents;
 use crate::opt::*;
 
 use syn::parse::{Parse, ParseStream};
@@ -7,6 +8,8 @@ pub struct EntraitFnAttr {
     pub trait_visibility: syn::Visibility,
     pub trait_ident: syn::Ident,
     pub opts: Opts,
+
+    pub crate_idents: CrateIdents,
 }
 
 impl EntraitFnAttr {
@@ -36,6 +39,7 @@ impl EntraitFnAttr {
 
 impl Parse for EntraitFnAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let span = input.span();
         let trait_visibility: syn::Visibility = input.parse()?;
 
         let trait_ident = input.parse()?;
@@ -77,6 +81,7 @@ impl Parse for EntraitFnAttr {
                 unimock,
                 mockall,
             },
+            crate_idents: CrateIdents::new(span),
         })
     }
 }
