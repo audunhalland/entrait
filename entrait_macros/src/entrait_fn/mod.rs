@@ -30,7 +30,12 @@ enum Mode<'a> {
 
 pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
-    let trait_fns = [TraitFn::analyze(&input_fn, &mut generics_analyzer, attr)?];
+    let trait_fns = [TraitFn::analyze(
+        &input_fn,
+        &mut generics_analyzer,
+        signature::FnIndex(0),
+        attr,
+    )?];
 
     let trait_dependency_mode = detect_trait_dependency_mode(&trait_fns, attr.trait_ident.span());
     let use_associated_future = detect_use_associated_future(attr, [&input_fn].into_iter());
@@ -72,7 +77,15 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         .items
         .iter()
         .filter_map(ModItem::filter_pub_fn)
-        .map(|input_fn| TraitFn::analyze(input_fn, &mut generics_analyzer, attr))
+        .enumerate()
+        .map(|(index, input_fn)| {
+            TraitFn::analyze(
+                input_fn,
+                &mut generics_analyzer,
+                signature::FnIndex(index),
+                attr,
+            )
+        })
         .collect::<syn::Result<Vec<_>>>()?;
 
     let trait_dependency_mode = detect_trait_dependency_mode(&trait_fns, attr.trait_ident.span());
@@ -132,10 +145,12 @@ impl<'i> TraitFn<'i> {
     fn analyze(
         source: &'i InputFn,
         analyzer: &mut GenericsAnalyzer,
+        fn_index: signature::FnIndex,
         attr: &EntraitFnAttr,
     ) -> syn::Result<Self> {
         let deps = analyzer.analyze_fn_deps(source, attr)?;
-        let entrait_sig = signature::SignatureConverter::new(attr, source, &deps).convert();
+        let entrait_sig =
+            signature::SignatureConverter::new(attr, source, &deps, fn_index).convert();
         Ok(Self {
             source,
             deps,

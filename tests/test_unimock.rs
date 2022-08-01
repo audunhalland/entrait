@@ -529,16 +529,29 @@ mod module {
 mod module_async {
     use entrait::*;
 
-    #[entrait(pub Module)]
-    mod module {
+    #[entrait(pub Mixed)]
+    mod mixed {
         use std::any::Any;
 
         pub fn bar(_: &impl Any) {}
         pub async fn bar_async(_: &impl Any) {}
     }
 
-    fn takes_module(module: &impl Module) {
-        let _ = module.bar();
-        let _ = module.bar_async();
+    fn takes_mixed(deps: &impl Mixed) {
+        let _ = deps.bar();
+        let _ = deps.bar_async();
+    }
+
+    #[entrait(pub MultiAsync, debug)]
+    mod multi_async {
+        use std::any::Any;
+
+        pub async fn foo(_: &impl Any) {}
+        pub async fn bar(_: &impl Any) {}
+    }
+
+    async fn takes_multi_async(deps: &impl MultiAsync) {
+        deps.foo().await;
+        deps.bar().await;
     }
 }

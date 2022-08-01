@@ -9,6 +9,8 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
 
+pub struct FnIndex(pub usize);
+
 /// The fn signature inside the trait
 pub struct EntraitSignature {
     pub sig: syn::Signature,
@@ -37,6 +39,7 @@ pub struct SignatureConverter<'a> {
     attr: &'a EntraitFnAttr,
     input_fn: &'a InputFn,
     deps: &'a FnDeps,
+    fn_index: FnIndex,
 }
 
 #[derive(Clone, Copy)]
@@ -51,11 +54,13 @@ impl<'a> SignatureConverter<'a> {
         attr: &'a EntraitFnAttr,
         input_fn: &'a InputFn,
         deps: &'a FnDeps,
+        fn_index: FnIndex,
     ) -> SignatureConverter<'a> {
         Self {
             attr,
             input_fn,
             deps,
+            fn_index,
         }
     }
 
@@ -192,18 +197,20 @@ impl<'a> SignatureConverter<'a> {
                 }));
         }
 
+        let fut = quote::format_ident!("Fut{}", self.fn_index.0);
+
         entrait_sig.sig.output = syn::parse_quote_spanned! {span =>
-            -> Self::Fut<#(#fut_lifetimes),*>
+            -> Self::#fut<#(#fut_lifetimes),*>
         };
 
         entrait_sig.associated_fut_decl = Some(quote_spanned! { span=>
-            type Fut<#(#fut_lifetimes),*>: ::core::future::Future<Output = #output_ty> + Send
+            type #fut<#(#fut_lifetimes),*>: ::core::future::Future<Output = #output_ty> + Send
             where
                 Self: #(#self_lifetimes)+*;
         });
 
         entrait_sig.associated_fut_impl = Some(quote_spanned! { span=>
-            type Fut<#(#fut_lifetimes),*> = impl ::core::future::Future<Output = #output_ty>
+            type #fut<#(#fut_lifetimes),*> = impl ::core::future::Future<Output = #output_ty>
             where
                 Self: #(#self_lifetimes)+*;
         });
