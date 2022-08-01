@@ -106,14 +106,8 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         ..
     } = input_mod;
 
-    let use_stmt = {
-        let trait_vis = &attr.trait_visibility;
-        let trait_ident = &attr.trait_ident;
-
-        quote! {
-            #trait_vis use #mod_ident::#trait_ident;
-        }
-    };
+    let trait_vis = &attr.trait_visibility;
+    let trait_ident = &attr.trait_ident;
 
     Ok(quote! {
         #(#attrs)*
@@ -124,7 +118,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
             #impl_block
         }
 
-        #use_stmt
+        #trait_vis use #mod_ident::#trait_ident;
     })
 }
 
