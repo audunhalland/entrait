@@ -6,6 +6,7 @@
 pub mod attr;
 
 mod analyze_generics;
+mod attributes;
 mod signature;
 
 use crate::generics::{self, TraitDependencyMode};
@@ -162,7 +163,19 @@ fn gen_trait_def(
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
-    let opt_unimock_attr = attr.opt_unimock_attribute(trait_fns, mode);
+    let opt_unimock_attr = match attr.default_option(attr.opts.unimock, false) {
+        SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
+            params: attributes::UnimockAttrParams {
+                trait_fns,
+                mode,
+                span,
+            },
+            attr,
+        }),
+        _ => None,
+    };
+
+    // let opt_unimock_attr = attr.opt_unimock_attribute(trait_fns, mode);
     let opt_entrait_for_trait_attr = match trait_dependency_mode {
         TraitDependencyMode::Concrete(_) => {
             Some(quote! { #[::entrait::entrait(unimock = false, mockall = false)] })
@@ -303,58 +316,6 @@ fn gen_delegating_fn_item(trait_fn: &TraitFn, span: Span) -> TokenStream {
 }
 
 impl EntraitFnAttr {
-    fn opt_unimock_attribute(&self, trait_fns: &[TraitFn], mode: &Mode<'_>) -> Option<TokenStream> {
-        match self.default_option(self.opts.unimock, false) {
-            SpanOpt(true, span) => {
-                let mock_mod = if let Mode::SingleFn(fn_ident) = mode {
-                    quote! { , mod=#fn_ident, as=Fn }
-                } else {
-                    quote! { , mod=*, as=Fn }
-                };
-
-                let opt_unmocked = if !trait_fns.is_empty() {
-                    let unmock_exprs = trait_fns.iter().map(|trait_fn| {
-                        let fn_ident = &trait_fn.sig().ident;
-
-                        match &trait_fn.deps {
-                            generics::FnDeps::Generic { .. } => quote! { #fn_ident },
-                            generics::FnDeps::Concrete(_) => quote! { _ },
-                            generics::FnDeps::NoDeps { .. } => {
-                                let arguments =
-                                    trait_fn.sig().inputs.iter().filter_map(
-                                        |fn_arg| match fn_arg {
-                                            syn::FnArg::Receiver(_) => None,
-                                            syn::FnArg::Typed(pat_type) => {
-                                                match pat_type.pat.as_ref() {
-                                                    syn::Pat::Ident(pat_ident) => {
-                                                        Some(&pat_ident.ident)
-                                                    }
-                                                    _ => None,
-                                                }
-                                            }
-                                        },
-                                    );
-
-                                quote! { #fn_ident(#(#arguments),*) }
-                            }
-                        }
-                    });
-
-                    Some(quote_spanned! { span=>
-                        , unmocked=[#(#unmock_exprs),*]
-                    })
-                } else {
-                    None
-                };
-
-                Some(self.gated_mock_attr(span, quote_spanned! {span=>
-                    ::entrait::__unimock::unimock(prefix=::entrait::__unimock #mock_mod #opt_unmocked)
-                }))
-            }
-            _ => None,
-        }
-    }
-
     pub fn opt_mockall_automock_attribute(&self) -> Option<TokenStream> {
         match self.default_option(self.opts.mockall, false) {
             SpanOpt(true, span) => {

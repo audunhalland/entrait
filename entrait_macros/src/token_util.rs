@@ -36,6 +36,13 @@ pub struct Punctuator<'s, S, P, E: ToTokens> {
     end: E,
 }
 
+pub fn comma_sep(
+    stream: &mut TokenStream,
+    span: proc_macro2::Span,
+) -> Punctuator<EmptyToken, syn::token::Comma, EmptyToken> {
+    Punctuator::new(stream, EmptyToken, syn::token::Comma(span), EmptyToken)
+}
+
 impl<'s, S, P, E> Punctuator<'s, S, P, E>
 where
     S: quote::ToTokens,
