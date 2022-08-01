@@ -251,20 +251,15 @@ impl<'a> ToTokens for TraitVisibility<'a> {
         match &self.mode {
             InputMode::Module => {
                 push_tokens!(stream, syn::token::Pub(Span::call_site()));
-                match &self.attr.trait_visibility {
-                    syn::Visibility::Inherited => {
-                        // When the trait is "private", it should only be accessible to the module outside,
-                        // so use `pub(super)`.
-                        // This is because the trait is syntacitally "defined" outside the module, because
-                        // the attribute is an outer attribute.
-                        // If proc-macros supported inner attributes, and this was invoked with that, we wouldn't do this.
-                        syn::token::Paren::default().surround(stream, |stream| {
-                            push_tokens!(stream, syn::token::Super::default());
-                        });
-                    }
-                    _ => {
-                        // Else, it's public without constraints
-                    }
+                if let syn::Visibility::Inherited = &self.attr.trait_visibility {
+                    // When the trait is "private", it should only be accessible to the module outside,
+                    // so use `pub(super)`.
+                    // This is because the trait is syntacitally "defined" outside the module, because
+                    // the attribute is an outer attribute.
+                    // If proc-macros supported inner attributes, and this was invoked with that, we wouldn't do this.
+                    syn::token::Paren::default().surround(stream, |stream| {
+                        push_tokens!(stream, syn::token::Super::default());
+                    });
                 }
             }
             InputMode::SingleFn(_) => {
