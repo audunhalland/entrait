@@ -307,9 +307,9 @@ impl EntraitFnAttr {
         match self.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => {
                 let opt_mock_mod = if let Mode::SingleFn(fn_ident) = mode {
-                    Some(quote! { , mod=#fn_ident, as=[Fn] })
+                    Some(quote! { , mod=#fn_ident, as=Fn })
                 } else {
-                    None
+                    Some(quote! { , mod=*, as=Fn })
                 };
 
                 let opt_unmocked = if !trait_fns.is_empty() {

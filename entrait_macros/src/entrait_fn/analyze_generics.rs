@@ -35,7 +35,6 @@ impl GenericsAnalyzer {
         self.trait_generics
     }
 
-    // TODO: Should return FnDeps
     pub fn analyze_fn_deps(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<FnDeps> {
         let span = attr.trait_ident.span();
         if attr.no_deps_value() {
