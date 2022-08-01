@@ -1,5 +1,5 @@
-use super::InputFn;
-use super::{attr::EntraitFnAttr, TraitFn};
+use super::input_attr::EntraitFnAttr;
+use super::{InputFn, TraitFn};
 use crate::generics::{FnDeps, GenericIdents, TraitDependencyMode, TraitGenerics};
 
 use syn::spanned::Spanned;

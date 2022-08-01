@@ -143,7 +143,7 @@ fn invoke(
 
     let (result, debug) = match input {
         Input::Fn(input_fn) => {
-            let mut attr = syn::parse_macro_input!(attr as entrait_fn::attr::EntraitFnAttr);
+            let mut attr = syn::parse_macro_input!(attr as entrait_fn::input_attr::EntraitFnAttr);
             opts_modifier(&mut attr.opts);
 
             (
@@ -152,7 +152,7 @@ fn invoke(
             )
         }
         Input::Mod(input_mod) => {
-            let mut attr = syn::parse_macro_input!(attr as entrait_fn::attr::EntraitFnAttr);
+            let mut attr = syn::parse_macro_input!(attr as entrait_fn::input_attr::EntraitFnAttr);
             opts_modifier(&mut attr.opts);
 
             (

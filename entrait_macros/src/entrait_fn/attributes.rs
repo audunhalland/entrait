@@ -1,8 +1,6 @@
-use super::{attr::EntraitFnAttr, Mode, TraitFn};
-use crate::{
-    generics,
-    token_util::{comma_sep, push_tokens},
-};
+use super::{input_attr::EntraitFnAttr, Mode, TraitFn};
+use crate::generics;
+use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;

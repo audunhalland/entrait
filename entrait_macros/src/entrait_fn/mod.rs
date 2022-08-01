@@ -3,7 +3,7 @@
 //! Procedural macros used by entrait.
 //!
 
-pub mod attr;
+pub mod input_attr;
 
 mod analyze_generics;
 mod attributes;
@@ -14,7 +14,7 @@ use crate::input::{InputFn, InputMod, ModItem};
 use crate::opt::*;
 use crate::token_util::{push_tokens, TokenPair};
 use analyze_generics::GenericsAnalyzer;
-use attr::*;
+use input_attr::*;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;

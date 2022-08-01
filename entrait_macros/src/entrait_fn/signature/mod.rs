@@ -1,7 +1,7 @@
 mod fn_params;
 mod lifetimes;
 
-use super::attr::EntraitFnAttr;
+use super::input_attr::EntraitFnAttr;
 use crate::generics::FnDeps;
 use crate::input::InputFn;
 
