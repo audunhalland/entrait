@@ -164,6 +164,9 @@ mod module {
     #[entrait(pub Dep2)]
     fn dep2(_: &impl Any) {}
 
+    #[entrait(pub EmptyModule)]
+    mod empty_module {}
+
     #[entrait(pub FooBarBazQux)]
     mod foo_bar_baz_qux {
         use super::Dep1;
