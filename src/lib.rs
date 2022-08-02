@@ -737,3 +737,15 @@ pub use ::unimock as __unimock;
 pub mod __async_trait {
     pub use ::async_trait::async_trait;
 }
+
+pub trait ImplRef<'i, T> {
+    fn from_impl(_impl: &'i Impl<T>) -> Self;
+
+    fn as_impl(&self) -> &'i Impl<T>;
+}
+
+pub trait BorrowImplRef<'i, T> {
+    type Ref: ImplRef<'i, T>;
+}
+
+pub trait BorrowImpl<T>: for<'i> BorrowImplRef<'i, T> {}

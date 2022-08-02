@@ -29,10 +29,12 @@ pub enum AsyncStrategy {
     AssociatedFuture,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum DelegationKind {
     BySelf,
     ByBorrow,
+    ByTraitStatic(syn::Ident),
+    ByTraitDyn(syn::Ident),
 }
 
 #[derive(Copy, Clone)]
@@ -118,19 +120,29 @@ fn parse_eq_delegate_by(
     default: DelegationKind,
     span: Span,
 ) -> syn::Result<SpanOpt<DelegationKind>> {
-    parse_eq_value_or_default(
-        input,
-        default,
-        |b: syn::Ident| match b.to_string().as_str() {
-            "Self" => Ok(DelegationKind::BySelf),
-            "Borrow" => Ok(DelegationKind::ByBorrow),
-            ident => Err(syn::Error::new(
-                span,
-                format!("Unknown delegation kind: `{ident}`. Use either `Self` or `Borrow`"),
-            )),
+    if !input.peek(syn::token::Eq) {
+        return Ok(SpanOpt(default, span));
+    }
+
+    input.parse::<syn::token::Eq>()?;
+
+    if input.peek(syn::token::Dyn) {
+        let _: syn::token::Dyn = input.parse()?;
+        let trait_ident = input.parse::<syn::Ident>()?;
+
+        return Ok(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), span));
+    }
+
+    let ident = input.parse::<syn::Ident>()?;
+
+    Ok(SpanOpt(
+        match ident.to_string().as_str() {
+            "Self" => DelegationKind::BySelf,
+            "Borrow" => DelegationKind::ByBorrow,
+            _ => DelegationKind::ByTraitStatic(ident),
         },
         span,
-    )
+    ))
 }
 
 fn parse_eq_value_or_default<V, F, O>(

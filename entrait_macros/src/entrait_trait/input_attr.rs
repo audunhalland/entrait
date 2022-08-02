@@ -4,9 +4,15 @@ use crate::opt::*;
 use syn::parse::{Parse, ParseStream};
 
 pub struct EntraitTraitAttr {
+    pub delegation_trait: Option<DelegationTrait>,
     pub opts: Opts,
     pub delegation_kind: Option<SpanOpt<DelegationKind>>,
     pub crate_idents: CrateIdents,
+}
+
+pub struct DelegationTrait {
+    pub trait_visibility: syn::Visibility,
+    pub trait_ident: syn::Ident,
 }
 
 impl Parse for EntraitTraitAttr {
@@ -39,6 +45,7 @@ impl Parse for EntraitTraitAttr {
         }
 
         Ok(Self {
+            delegation_trait: None,
             opts: Opts {
                 no_deps: None,
                 debug,

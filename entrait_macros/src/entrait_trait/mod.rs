@@ -10,8 +10,8 @@ use crate::opt::*;
 use crate::token_util::*;
 
 use proc_macro2::TokenStream;
-use quote::quote;
 use quote::ToTokens;
+use quote::{quote, quote_spanned};
 
 pub fn output_tokens(
     attr: EntraitTraitAttr,
@@ -49,6 +49,8 @@ pub fn output_tokens(
         None
     };
 
+    let delegation_trait = gen_delegation_trait(&generic_idents, &attr);
+
     let impl_attrs = item_trait
         .attrs
         .iter()
@@ -85,7 +87,7 @@ pub fn output_tokens(
         .items
         .iter()
         .filter_map(|trait_item| match trait_item {
-            syn::TraitItem::Method(method) => Some(gen_method(method, &attr)),
+            syn::TraitItem::Method(method) => Some(gen_method(method, &generic_idents, &attr)),
             _ => None,
         });
 
@@ -93,6 +95,8 @@ pub fn output_tokens(
         #opt_unimock_attr
         #opt_mockall_automock_attr
         #item_trait
+
+        #delegation_trait
 
         #(#impl_attrs)*
         impl #params #trait_ident #args for #self_ty #where_clause {
@@ -104,9 +108,34 @@ pub fn output_tokens(
     Ok(tokens)
 }
 
-fn gen_method(method: &syn::TraitItemMethod, attr: &EntraitTraitAttr) -> TokenStream {
+fn gen_delegation_trait(
+    generic_idents: &GenericIdents,
+    attr: &EntraitTraitAttr,
+) -> Option<TokenStream> {
+    match &attr.delegation_kind {
+        Some(SpanOpt(DelegationKind::ByTraitStatic(trait_ident), _)) => {
+            let span = trait_ident.span();
+            let impl_t = &generic_idents.impl_t;
+            Some(quote_spanned! { span=>
+                pub trait #trait_ident<#impl_t> {
+                    type By: ::entrait::BorrowImpl<#impl_t>;
+                }
+            })
+        }
+        _ => None,
+    }
+}
+
+fn gen_method(
+    method: &syn::TraitItemMethod,
+    generic_idents: &GenericIdents,
+    attr: &EntraitTraitAttr,
+) -> TokenStream {
     let fn_sig = &method.sig;
     let fn_ident = &fn_sig.ident;
+    let impl_t = &generic_idents.impl_t;
+    let entrait = &attr.crate_idents.entrait;
+
     let arguments = fn_sig.inputs.iter().filter_map(|arg| match arg {
         syn::FnArg::Receiver(_) => None,
         syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
@@ -117,6 +146,13 @@ fn gen_method(method: &syn::TraitItemMethod, attr: &EntraitTraitAttr) -> TokenSt
     let opt_dot_await = fn_sig.asyncness.map(|_| quote! { .await });
 
     match &attr.delegation_kind {
+        Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) => {
+            quote! {
+                #fn_sig {
+                    <#impl_t::By as #entrait::BorrowImplRef<#impl_t>>::Ref::from_impl(self).#fn_ident(#(#arguments),*) #opt_dot_await
+                }
+            }
+        }
         Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
             quote! {
                 #fn_sig {
@@ -170,18 +206,22 @@ struct ImplWhereClause<'g, 'c> {
 
 impl<'g, 'c> ImplWhereClause<'g, 'c> {
     fn impl_t_bounds(&self, stream: &mut TokenStream) {
-        push_tokens!(
-            stream,
-            self.generic_idents.impl_t,
-            syn::token::Colon(self.span)
-        );
+        use syn::token::*;
+        use syn::Ident;
+
+        push_tokens!(stream, self.generic_idents.impl_t, Colon(self.span));
 
         match &self.attr.delegation_kind {
+            Some(SpanOpt(DelegationKind::ByTraitStatic(trait_ident), _)) => {
+                push_tokens!(
+                    stream,
+                    trait_ident,
+                    Lt(self.span),
+                    self.generic_idents.impl_t,
+                    Gt(self.span)
+                );
+            }
             Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
-                use syn::token::*;
-
-                use syn::Ident;
-
                 push_tokens!(
                     stream,
                     Colon2(self.span),
@@ -206,6 +246,44 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                 push_tokens!(stream, self.trait_with_arguments(), self.plus_sync());
             }
         }
+    }
+
+    fn delegate_borrow_impl_ref_bounds(&self, stream: &mut TokenStream) {
+        use syn::token::*;
+        use syn::Ident;
+
+        let span = self.span;
+
+        let impl_lifetime = syn::Lifetime::new("'impl_life", self.span);
+
+        push_tokens!(
+            stream,
+            // for<'i>
+            For(span),
+            Lt(span),
+            impl_lifetime,
+            Gt(span),
+            // <T::By as framework::BorrowImplRef<'i, T>>
+            Lt(span),
+            self.generic_idents.impl_t,
+            Colon2(span),
+            Ident::new("By", span),
+            As(span),
+            self.attr.crate_idents.entrait,
+            Colon2(span),
+            Ident::new("BorrowImplRef", span),
+            Lt(span),
+            impl_lifetime,
+            Comma(span),
+            self.generic_idents.impl_t,
+            Gt(span),
+            Gt(span),
+            // ::Ref: #trait_ident
+            Colon2(span),
+            Ident::new("Ref", span),
+            Colon(span),
+            self.item_trait.ident
+        );
     }
 
     fn trait_with_arguments(&self) -> TokenPair<impl ToTokens + '_, impl ToTokens + '_> {
@@ -247,6 +325,14 @@ impl<'g, 'c> quote::ToTokens for ImplWhereClause<'g, 'c> {
         punctuator.push_fn(|stream| {
             self.impl_t_bounds(stream);
         });
+
+        // Trait delegation bounds:
+        match &self.attr.delegation_kind {
+            Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) => punctuator.push_fn(|stream| {
+                self.delegate_borrow_impl_ref_bounds(stream);
+            }),
+            _ => {}
+        }
 
         for predicate in &self.trait_generics.where_predicates {
             punctuator.push(predicate);
