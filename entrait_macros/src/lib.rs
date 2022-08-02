@@ -162,7 +162,8 @@ fn invoke(
             )
         }
         Input::Trait(item_trait) => {
-            let mut attr = syn::parse_macro_input!(attr as entrait_trait::EntraitTraitAttr);
+            let mut attr =
+                syn::parse_macro_input!(attr as entrait_trait::input_attr::EntraitTraitAttr);
             opts_modifier(&mut attr.opts);
             let debug = attr.opts.debug.map(|opt| *opt.value()).unwrap_or(false);
 
