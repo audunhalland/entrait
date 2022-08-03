@@ -5,4 +5,18 @@ mod simple_static {
     trait Foo {
         fn foo(&self) -> i32;
     }
+
+    /*
+    impl DelegateFoo<Self> for () {
+        type By = Provider;
+    }
+
+    struct Provider;
+
+    fn test() {
+        let app = Impl::new(());
+
+        app.foo();
+    }
+    */
 }
