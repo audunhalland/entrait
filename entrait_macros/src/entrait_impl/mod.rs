@@ -1,15 +1,36 @@
 pub mod input_attr;
 
-use crate::input::InputMod;
+use crate::analyze_generics;
+use crate::input::{InputMod, ModItem};
+use crate::signature;
 use input_attr::EntraitImplAttr;
 
 use quote::quote;
+use syn::spanned::Spanned;
 
 pub fn output_tokens(
     attr: EntraitImplAttr,
     input_mod: InputMod,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let type_path = &attr.type_path;
+    let trait_span = attr.trait_path.span();
+
+    let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
+    let trait_fns = input_mod
+        .items
+        .iter()
+        .filter_map(ModItem::filter_pub_fn)
+        .enumerate()
+        .map(|(index, input_fn)| {
+            analyze_generics::TraitFn::analyze(
+                input_fn,
+                &mut generics_analyzer,
+                signature::FnIndex(index),
+                trait_span,
+                &attr.opts,
+            )
+        })
+        .collect::<syn::Result<Vec<_>>>()?;
 
     let InputMod {
         attrs,

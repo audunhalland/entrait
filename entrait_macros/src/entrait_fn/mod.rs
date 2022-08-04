@@ -11,6 +11,7 @@ use crate::analyze_generics;
 use crate::analyze_generics::GenericsAnalyzer;
 use crate::analyze_generics::TraitFn;
 use crate::generics::{self, TraitDependencyMode};
+use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
 use crate::input::{InputFn, InputMod, ModItem};
 use crate::opt::*;
@@ -42,7 +43,8 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         &attr.crate_idents,
         attr.trait_ident.span(),
     )?;
-    let use_associated_future = detect_use_associated_future(attr, [&input_fn].into_iter());
+    let use_associated_future =
+        generics::detect_use_associated_future(&attr.opts, [&input_fn].into_iter());
 
     let trait_generics = generics_analyzer.into_trait_generics();
     let trait_def = gen_trait_def(
@@ -100,8 +102,8 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         &attr.crate_idents,
         attr.trait_ident.span(),
     )?;
-    let use_associated_future = detect_use_associated_future(
-        attr,
+    let use_associated_future = generics::detect_use_associated_future(
+        &attr.opts,
         input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
     );
 
@@ -183,7 +185,8 @@ fn gen_trait_def(
         }),
         _ => None,
     };
-    let opt_async_trait_attr = opt_async_trait_attribute(attr, trait_fns.iter());
+    let opt_async_trait_attr =
+        opt_async_trait_attribute(&attr.opts, &attr.crate_idents, trait_fns.iter());
 
     let trait_visibility = TraitVisibility { attr, mode };
     let trait_ident = &attr.trait_ident;
@@ -265,7 +268,8 @@ fn gen_impl_block(
 ) -> TokenStream {
     let span = attr.trait_ident.span();
 
-    let async_trait_attribute = opt_async_trait_attribute(attr, trait_fns.iter());
+    let async_trait_attribute =
+        opt_async_trait_attribute(&attr.opts, &attr.crate_idents, trait_fns.iter());
     let params = trait_generics.impl_params(trait_dependency_mode, use_associated_future);
     let trait_ident = &attr.trait_ident;
     let args = trait_generics.arguments();
@@ -365,37 +369,21 @@ impl InputFn {
     }
 }
 
-fn opt_async_trait_attribute<'a, 'o>(
-    attr: &'a EntraitFnAttr,
+fn opt_async_trait_attribute<'s, 'o>(
+    opts: &'s Opts,
+    crate_idents: &'s CrateIdents,
     trait_fns: impl Iterator<Item = &'o TraitFn<'o>>,
-) -> Option<impl ToTokens + 'a> {
+) -> Option<impl ToTokens + 's> {
     match (
-        attr.opts.async_strategy(),
-        has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
+        opts.async_strategy(),
+        generics::has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
     ) {
         (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
             Some(attributes::Attr(attributes::AsyncTraitParams {
-                attr,
+                crate_idents,
                 span,
             }))
         }
         _ => None,
     }
-}
-
-fn detect_use_associated_future<'i>(
-    attr: &EntraitFnAttr,
-    input_fns: impl Iterator<Item = &'i InputFn>,
-) -> generics::UseAssociatedFuture {
-    generics::UseAssociatedFuture(matches!(
-        (
-            attr.opts.async_strategy(),
-            has_any_async(input_fns.map(|input_fn| &input_fn.fn_sig))
-        ),
-        (SpanOpt(AsyncStrategy::AssociatedFuture, _), true)
-    ))
-}
-
-fn has_any_async<'s>(mut signatures: impl Iterator<Item = &'s syn::Signature>) -> bool {
-    signatures.any(|sig| sig.asyncness.is_some())
 }

@@ -1,10 +1,29 @@
 use crate::{
     analyze_generics::TraitFn,
     idents::GenericIdents,
+    input::InputFn,
+    opt::{AsyncStrategy, Opts, SpanOpt},
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
 
 pub struct UseAssociatedFuture(pub bool);
+
+pub fn detect_use_associated_future<'i>(
+    opts: &Opts,
+    input_fns: impl Iterator<Item = &'i InputFn>,
+) -> UseAssociatedFuture {
+    UseAssociatedFuture(matches!(
+        (
+            opts.async_strategy(),
+            has_any_async(input_fns.map(|input_fn| &input_fn.fn_sig))
+        ),
+        (SpanOpt(AsyncStrategy::AssociatedFuture, _), true)
+    ))
+}
+
+pub fn has_any_async<'s>(mut signatures: impl Iterator<Item = &'s syn::Signature>) -> bool {
+    signatures.any(|sig| sig.asyncness.is_some())
+}
 
 pub enum FnDeps {
     Generic {

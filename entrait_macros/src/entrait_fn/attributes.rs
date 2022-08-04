@@ -1,5 +1,6 @@
 use super::{input_attr::EntraitFnAttr, TraitFn};
 use crate::generics;
+use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
 use crate::token_util::{comma_sep, push_tokens};
 
@@ -207,7 +208,7 @@ impl ToTokens for MockallAutomockParams {
 }
 
 pub struct AsyncTraitParams<'a> {
-    pub attr: &'a EntraitFnAttr,
+    pub crate_idents: &'a CrateIdents,
     pub span: Span,
 }
 
@@ -217,7 +218,7 @@ impl<'a> ToTokens for AsyncTraitParams<'a> {
         push_tokens!(
             stream,
             syn::token::Colon2(span),
-            self.attr.crate_idents.entrait,
+            self.crate_idents.entrait,
             syn::token::Colon2(span),
             syn::Ident::new("__async_trait", span),
             syn::token::Colon2(span),
