@@ -8,6 +8,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 
+mod analyze_generics;
 mod entrait_fn;
 mod entrait_impl;
 mod entrait_trait;

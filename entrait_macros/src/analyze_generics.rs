@@ -1,12 +1,42 @@
-use super::input_attr::EntraitFnAttr;
-use super::{InputFn, TraitFn};
 use crate::generics::{FnDeps, TraitDependencyMode, TraitGenerics};
 use crate::idents::{CrateIdents, GenericIdents};
+use crate::input::{FnInputMode, InputFn};
+use crate::opt::Opts;
+use crate::signature::{EntraitSignature, FnIndex, SignatureConverter};
 
 use syn::spanned::Spanned;
 
+pub struct TraitFn<'i> {
+    pub source: &'i InputFn,
+    pub deps: FnDeps,
+    pub entrait_sig: EntraitSignature,
+}
+
+impl<'i> TraitFn<'i> {
+    pub fn analyze(
+        source: &'i InputFn,
+        analyzer: &mut GenericsAnalyzer,
+        fn_index: FnIndex,
+        trait_ident: &syn::Ident,
+        opts: &Opts,
+    ) -> syn::Result<Self> {
+        let deps = analyzer.analyze_fn_deps(source, trait_ident, opts)?;
+        let entrait_sig =
+            SignatureConverter::new(trait_ident, opts, source, &deps, fn_index).convert();
+        Ok(Self {
+            source,
+            deps,
+            entrait_sig,
+        })
+    }
+
+    pub fn sig(&self) -> &syn::Signature {
+        &self.entrait_sig.sig
+    }
+}
+
 pub(super) fn detect_trait_dependency_mode<'t, 'c>(
-    input_mode: &super::InputMode,
+    input_mode: &FnInputMode,
     trait_fns: &'t [TraitFn],
     crate_idents: &'c CrateIdents,
     span: proc_macro2::Span,
@@ -14,8 +44,8 @@ pub(super) fn detect_trait_dependency_mode<'t, 'c>(
     for trait_fn in trait_fns {
         if let FnDeps::Concrete(ty) = &trait_fn.deps {
             return match input_mode {
-                super::InputMode::SingleFn(_) => Ok(TraitDependencyMode::Concrete(ty.as_ref())),
-                super::InputMode::Module => Err(syn::Error::new(
+                FnInputMode::SingleFn(_) => Ok(TraitDependencyMode::Concrete(ty.as_ref())),
+                FnInputMode::Module => Err(syn::Error::new(
                     ty.span(),
                     "Using concrete dependencies in a module is an anti-pattern. Instead, write a trait manually, use the #[entrait] attribute on it, and implement it for your application type",
                 )),
@@ -47,9 +77,14 @@ impl GenericsAnalyzer {
         self.trait_generics
     }
 
-    pub fn analyze_fn_deps(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<FnDeps> {
-        let span = attr.trait_ident.span();
-        if attr.opts.no_deps_value() {
+    pub fn analyze_fn_deps(
+        &mut self,
+        func: &InputFn,
+        trait_ident: &syn::Ident,
+        opts: &Opts,
+    ) -> syn::Result<FnDeps> {
+        let span = trait_ident.span();
+        if opts.no_deps_value() {
             return self.deps_with_generics(FnDeps::NoDeps, &func.fn_sig.generics);
         }
 

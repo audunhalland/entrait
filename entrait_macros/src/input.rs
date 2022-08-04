@@ -10,6 +10,11 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 
+pub enum FnInputMode<'a> {
+    SingleFn(&'a syn::Ident),
+    Module,
+}
+
 pub enum Input {
     Fn(InputFn),
     Trait(syn::ItemTrait),

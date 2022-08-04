@@ -1,5 +1,6 @@
-use super::{input_attr::EntraitFnAttr, InputMode, TraitFn};
+use super::{input_attr::EntraitFnAttr, TraitFn};
 use crate::generics;
+use crate::input::FnInputMode;
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
@@ -76,7 +77,7 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
 pub struct UnimockAttrParams<'s, 'i> {
     pub attr: &'s EntraitFnAttr,
     pub trait_fns: &'s [TraitFn<'i>],
-    pub(super) mode: &'s InputMode<'s>,
+    pub(super) mode: &'s FnInputMode<'s>,
     pub span: Span,
 }
 
@@ -116,7 +117,7 @@ impl<'s, 'i> ToTokens for UnimockAttrParams<'s, 'i> {
 
             // mod=?
             punctuator.push_fn(|stream| {
-                if let InputMode::SingleFn(fn_ident) = &self.mode {
+                if let FnInputMode::SingleFn(fn_ident) = &self.mode {
                     push_tokens!(stream, Mod(span), Eq(span), fn_ident);
                 } else {
                     push_tokens!(stream, Mod(span), Eq(span), Star(span));

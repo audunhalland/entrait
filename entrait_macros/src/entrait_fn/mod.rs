@@ -5,15 +5,17 @@
 
 pub mod input_attr;
 
-mod analyze_generics;
 mod attributes;
 
+use crate::analyze_generics;
+use crate::analyze_generics::GenericsAnalyzer;
+use crate::analyze_generics::TraitFn;
 use crate::generics::{self, TraitDependencyMode};
+use crate::input::FnInputMode;
 use crate::input::{InputFn, InputMod, ModItem};
 use crate::opt::*;
 use crate::signature;
 use crate::token_util::{push_tokens, TokenPair};
-use analyze_generics::GenericsAnalyzer;
 use input_attr::*;
 
 use proc_macro2::Span;
@@ -21,21 +23,17 @@ use proc_macro2::TokenStream;
 use quote::quote_spanned;
 use quote::{quote, ToTokens};
 
-use self::analyze_generics::detect_trait_dependency_mode;
-
-enum InputMode<'a> {
-    SingleFn(&'a syn::Ident),
-    Module,
-}
+use crate::analyze_generics::detect_trait_dependency_mode;
 
 pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
-    let mode = InputMode::SingleFn(&input_fn.fn_sig.ident);
-    let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
+    let mode = FnInputMode::SingleFn(&input_fn.fn_sig.ident);
+    let mut generics_analyzer = GenericsAnalyzer::new();
     let trait_fns = [TraitFn::analyze(
         &input_fn,
         &mut generics_analyzer,
         signature::FnIndex(0),
-        attr,
+        &attr.trait_ident,
+        &attr.opts,
     )?];
 
     let trait_dependency_mode = detect_trait_dependency_mode(
@@ -78,7 +76,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
 }
 
 pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result<TokenStream> {
-    let mode = InputMode::Module;
+    let mode = FnInputMode::Module;
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
     let trait_fns = input_mod
         .items
@@ -90,7 +88,8 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
                 input_fn,
                 &mut generics_analyzer,
                 signature::FnIndex(index),
-                attr,
+                &attr.trait_ident,
+                &attr.opts,
             )
         })
         .collect::<syn::Result<Vec<_>>>()?;
@@ -147,46 +146,12 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
     })
 }
 
-pub struct TraitFn<'i> {
-    source: &'i InputFn,
-    pub deps: generics::FnDeps,
-    entrait_sig: signature::EntraitSignature,
-}
-
-impl<'i> TraitFn<'i> {
-    fn analyze(
-        source: &'i InputFn,
-        analyzer: &mut GenericsAnalyzer,
-        fn_index: signature::FnIndex,
-        attr: &EntraitFnAttr,
-    ) -> syn::Result<Self> {
-        let deps = analyzer.analyze_fn_deps(source, attr)?;
-        let entrait_sig = signature::SignatureConverter::new(
-            &attr.trait_ident,
-            &attr.opts,
-            source,
-            &deps,
-            fn_index,
-        )
-        .convert();
-        Ok(Self {
-            source,
-            deps,
-            entrait_sig,
-        })
-    }
-
-    fn sig(&self) -> &syn::Signature {
-        &self.entrait_sig.sig
-    }
-}
-
 fn gen_trait_def(
     attr: &EntraitFnAttr,
     trait_generics: &generics::TraitGenerics,
     trait_dependency_mode: &TraitDependencyMode,
     trait_fns: &[TraitFn],
-    mode: &InputMode<'_>,
+    mode: &FnInputMode<'_>,
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
@@ -249,13 +214,13 @@ fn gen_trait_def(
 
 struct TraitVisibility<'a> {
     attr: &'a EntraitFnAttr,
-    mode: &'a InputMode<'a>,
+    mode: &'a FnInputMode<'a>,
 }
 
 impl<'a> ToTokens for TraitVisibility<'a> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         match &self.mode {
-            InputMode::Module => {
+            FnInputMode::Module => {
                 match &self.attr.trait_visibility {
                     syn::Visibility::Inherited => {
                         // When the trait is "private", it should only be accessible to the module outside,
@@ -273,7 +238,7 @@ impl<'a> ToTokens for TraitVisibility<'a> {
                     }
                 }
             }
-            InputMode::SingleFn(_) => {
+            FnInputMode::SingleFn(_) => {
                 push_tokens!(stream, self.attr.trait_visibility);
             }
         }

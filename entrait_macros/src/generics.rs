@@ -1,5 +1,5 @@
 use crate::{
-    entrait_fn::TraitFn,
+    analyze_generics::TraitFn,
     idents::GenericIdents,
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
