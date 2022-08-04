@@ -1,3 +1,8 @@
+#[entrait::entrait(pub Baz)]
+fn baz<D>(_: &D) -> i32 {
+    42
+}
+
 mod simple_static {
     use entrait::*;
 
@@ -7,18 +12,13 @@ mod simple_static {
         fn bar(&self) -> u32;
     }
 
-    #[entrait(pub Baz)]
-    fn baz<D>(_: &D) -> i32 {
-        42
-    }
-
     #[entrait_impl]
     mod foobar_impl {
         pub fn bar<D>(_: &D) -> u32 {
             0
         }
 
-        pub fn foo(deps: &impl super::Baz) -> i32 {
+        pub fn foo(deps: &impl super::super::Baz) -> i32 {
             deps.baz()
         }
 
@@ -47,16 +47,36 @@ mod simple_dyn {
         fn bar(&self) -> u32;
     }
 
-    impl std::borrow::Borrow<dyn DelegateFoobar<Self>> for () {
+    #[entrait_dyn_impl]
+    mod foobar_impl {
+        pub fn bar<D>(_: &D) -> u32 {
+            0
+        }
+
+        pub fn foo<D>(_: &D) -> i32 {
+            1337
+        }
+
+        #[derive_impl(super::DelegateFoobar)]
+        pub struct FoobarImpl;
+    }
+
+    struct App {
+        foobar: Box<dyn DelegateFoobar<Self> + Sync>,
+    }
+
+    impl std::borrow::Borrow<dyn DelegateFoobar<Self>> for App {
         fn borrow(&self) -> &dyn DelegateFoobar<Self> {
-            panic!()
+            self.foobar.as_ref()
         }
     }
 
     #[test]
     fn test() {
-        let app = Impl::new(());
+        let app = Impl::new(App {
+            foobar: Box::new(foobar_impl::FoobarImpl),
+        });
 
-        app.foo();
+        assert_eq!(42, app.foo());
     }
 }

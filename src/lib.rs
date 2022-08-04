@@ -726,6 +726,8 @@ pub use macros::entrait_export;
 
 pub use entrait_macros::entrait_impl;
 
+pub use entrait_macros::entrait_dyn_impl;
+
 /// Re-exported from the [implementation] crate.
 pub use ::implementation::Impl;
 

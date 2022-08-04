@@ -42,7 +42,7 @@ pub fn gen_impl_block(
         &impl_indirection,
         use_associated_future,
     );
-    let args = trait_generics.arguments();
+    let args = trait_generics.arguments(&impl_indirection);
     let self_ty = SelfTy(trait_dependency_mode, &impl_indirection, trait_span);
     let where_clause = trait_generics.impl_where_clause(
         trait_fns,
@@ -83,9 +83,10 @@ fn gen_delegating_fn_item(
     let mut fn_ident = trait_fn.source.fn_sig.ident.clone();
     fn_ident.set_span(span);
 
-    let opt_self_comma = match (deps, entrait_sig.sig.inputs.first()) {
-        (generics::FnDeps::NoDeps { .. }, _) | (_, None) => None,
-        (_, Some(_)) => Some(SelfArgComma(impl_indirection, span)),
+    let opt_self_comma = match (deps, entrait_sig.sig.inputs.first(), impl_indirection) {
+        (generics::FnDeps::NoDeps { .. }, _, _) | (_, None, _) => None,
+        (_, _, ImplIndirection::DynCopy { .. }) => None,
+        (_, Some(_), _) => Some(SelfArgComma(impl_indirection, span)),
     };
 
     let arguments = entrait_sig
@@ -112,7 +113,11 @@ fn gen_delegating_fn_item(
     }
 }
 
-struct SelfTy<'g, 'c>(&'g TraitDependencyMode<'g, 'c>, &'g ImplIndirection, Span);
+struct SelfTy<'g, 'c>(
+    &'g TraitDependencyMode<'g, 'c>,
+    &'g ImplIndirection<'g>,
+    Span,
+);
 
 impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
     fn to_tokens(&self, stream: &mut TokenStream) {
@@ -133,6 +138,9 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
                         syn::token::Gt(span)
                     );
                 }
+                ImplIndirection::DynCopy { ident } => {
+                    push_tokens!(stream, ident);
+                }
             },
             TraitDependencyMode::Concrete(ty) => {
                 push_tokens!(stream, ty)
@@ -142,7 +150,7 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
 }
 
 // i.e. `self,`
-struct SelfArgComma<'g>(&'g ImplIndirection, Span);
+struct SelfArgComma<'g>(&'g ImplIndirection<'g>, Span);
 
 impl<'g> quote::ToTokens for SelfArgComma<'g> {
     fn to_tokens(&self, stream: &mut TokenStream) {
@@ -157,6 +165,13 @@ impl<'g> quote::ToTokens for SelfArgComma<'g> {
                     syn::token::SelfValue(span),
                     syn::token::Dot(span),
                     syn::LitInt::new("0", span),
+                    syn::token::Comma(span)
+                );
+            }
+            ImplIndirection::DynCopy { .. } => {
+                push_tokens!(
+                    stream,
+                    syn::Ident::new("__impl", span),
                     syn::token::Comma(span)
                 );
             }

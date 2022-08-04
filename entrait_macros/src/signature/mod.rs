@@ -11,6 +11,8 @@ use quote::quote_spanned;
 
 pub struct FnIndex(pub usize);
 
+pub struct InjectDynImplParam(pub bool);
+
 /// The fn signature inside the trait
 pub struct EntraitSignature {
     pub sig: syn::Signature,
@@ -40,6 +42,7 @@ pub struct SignatureConverter<'a> {
     opts: &'a Opts,
     input_fn: &'a InputFn,
     deps: &'a FnDeps,
+    inject_dyn_impl_param: InjectDynImplParam,
     fn_index: FnIndex,
 }
 
@@ -57,12 +60,14 @@ impl<'a> SignatureConverter<'a> {
         input_fn: &'a InputFn,
         deps: &'a FnDeps,
         fn_index: FnIndex,
+        inject_dyn_impl_param: InjectDynImplParam,
     ) -> SignatureConverter<'a> {
         Self {
             trait_span,
             opts,
             input_fn,
             deps,
+            inject_dyn_impl_param,
             fn_index,
         }
     }
@@ -88,13 +93,12 @@ impl<'a> SignatureConverter<'a> {
         }
 
         let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
-        self.generate_receiver(&mut entrait_sig.sig, receiver_generation);
+        self.generate_params(&mut entrait_sig.sig, receiver_generation);
 
         if self.input_fn.use_associated_future(self.opts) {
             self.convert_to_associated_future(&mut entrait_sig, receiver_generation);
         }
 
-        // self.remove_deps_generic_param(&mut entrait_sig.sig);
         self.remove_generic_type_params(&mut entrait_sig.sig);
         tidy_generics(&mut entrait_sig.sig.generics);
 
@@ -120,7 +124,7 @@ impl<'a> SignatureConverter<'a> {
         }
     }
 
-    fn generate_receiver(&self, sig: &mut syn::Signature, receiver_generation: ReceiverGeneration) {
+    fn generate_params(&self, sig: &mut syn::Signature, receiver_generation: ReceiverGeneration) {
         let span = self.trait_span;
         match receiver_generation {
             ReceiverGeneration::Insert => {
@@ -151,6 +155,15 @@ impl<'a> SignatureConverter<'a> {
                 }
             }
             ReceiverGeneration::None => {}
+        }
+
+        if self.inject_dyn_impl_param.0 {
+            sig.inputs.insert(
+                1,
+                syn::parse_quote! {
+                    __impl: &::entrait::Impl<EntraitT>
+                },
+            );
         }
     }
 

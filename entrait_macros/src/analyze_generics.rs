@@ -2,7 +2,7 @@ use crate::generics::{FnDeps, TraitDependencyMode, TraitGenerics};
 use crate::idents::{CrateIdents, GenericIdents};
 use crate::input::{FnInputMode, InputFn};
 use crate::opt::Opts;
-use crate::signature::{EntraitSignature, FnIndex, SignatureConverter};
+use crate::signature::{EntraitSignature, FnIndex, InjectDynImplParam, SignatureConverter};
 
 use proc_macro2::Span;
 use syn::spanned::Spanned;
@@ -18,12 +18,20 @@ impl<'i> TraitFn<'i> {
         source: &'i InputFn,
         analyzer: &mut GenericsAnalyzer,
         fn_index: FnIndex,
+        inject_dyn_impl_param: InjectDynImplParam,
         trait_span: Span,
         opts: &Opts,
     ) -> syn::Result<Self> {
         let deps = analyzer.analyze_fn_deps(source, trait_span, opts)?;
-        let entrait_sig =
-            SignatureConverter::new(trait_span, opts, source, &deps, fn_index).convert();
+        let entrait_sig = SignatureConverter::new(
+            trait_span,
+            opts,
+            source,
+            &deps,
+            fn_index,
+            inject_dyn_impl_param,
+        )
+        .convert();
         Ok(Self {
             source,
             deps,

@@ -124,7 +124,12 @@ pub fn entrait_export_unimock_use_associated_future(
 
 #[proc_macro_attribute]
 pub fn entrait_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
-    invoke_impl(attr, input)
+    invoke_impl(attr, input, entrait_impl::ImplKind::Static)
+}
+
+#[proc_macro_attribute]
+pub fn entrait_dyn_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
+    invoke_impl(attr, input, entrait_impl::ImplKind::Dyn)
 }
 
 fn set_fallbacks<const N: usize>(opts: [&mut Option<opt::SpanOpt<bool>>; N]) {
@@ -181,11 +186,11 @@ fn invoke(
     proc_macro::TokenStream::from(output)
 }
 
-fn invoke_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
+fn invoke_impl(attr: TokenStream, input: TokenStream, kind: entrait_impl::ImplKind) -> TokenStream {
     let attr = syn::parse_macro_input!(attr as entrait_impl::input_attr::EntraitImplAttr);
     let input_mod = syn::parse_macro_input!(input as input::InputMod);
 
-    let output = match entrait_impl::output_tokens(attr, input_mod) {
+    let output = match entrait_impl::output_tokens(attr, input_mod, kind) {
         Ok(token_stream) => token_stream,
         Err(err) => err.into_compile_error(),
     };

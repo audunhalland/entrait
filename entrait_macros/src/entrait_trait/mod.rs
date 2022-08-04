@@ -67,7 +67,7 @@ pub fn output_tokens(
         &generics::ImplIndirection::None,
         generics::UseAssociatedFuture(false),
     );
-    let args = generics.arguments();
+    let args = generics.arguments(&generics::ImplIndirection::None);
     let self_ty = generic_idents.impl_path(item_trait.ident.span());
     let where_clause = ImplWhereClause {
         item_trait: &item_trait,
@@ -354,7 +354,11 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
     }
 
     fn trait_with_arguments(&self) -> TokenPair<impl ToTokens + '_, impl ToTokens + '_> {
-        TokenPair(&self.item_trait.ident, self.trait_generics.arguments())
+        TokenPair(
+            &self.item_trait.ident,
+            self.trait_generics
+                .arguments(&generics::ImplIndirection::None),
+        )
     }
 
     fn plus_static(&self) -> TokenPair<impl ToTokens, impl ToTokens> {

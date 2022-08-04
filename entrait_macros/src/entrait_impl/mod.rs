@@ -11,9 +11,16 @@ use input_attr::EntraitImplAttr;
 use quote::quote;
 use syn::spanned::Spanned;
 
+#[derive(Clone, Copy)]
+pub enum ImplKind {
+    Static,
+    Dyn,
+}
+
 pub fn output_tokens(
     attr: EntraitImplAttr,
     input_mod: InputMod,
+    kind: ImplKind,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let derive_impl = match input_mod
         .items
@@ -47,6 +54,7 @@ pub fn output_tokens(
                 input_fn,
                 &mut generics_analyzer,
                 signature::FnIndex(index),
+                signature::InjectDynImplParam(matches!(kind, ImplKind::Dyn)),
                 trait_span,
                 &attr.opts,
             )
@@ -64,15 +72,19 @@ pub fn output_tokens(
         &attr.opts,
         input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
     );
+    let impl_indirection = match kind {
+        ImplKind::Static => generics::ImplIndirection::ImplRef {
+            ref_lifetime: syn::Lifetime::new("'impl_life", trait_span),
+        },
+        ImplKind::Dyn => generics::ImplIndirection::DynCopy { ident: &impl_ident },
+    };
 
     let impl_block = impl_fn_codegen::gen_impl_block(
         &attr.opts,
         &attr.crate_idents,
         &derive_impl.trait_path.0,
         trait_span,
-        generics::ImplIndirection::ImplRef {
-            ref_lifetime: syn::Lifetime::new("'impl_life", trait_span),
-        },
+        impl_indirection,
         &trait_generics,
         &trait_dependency_mode,
         &trait_fns,
@@ -88,29 +100,38 @@ pub fn output_tokens(
         ..
     } = &input_mod;
 
-    Ok(quote! {
-        #(#attrs)*
-        #vis #mod_token #mod_ident {
-            #(#items)*
+    Ok(match kind {
+        ImplKind::Static => quote! {
+            #(#attrs)*
+            #vis #mod_token #mod_ident {
+                #(#items)*
 
-            const _: () = {
-                pub struct __ImplRef<'i, T>(&'i ::entrait::Impl<T>);
+                const _: () = {
+                    pub struct __ImplRef<'i, T>(&'i ::entrait::Impl<T>);
 
-                impl<'i, T> ::entrait::ImplRef<'i, T> for __ImplRef<'i, T> {
-                    fn from_impl(_impl: &'i ::entrait::Impl<T>) -> Self {
-                        Self(_impl)
+                    impl<'i, T> ::entrait::ImplRef<'i, T> for __ImplRef<'i, T> {
+                        fn from_impl(_impl: &'i ::entrait::Impl<T>) -> Self {
+                            Self(_impl)
+                        }
                     }
-                }
 
-                impl<'i, T: 'static> ::entrait::BorrowImplRef<'i, T> for #impl_ident {
-                    type Ref = __ImplRef<'i, T>;
-                }
+                    impl<'i, T: 'static> ::entrait::BorrowImplRef<'i, T> for #impl_ident {
+                        type Ref = __ImplRef<'i, T>;
+                    }
 
-                impl<T: 'static> ::entrait::BorrowImpl<T> for #impl_ident {}
+                    impl<T: 'static> ::entrait::BorrowImpl<T> for #impl_ident {}
 
+                    #impl_block
+                };
+            }
+        },
+        ImplKind::Dyn => quote! {
+            #(#attrs)*
+            #vis #mod_token #mod_ident {
+                #(#items)*
                 #impl_block
-            };
-        }
+            }
+        },
     })
 }
 

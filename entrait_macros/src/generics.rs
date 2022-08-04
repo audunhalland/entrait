@@ -9,9 +9,10 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub enum ImplIndirection {
+pub enum ImplIndirection<'s> {
     None,
     ImplRef { ref_lifetime: syn::Lifetime },
+    DynCopy { ident: &'s syn::Ident },
 }
 
 pub struct UseAssociatedFuture(pub bool);
@@ -115,9 +116,13 @@ impl TraitGenerics {
         }
     }
 
-    pub fn arguments(&self) -> ArgumentsGenerator {
+    pub fn arguments<'s>(
+        &'s self,
+        impl_indirection: &'s ImplIndirection,
+    ) -> ArgumentsGenerator<'s> {
         ArgumentsGenerator {
             params: &self.params,
+            impl_indirection,
         }
     }
 }
@@ -153,7 +158,7 @@ impl<'g, 'c> quote::ToTokens for ImplPath<'g, 'c> {
 pub struct ParamsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     impl_t: Option<&'g syn::Ident>,
-    impl_indirection: &'g ImplIndirection,
+    impl_indirection: &'g ImplIndirection<'g>,
     use_associated_future: UseAssociatedFuture,
 }
 
@@ -199,6 +204,7 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
 // Args as in impl<..Param> T for U<..Arg>
 pub struct ArgumentsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
+    impl_indirection: &'g ImplIndirection<'g>,
 }
 
 impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
@@ -209,6 +215,10 @@ impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
             syn::token::Comma::default(),
             syn::token::Gt::default(),
         );
+
+        if let ImplIndirection::DynCopy { .. } = &self.impl_indirection {
+            punctuator.push(syn::Ident::new("EntraitT", proc_macro2::Span::call_site()));
+        }
 
         for pair in self.params.pairs() {
             match pair.value() {
@@ -247,7 +257,7 @@ impl<'g> quote::ToTokens for TraitWhereClauseGenerator<'g> {
 pub struct ImplWhereClauseGenerator<'g, 's, 'c> {
     trait_where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
     trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
-    impl_indirection: &'s ImplIndirection,
+    impl_indirection: &'s ImplIndirection<'s>,
     trait_fns: &'s [TraitFn<'s>],
     span: proc_macro2::Span,
 }
@@ -281,7 +291,7 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
                                 self.span,
                             );
                         }
-                        ImplIndirection::ImplRef { .. } => {
+                        ImplIndirection::ImplRef { .. } | ImplIndirection::DynCopy { .. } => {
                             push_impl_t_bounds(
                                 stream,
                                 generic_idents.impl_path(self.span),
