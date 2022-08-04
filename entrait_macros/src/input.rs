@@ -12,7 +12,7 @@ use syn::parse::{Parse, ParseStream};
 
 pub enum FnInputMode<'a> {
     SingleFn(&'a syn::Ident),
-    Module,
+    Module(&'a syn::Ident),
 }
 
 pub enum Input {

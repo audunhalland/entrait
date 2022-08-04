@@ -26,7 +26,7 @@ use quote::{quote, ToTokens};
 use crate::analyze_generics::detect_trait_dependency_mode;
 
 pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
-    let mode = FnInputMode::SingleFn(&input_fn.fn_sig.ident);
+    let fn_input_mode = FnInputMode::SingleFn(&input_fn.fn_sig.ident);
     let mut generics_analyzer = GenericsAnalyzer::new();
     let trait_fns = [TraitFn::analyze(
         &input_fn,
@@ -37,7 +37,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
     )?];
 
     let trait_dependency_mode = detect_trait_dependency_mode(
-        &mode,
+        &fn_input_mode,
         &trait_fns,
         &attr.crate_idents,
         attr.trait_ident.span(),
@@ -51,7 +51,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         &trait_generics,
         &trait_dependency_mode,
         &trait_fns,
-        &mode,
+        &fn_input_mode,
     )?;
     let impl_block = impl_fn_codegen::gen_impl_block(
         &attr.opts,
@@ -80,7 +80,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
 }
 
 pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result<TokenStream> {
-    let mode = FnInputMode::Module;
+    let fn_input_mode = FnInputMode::Module(&input_mod.ident);
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
     let trait_fns = input_mod
         .items
@@ -99,7 +99,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         .collect::<syn::Result<Vec<_>>>()?;
 
     let trait_dependency_mode = detect_trait_dependency_mode(
-        &mode,
+        &fn_input_mode,
         &trait_fns,
         &attr.crate_idents,
         attr.trait_ident.span(),
@@ -115,7 +115,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         &trait_generics,
         &trait_dependency_mode,
         &trait_fns,
-        &mode,
+        &fn_input_mode,
     )?;
     let impl_block = impl_fn_codegen::gen_impl_block(
         &attr.opts,
@@ -158,7 +158,7 @@ fn gen_trait_def(
     trait_generics: &generics::TraitGenerics,
     trait_dependency_mode: &TraitDependencyMode,
     trait_fns: &[TraitFn],
-    mode: &FnInputMode<'_>,
+    fn_input_mode: &FnInputMode<'_>,
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
@@ -167,7 +167,7 @@ fn gen_trait_def(
             params: attributes::UnimockAttrParams {
                 crate_idents: &attr.crate_idents,
                 trait_fns,
-                mode,
+                mode: fn_input_mode,
                 span,
             },
             opts: &attr.opts,
@@ -198,7 +198,10 @@ fn gen_trait_def(
         trait_fns.iter(),
     );
 
-    let trait_visibility = TraitVisibility { attr, mode };
+    let trait_visibility = TraitVisibility {
+        attr,
+        fn_input_mode,
+    };
     let trait_ident = &attr.trait_ident;
 
     let fn_defs = trait_fns.iter().map(|trait_fn| {
@@ -227,13 +230,13 @@ fn gen_trait_def(
 
 struct TraitVisibility<'a> {
     attr: &'a EntraitFnAttr,
-    mode: &'a FnInputMode<'a>,
+    fn_input_mode: &'a FnInputMode<'a>,
 }
 
 impl<'a> ToTokens for TraitVisibility<'a> {
     fn to_tokens(&self, stream: &mut TokenStream) {
-        match &self.mode {
-            FnInputMode::Module => {
+        match &self.fn_input_mode {
+            FnInputMode::Module(_) => {
                 match &self.attr.trait_visibility {
                     syn::Visibility::Inherited => {
                         // When the trait is "private", it should only be accessible to the module outside,

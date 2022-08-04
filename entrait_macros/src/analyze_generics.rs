@@ -46,7 +46,7 @@ pub(super) fn detect_trait_dependency_mode<'t, 'c>(
         if let FnDeps::Concrete(ty) = &trait_fn.deps {
             return match input_mode {
                 FnInputMode::SingleFn(_) => Ok(TraitDependencyMode::Concrete(ty.as_ref())),
-                FnInputMode::Module => Err(syn::Error::new(
+                FnInputMode::Module(_) => Err(syn::Error::new(
                     ty.span(),
                     "Using concrete dependencies in a module is an anti-pattern. Instead, write a trait manually, use the #[entrait] attribute on it, and implement it for your application type",
                 )),

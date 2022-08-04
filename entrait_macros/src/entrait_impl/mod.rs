@@ -37,7 +37,7 @@ pub fn output_tokens(
     let trait_generics = generics_analyzer.into_trait_generics();
 
     let trait_dependency_mode = detect_trait_dependency_mode(
-        &crate::input::FnInputMode::Module,
+        &crate::input::FnInputMode::Module(&input_mod.ident),
         &trait_fns,
         &attr.crate_idents,
         trait_span,
@@ -73,38 +73,27 @@ pub fn output_tokens(
         #(#attrs)*
         #vis #mod_token #mod_ident {
             #(#items)*
-
-            const _: () = {
-                pub struct __ImplRef<'i, T>(&'i ::entrait::Impl<T>);
-
-                impl<'i, T> ::entrait::ImplRef<'i, T> for __ImplRef<'i, T> {
-                    fn from_impl(_impl: &'i ::entrait::Impl<T>) -> Self {
-                        Self(_impl)
-                    }
-                    fn as_impl(&self) -> &'i ::entrait::Impl<T> {
-                        self.0
-                    }
-                }
-
-                impl<'i, T: 'static> ::entrait::BorrowImplRef<'i, T> for super::#type_path {
-                    type Ref = __ImplRef<'i, T>;
-                }
-
-                impl<T: 'static> ::entrait::BorrowImpl<T> for super::#type_path {}
-
-                #impl_block
-
-                /*
-                impl<'i, T> Foo3 for MyImplRef<'i, T>
-                where
-                    Impl<T>: SomeDep,
-                {
-                    fn foo3(&self) -> i32 {
-                        self.as_impl().bar()
-                    }
-                }
-                */
-            };
         }
+
+        const _: () = {
+            pub struct __ImplRef<'i, T>(&'i ::entrait::Impl<T>);
+
+            impl<'i, T> ::entrait::ImplRef<'i, T> for __ImplRef<'i, T> {
+                fn from_impl(_impl: &'i ::entrait::Impl<T>) -> Self {
+                    Self(_impl)
+                }
+                fn as_impl(&self) -> &'i ::entrait::Impl<T> {
+                    self.0
+                }
+            }
+
+            impl<'i, T: 'static> ::entrait::BorrowImplRef<'i, T> for #type_path {
+                type Ref = __ImplRef<'i, T>;
+            }
+
+            impl<T: 'static> ::entrait::BorrowImpl<T> for #type_path {}
+
+            #impl_block
+        };
     })
 }
