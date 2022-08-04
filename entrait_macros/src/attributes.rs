@@ -1,7 +1,8 @@
-use super::{input_attr::EntraitFnAttr, TraitFn};
+use crate::analyze_generics::TraitFn;
 use crate::generics;
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
+use crate::opt::Opts;
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
@@ -20,14 +21,14 @@ impl<P: ToTokens> ToTokens for Attr<P> {
 
 pub struct ExportGatedAttr<'a, P: ToTokens> {
     pub params: P,
-    pub attr: &'a EntraitFnAttr,
+    pub opts: &'a Opts,
 }
 
 impl<'a, P: ToTokens> ToTokens for ExportGatedAttr<'a, P> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         push_tokens!(stream, syn::token::Pound::default());
         syn::token::Bracket::default().surround(stream, |stream| {
-            if self.attr.opts.export_value() {
+            if self.opts.export_value() {
                 push_tokens!(stream, self.params);
             } else {
                 push_tokens!(stream, syn::Ident::new("cfg_attr", Span::call_site()));
@@ -45,7 +46,7 @@ impl<'a, P: ToTokens> ToTokens for ExportGatedAttr<'a, P> {
 }
 
 pub struct EntraitForTraitParams<'a> {
-    pub attr: &'a EntraitFnAttr,
+    pub crate_idents: &'a CrateIdents,
 }
 
 impl<'a> ToTokens for EntraitForTraitParams<'a> {
@@ -56,9 +57,9 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
         push_tokens!(
             stream,
             Colon2::default(),
-            self.attr.crate_idents.entrait,
+            self.crate_idents.entrait,
             Colon2::default(),
-            self.attr.crate_idents.entrait
+            self.crate_idents.entrait
         );
         Paren::default().surround(stream, |stream| {
             push_tokens!(
@@ -76,7 +77,7 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
 }
 
 pub struct UnimockAttrParams<'s, 'i> {
-    pub attr: &'s EntraitFnAttr,
+    pub crate_idents: &'s CrateIdents,
     pub trait_fns: &'s [TraitFn<'i>],
     pub(super) mode: &'s FnInputMode<'s>,
     pub span: Span,
@@ -93,7 +94,7 @@ impl<'s, 'i> ToTokens for UnimockAttrParams<'s, 'i> {
         push_tokens!(
             stream,
             Colon2(span),
-            self.attr.crate_idents.entrait,
+            self.crate_idents.entrait,
             Colon2(span),
             __unimock_ident,
             Colon2(span),
@@ -110,7 +111,7 @@ impl<'s, 'i> ToTokens for UnimockAttrParams<'s, 'i> {
                     Ident::new("prefix", span),
                     Eq(span),
                     Colon2(span),
-                    self.attr.crate_idents.entrait,
+                    self.crate_idents.entrait,
                     Colon2(span),
                     __unimock_ident
                 );

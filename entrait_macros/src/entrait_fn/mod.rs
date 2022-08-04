@@ -5,11 +5,10 @@
 
 pub mod input_attr;
 
-mod attributes;
-
 use crate::analyze_generics;
 use crate::analyze_generics::GenericsAnalyzer;
 use crate::analyze_generics::TraitFn;
+use crate::attributes;
 use crate::generics::{self, TraitDependencyMode};
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
@@ -160,12 +159,12 @@ fn gen_trait_def(
     let opt_unimock_attr = match attr.opts.default_option(attr.opts.unimock, false) {
         SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
             params: attributes::UnimockAttrParams {
-                attr,
+                crate_idents: &attr.crate_idents,
                 trait_fns,
                 mode,
                 span,
             },
-            attr,
+            opts: &attr.opts,
         }),
         _ => None,
     };
@@ -173,7 +172,9 @@ fn gen_trait_def(
     // let opt_unimock_attr = attr.opt_unimock_attribute(trait_fns, mode);
     let opt_entrait_for_trait_attr = match trait_dependency_mode {
         TraitDependencyMode::Concrete(_) => {
-            Some(attributes::Attr(attributes::EntraitForTraitParams { attr }))
+            Some(attributes::Attr(attributes::EntraitForTraitParams {
+                crate_idents: &attr.crate_idents,
+            }))
         }
         _ => None,
     };
@@ -181,7 +182,7 @@ fn gen_trait_def(
     let opt_mockall_automock_attr = match attr.opts.default_option(attr.opts.mockall, false) {
         SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
             params: attributes::MockallAutomockParams { span },
-            attr,
+            opts: &attr.opts,
         }),
         _ => None,
     };
