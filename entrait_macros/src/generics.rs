@@ -258,7 +258,7 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
 
         // The where clause looks quite different depending on what kind of Deps is used in the function.
         match &self.trait_dependency_mode {
-            TraitDependencyMode::Generic(_) => {
+            TraitDependencyMode::Generic(generic_idents) => {
                 // Self bounds
 
                 let has_bounds = self.trait_fns.iter().any(|trait_fn| match &trait_fn.deps {
@@ -271,7 +271,8 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
                         let mut bound_punctuator = Punctuator::new(
                             stream,
                             TokenPair(
-                                syn::token::SelfType(self.span),
+                                generic_idents.impl_path(self.span),
+                                // syn::token::SelfType(self.span),
                                 syn::token::Colon(self.span),
                             ),
                             syn::token::Add(self.span),

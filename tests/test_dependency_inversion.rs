@@ -6,22 +6,51 @@ mod simple_static {
         fn foo(&self) -> i32;
     }
 
+    #[entrait(Bar)]
+    fn bar<D>(deps: &D) -> i32 {
+        42
+    }
+
     pub struct MyImpl;
 
-    #[entrait_impl(Foo for MyImpl)]
+    #[entrait_impl]
     mod my_impl {
-        pub fn foo<D>(deps: &D) -> i32 {
+        #[derive_impl(super::Foo)]
+        pub struct MyImpl;
+
+        pub fn foo(deps: &impl super::Bar) -> i32 {
             42
         }
     }
 
     impl DelegateFoo<Self> for () {
-        type By = MyImpl;
+        type By = my_impl::MyImpl;
     }
 
+    #[test]
     fn test() {
         let app = Impl::new(());
 
-        // app.foo();
+        assert_eq!(42, app.foo());
     }
+}
+
+mod scopes {
+    /*
+    mod lol {
+        pub trait Foo {}
+
+        pub mod bar {
+            pub trait Foo {}
+        }
+    }
+
+    use lol::bar;
+
+    mod hei {
+        fn harry() -> std::string::String {}
+
+        impl super::bar::Foo for () {}
+    }
+    */
 }

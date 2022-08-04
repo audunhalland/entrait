@@ -62,6 +62,7 @@ impl ToTokens for InputMod {
 
 pub enum ModItem {
     PubFn(Box<InputFn>),
+    DeriveImpl(DeriveImpl),
     Unknown(ItemUnknown),
 }
 
@@ -70,6 +71,13 @@ impl ModItem {
     pub fn filter_pub_fn(&self) -> Option<&InputFn> {
         match self {
             Self::PubFn(input_fn) => Some(input_fn),
+            _ => None,
+        }
+    }
+
+    pub fn filter_derive_impl(&self) -> Option<&DeriveImpl> {
+        match self {
+            Self::DeriveImpl(derive_impl) => Some(derive_impl),
             _ => None,
         }
     }
@@ -90,12 +98,35 @@ impl ToTokens for ModItem {
                 }
                 push_tokens!(stream, fn_vis, fn_sig, fn_body);
             }
+            ModItem::DeriveImpl(derive_impl) => {
+                for attr in &derive_impl.attrs {
+                    push_tokens!(stream, attr);
+                }
+                push_tokens!(
+                    stream,
+                    derive_impl.vis,
+                    derive_impl.struct_token,
+                    derive_impl.ident,
+                    derive_impl.semi
+                );
+            }
             ModItem::Unknown(unknown) => {
                 unknown.to_tokens(stream);
             }
         }
     }
 }
+
+pub struct DeriveImpl {
+    pub attrs: Vec<syn::Attribute>,
+    pub trait_path: DeriveImplTraitPath,
+    pub vis: syn::Visibility,
+    pub struct_token: syn::token::Struct,
+    pub ident: syn::Ident,
+    pub semi: syn::token::Semi,
+}
+
+pub struct DeriveImplTraitPath(pub syn::Path);
 
 pub struct ItemUnknown {
     attrs: Vec<syn::Attribute>,
@@ -176,7 +207,24 @@ fn parse_mod(
 
 impl Parse for ModItem {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let attrs = input.call(syn::Attribute::parse_outer)?;
+        let mut attrs = input.call(syn::Attribute::parse_outer)?;
+
+        if let Some(trait_path) = find_and_remove_derive_impl(&mut attrs)? {
+            let vis: syn::Visibility = input.parse()?;
+            let struct_token = input.parse()?;
+            let ident = input.parse()?;
+            let semi = input.parse()?;
+
+            return Ok(ModItem::DeriveImpl(DeriveImpl {
+                attrs,
+                trait_path,
+                vis,
+                struct_token,
+                ident,
+                semi,
+            }));
+        }
+
         let vis: syn::Visibility = input.parse()?;
         let unknown = input.fork();
 
@@ -202,6 +250,34 @@ impl Parse for ModItem {
             let tokens = parse_matched_braces_or_ending_semi(input)?;
             Ok(ModItem::Unknown(ItemUnknown { attrs, vis, tokens }))
         }
+    }
+}
+
+fn find_and_remove_derive_impl(
+    attributes: &mut Vec<syn::Attribute>,
+) -> syn::Result<Option<DeriveImplTraitPath>> {
+    let index = attributes.iter().position(|attribute| {
+        attribute.path.segments.len() == 1
+            && attribute.path.segments.first().unwrap().ident == "derive_impl"
+    });
+
+    if let Some(index) = index {
+        let attribute = attributes.remove(index);
+        let path = syn::parse2::<DeriveImplTraitPath>(attribute.tokens)?;
+        Ok(Some(path))
+    } else {
+        Ok(None)
+    }
+}
+
+impl Parse for DeriveImplTraitPath {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        let _ = syn::parenthesized!(content in input);
+
+        let path = content.parse()?;
+
+        Ok(DeriveImplTraitPath(path))
     }
 }
 
