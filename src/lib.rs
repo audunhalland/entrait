@@ -743,8 +743,6 @@ pub mod __async_trait {
 /// TODO: Document
 pub trait ImplRef<'i, T> {
     fn from_impl(_impl: &'i Impl<T>) -> Self;
-
-    fn as_impl(&self) -> &'i Impl<T>;
 }
 
 /// TODO: Document

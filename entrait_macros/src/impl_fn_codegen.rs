@@ -2,7 +2,6 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use quote::{quote, quote_spanned};
-use syn::spanned::Spanned;
 
 use crate::analyze_generics::TraitFn;
 use crate::attributes;
@@ -29,15 +28,14 @@ use crate::token_util::TokenPair;
 pub fn gen_impl_block(
     opts: &Opts,
     crate_idents: &CrateIdents,
-    trait_ref: &(impl ToTokens + Spanned),
+    trait_ref: &impl ToTokens,
+    trait_span: Span,
     impl_indirection: ImplIndirection,
     trait_generics: &generics::TraitGenerics,
     trait_dependency_mode: &TraitDependencyMode,
     trait_fns: &[TraitFn],
     use_associated_future: generics::UseAssociatedFuture,
 ) -> TokenStream {
-    let span = trait_ref.span();
-
     let async_trait_attribute = opt_async_trait_attribute(opts, crate_idents, trait_fns.iter());
     let params = trait_generics.impl_params(
         trait_dependency_mode,
@@ -45,13 +43,14 @@ pub fn gen_impl_block(
         use_associated_future,
     );
     let args = trait_generics.arguments();
-    let self_ty = SelfTy(trait_dependency_mode, &impl_indirection, span);
-    let where_clause = trait_generics.impl_where_clause(trait_fns, trait_dependency_mode, span);
+    let self_ty = SelfTy(trait_dependency_mode, &impl_indirection, trait_span);
+    let where_clause =
+        trait_generics.impl_where_clause(trait_fns, trait_dependency_mode, trait_span);
 
     let items = trait_fns.iter().map(|trait_fn| {
         let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl;
 
-        let fn_item = gen_delegating_fn_item(trait_fn, span);
+        let fn_item = gen_delegating_fn_item(trait_fn, &impl_indirection, trait_span);
 
         quote! {
             #associated_fut_impl
@@ -59,7 +58,7 @@ pub fn gen_impl_block(
         }
     });
 
-    quote_spanned! { span=>
+    quote_spanned! { trait_span=>
         #async_trait_attribute
         impl #params #trait_ref #args for #self_ty #where_clause {
             #(#items)*
@@ -68,7 +67,11 @@ pub fn gen_impl_block(
 }
 
 /// Generate the fn (in the impl block) that calls the entraited fn
-fn gen_delegating_fn_item(trait_fn: &TraitFn, span: Span) -> TokenStream {
+fn gen_delegating_fn_item(
+    trait_fn: &TraitFn,
+    impl_indirection: &ImplIndirection,
+    span: Span,
+) -> TokenStream {
     let entrait_sig = &trait_fn.entrait_sig;
     let trait_fn_sig = &trait_fn.sig();
     let deps = &trait_fn.deps;
@@ -78,10 +81,7 @@ fn gen_delegating_fn_item(trait_fn: &TraitFn, span: Span) -> TokenStream {
 
     let opt_self_comma = match (deps, entrait_sig.sig.inputs.first()) {
         (generics::FnDeps::NoDeps { .. }, _) | (_, None) => None,
-        (_, Some(_)) => Some(TokenPair(
-            syn::token::SelfValue(span),
-            syn::token::Comma(span),
-        )),
+        (_, Some(_)) => Some(SelfArgComma(impl_indirection, span)),
     };
 
     let arguments = entrait_sig
@@ -132,6 +132,29 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
             },
             TraitDependencyMode::Concrete(ty) => {
                 push_tokens!(stream, ty)
+            }
+        }
+    }
+}
+
+struct SelfArgComma<'g>(&'g ImplIndirection, Span);
+
+impl<'g> quote::ToTokens for SelfArgComma<'g> {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        let span = self.1;
+        match &self.0 {
+            ImplIndirection::None => {
+                push_tokens!(stream, syn::token::SelfValue(span), syn::token::Comma(span));
+            }
+            ImplIndirection::ImplRef { .. } => {
+                push_tokens!(
+                    stream,
+                    syn::token::SelfValue(span),
+                    syn::token::Dot(span),
+                    syn::LitInt::new("0", span),
+                    syn::token::Comma(span)
+                );
+                // syn::token::Paren(span).surround(stream, |_| {});
             }
         }
     }
