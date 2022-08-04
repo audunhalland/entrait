@@ -32,7 +32,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         &input_fn,
         &mut generics_analyzer,
         signature::FnIndex(0),
-        &attr.trait_ident,
+        attr.trait_ident.span(),
         &attr.opts,
     )?];
 
@@ -88,7 +88,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
                 input_fn,
                 &mut generics_analyzer,
                 signature::FnIndex(index),
-                &attr.trait_ident,
+                attr.trait_ident.span(),
                 &attr.opts,
             )
         })

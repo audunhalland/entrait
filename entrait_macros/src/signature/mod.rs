@@ -5,7 +5,7 @@ use crate::generics::FnDeps;
 use crate::input::InputFn;
 use crate::opt::Opts;
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use quote::quote_spanned;
 
@@ -36,7 +36,7 @@ pub enum SigComponent {
 pub struct UserProvidedLifetime(bool);
 
 pub struct SignatureConverter<'a> {
-    trait_ident: &'a syn::Ident,
+    trait_span: Span,
     opts: &'a Opts,
     input_fn: &'a InputFn,
     deps: &'a FnDeps,
@@ -52,14 +52,14 @@ enum ReceiverGeneration {
 
 impl<'a> SignatureConverter<'a> {
     pub fn new(
-        trait_ident: &'a syn::Ident,
+        trait_span: Span,
         opts: &'a Opts,
         input_fn: &'a InputFn,
         deps: &'a FnDeps,
         fn_index: FnIndex,
     ) -> SignatureConverter<'a> {
         Self {
-            trait_ident,
+            trait_span,
             opts,
             input_fn,
             deps,
@@ -121,7 +121,7 @@ impl<'a> SignatureConverter<'a> {
     }
 
     fn generate_receiver(&self, sig: &mut syn::Signature, receiver_generation: ReceiverGeneration) {
-        let span = self.trait_ident.span();
+        let span = self.trait_span;
         match receiver_generation {
             ReceiverGeneration::Insert => {
                 sig.inputs
@@ -159,7 +159,7 @@ impl<'a> SignatureConverter<'a> {
         entrait_sig: &mut EntraitSignature,
         receiver_generation: ReceiverGeneration,
     ) {
-        let span = self.trait_ident.span();
+        let span = self.trait_span;
 
         lifetimes::de_elide_lifetimes(entrait_sig, receiver_generation);
 
