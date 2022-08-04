@@ -62,8 +62,11 @@ pub fn output_tokens(
         })
         .collect::<Vec<_>>();
 
-    let params =
-        generics.impl_params_from_idents(&generic_idents, generics::UseAssociatedFuture(false));
+    let params = generics.impl_params_from_idents(
+        &generic_idents,
+        &generics::ImplIndirection::None,
+        generics::UseAssociatedFuture(false),
+    );
     let args = generics.arguments();
     let self_ty = generic_idents.impl_path(item_trait.ident.span());
     let where_clause = ImplWhereClause {

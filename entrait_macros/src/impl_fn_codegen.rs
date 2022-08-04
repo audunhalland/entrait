@@ -7,6 +7,7 @@ use syn::spanned::Spanned;
 use crate::analyze_generics::TraitFn;
 use crate::attributes;
 use crate::generics;
+use crate::generics::ImplIndirection;
 use crate::generics::TraitDependencyMode;
 use crate::idents::CrateIdents;
 use crate::input::InputFn;
@@ -29,6 +30,7 @@ pub fn gen_impl_block(
     opts: &Opts,
     crate_idents: &CrateIdents,
     trait_ref: &(impl ToTokens + Spanned),
+    impl_indirection: ImplIndirection,
     trait_generics: &generics::TraitGenerics,
     trait_dependency_mode: &TraitDependencyMode,
     trait_fns: &[TraitFn],
@@ -37,9 +39,13 @@ pub fn gen_impl_block(
     let span = trait_ref.span();
 
     let async_trait_attribute = opt_async_trait_attribute(opts, crate_idents, trait_fns.iter());
-    let params = trait_generics.impl_params(trait_dependency_mode, use_associated_future);
+    let params = trait_generics.impl_params(
+        trait_dependency_mode,
+        &impl_indirection,
+        use_associated_future,
+    );
     let args = trait_generics.arguments();
-    let self_ty = SelfTy(trait_dependency_mode, span);
+    let self_ty = SelfTy(trait_dependency_mode, &impl_indirection, span);
     let where_clause = trait_generics.impl_where_clause(trait_fns, trait_dependency_mode, span);
 
     let items = trait_fns.iter().map(|trait_fn| {
@@ -102,15 +108,28 @@ fn gen_delegating_fn_item(trait_fn: &TraitFn, span: Span) -> TokenStream {
     }
 }
 
-struct SelfTy<'g, 'c>(&'g TraitDependencyMode<'g, 'c>, Span);
+struct SelfTy<'g, 'c>(&'g TraitDependencyMode<'g, 'c>, &'g ImplIndirection, Span);
 
 impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
     fn to_tokens(&self, stream: &mut TokenStream) {
-        let span = self.1;
+        let span = self.2;
         match &self.0 {
-            TraitDependencyMode::Generic(idents) => {
-                push_tokens!(stream, idents.impl_path(span))
-            }
+            TraitDependencyMode::Generic(idents) => match self.1 {
+                ImplIndirection::None => {
+                    push_tokens!(stream, idents.impl_path(span))
+                }
+                ImplIndirection::ImplRef { ref_lifetime } => {
+                    push_tokens!(
+                        stream,
+                        syn::Ident::new("__ImplRef", span),
+                        syn::token::Lt(span),
+                        ref_lifetime,
+                        syn::token::Comma(span),
+                        idents.impl_t,
+                        syn::token::Gt(span)
+                    );
+                }
+            },
             TraitDependencyMode::Concrete(ty) => {
                 push_tokens!(stream, ty)
             }

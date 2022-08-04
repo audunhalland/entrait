@@ -6,6 +6,12 @@ use crate::{
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
 
+#[derive(Clone)]
+pub enum ImplIndirection {
+    None,
+    ImplRef { ref_lifetime: syn::Lifetime },
+}
+
 pub struct UseAssociatedFuture(pub bool);
 
 pub fn detect_use_associated_future<'i>(
@@ -49,6 +55,7 @@ impl TraitGenerics {
         ParamsGenerator {
             params: &self.params,
             impl_t: None,
+            impl_indirection: &ImplIndirection::None,
             use_associated_future: UseAssociatedFuture(false),
         }
     }
@@ -62,6 +69,7 @@ impl TraitGenerics {
     pub fn impl_params<'i>(
         &'i self,
         trait_dependency_mode: &'i TraitDependencyMode<'i, '_>,
+        impl_indirection: &'i ImplIndirection,
         use_associated_future: UseAssociatedFuture,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
@@ -70,6 +78,7 @@ impl TraitGenerics {
                 TraitDependencyMode::Generic(idents) => Some(&idents.impl_t),
                 TraitDependencyMode::Concrete(_) => None,
             },
+            impl_indirection,
             use_associated_future,
         }
     }
@@ -77,11 +86,13 @@ impl TraitGenerics {
     pub fn impl_params_from_idents<'i>(
         &'i self,
         idents: &'i GenericIdents,
+        impl_indirection: &'i ImplIndirection,
         use_associated_future: UseAssociatedFuture,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
             params: &self.params,
             impl_t: Some(&idents.impl_t),
+            impl_indirection,
             use_associated_future,
         }
     }
@@ -138,6 +149,7 @@ impl<'g, 'c> quote::ToTokens for ImplPath<'g, 'c> {
 pub struct ParamsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     impl_t: Option<&'g syn::Ident>,
+    impl_indirection: &'g ImplIndirection,
     use_associated_future: UseAssociatedFuture,
 }
 
@@ -149,6 +161,10 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
             syn::token::Comma::default(),
             syn::token::Gt::default(),
         );
+
+        if let ImplIndirection::ImplRef { ref_lifetime } = &self.impl_indirection {
+            punctuator.push(ref_lifetime);
+        }
 
         if let Some(impl_t) = &self.impl_t {
             punctuator.push_fn(|stream| {

@@ -1,6 +1,9 @@
 pub mod input_attr;
 
 use crate::analyze_generics;
+use crate::analyze_generics::detect_trait_dependency_mode;
+use crate::generics;
+use crate::impl_fn_codegen;
 use crate::input::{InputMod, ModItem};
 use crate::signature;
 use input_attr::EntraitImplAttr;
@@ -31,6 +34,31 @@ pub fn output_tokens(
             )
         })
         .collect::<syn::Result<Vec<_>>>()?;
+    let trait_generics = generics_analyzer.into_trait_generics();
+
+    let trait_dependency_mode = detect_trait_dependency_mode(
+        &crate::input::FnInputMode::Module,
+        &trait_fns,
+        &attr.crate_idents,
+        trait_span,
+    )?;
+    let use_associated_future = generics::detect_use_associated_future(
+        &attr.opts,
+        input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
+    );
+
+    let impl_block = impl_fn_codegen::gen_impl_block(
+        &attr.opts,
+        &attr.crate_idents,
+        &attr.trait_path,
+        generics::ImplIndirection::ImplRef {
+            ref_lifetime: syn::Lifetime::new("'impl_life", trait_span),
+        },
+        &trait_generics,
+        &trait_dependency_mode,
+        &trait_fns,
+        use_associated_future,
+    );
 
     let InputMod {
         attrs,
@@ -63,6 +91,8 @@ pub fn output_tokens(
                 }
 
                 impl<T: 'static> ::entrait::BorrowImpl<T> for super::#type_path {}
+
+                #impl_block
 
                 /*
                 impl<'i, T> Foo3 for MyImplRef<'i, T>
