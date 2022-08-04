@@ -25,7 +25,7 @@ impl<'a, P: ToTokens> ToTokens for ExportGatedAttr<'a, P> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         push_tokens!(stream, syn::token::Pound::default());
         syn::token::Bracket::default().surround(stream, |stream| {
-            if self.attr.export_value() {
+            if self.attr.opts.export_value() {
                 push_tokens!(stream, self.params);
             } else {
                 push_tokens!(stream, syn::Ident::new("cfg_attr", Span::call_site()));

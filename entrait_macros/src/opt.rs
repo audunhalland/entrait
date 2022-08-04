@@ -2,6 +2,8 @@ use proc_macro2::Span;
 use syn::parse::{Parse, ParseStream};
 
 pub struct Opts {
+    pub default_span: Span,
+
     pub no_deps: Option<SpanOpt<bool>>,
     pub debug: Option<SpanOpt<bool>>,
     pub async_strategy: Option<SpanOpt<AsyncStrategy>>,
@@ -19,6 +21,29 @@ pub struct Opts {
 impl Opts {
     pub fn set_fallback_async_strategy(&mut self, strategy: AsyncStrategy) {
         self.async_strategy.get_or_insert(SpanOpt::of(strategy));
+    }
+
+    pub fn no_deps_value(&self) -> bool {
+        self.default_option(self.no_deps, false).0
+    }
+
+    pub fn debug_value(&self) -> bool {
+        self.default_option(self.debug, false).0
+    }
+
+    pub fn async_strategy(&self) -> SpanOpt<AsyncStrategy> {
+        self.default_option(self.async_strategy, AsyncStrategy::NoHack)
+    }
+
+    pub fn export_value(&self) -> bool {
+        self.default_option(self.export, false).0
+    }
+
+    pub fn default_option<T>(&self, option: Option<SpanOpt<T>>, default: T) -> SpanOpt<T> {
+        match option {
+            Some(option) => option,
+            None => SpanOpt(default, self.default_span),
+        }
     }
 }
 

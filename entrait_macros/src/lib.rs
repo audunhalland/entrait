@@ -15,6 +15,7 @@ mod generics;
 mod idents;
 mod input;
 mod opt;
+mod signature;
 mod token_util;
 
 use input::Input;
@@ -143,7 +144,7 @@ fn invoke(
 
             (
                 entrait_fn::entrait_for_single_fn(&attr, input_fn),
-                attr.debug_value(),
+                attr.opts.debug_value(),
             )
         }
         Input::Mod(input_mod) => {
@@ -152,7 +153,7 @@ fn invoke(
 
             (
                 entrait_fn::entrait_for_mod(&attr, input_mod),
-                attr.debug_value(),
+                attr.opts.debug_value(),
             )
         }
         Input::Trait(item_trait) => {

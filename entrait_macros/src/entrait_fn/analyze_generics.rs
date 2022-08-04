@@ -49,7 +49,7 @@ impl GenericsAnalyzer {
 
     pub fn analyze_fn_deps(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<FnDeps> {
         let span = attr.trait_ident.span();
-        if attr.no_deps_value() {
+        if attr.opts.no_deps_value() {
             return self.deps_with_generics(FnDeps::NoDeps, &func.fn_sig.generics);
         }
 

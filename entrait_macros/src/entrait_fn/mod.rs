@@ -7,11 +7,11 @@ pub mod input_attr;
 
 mod analyze_generics;
 mod attributes;
-mod signature;
 
 use crate::generics::{self, TraitDependencyMode};
 use crate::input::{InputFn, InputMod, ModItem};
 use crate::opt::*;
+use crate::signature;
 use crate::token_util::{push_tokens, TokenPair};
 use analyze_generics::GenericsAnalyzer;
 use input_attr::*;
@@ -161,8 +161,14 @@ impl<'i> TraitFn<'i> {
         attr: &EntraitFnAttr,
     ) -> syn::Result<Self> {
         let deps = analyzer.analyze_fn_deps(source, attr)?;
-        let entrait_sig =
-            signature::SignatureConverter::new(attr, source, &deps, fn_index).convert();
+        let entrait_sig = signature::SignatureConverter::new(
+            &attr.trait_ident,
+            &attr.opts,
+            source,
+            &deps,
+            fn_index,
+        )
+        .convert();
         Ok(Self {
             source,
             deps,
@@ -184,7 +190,7 @@ fn gen_trait_def(
 ) -> syn::Result<TokenStream> {
     let span = attr.trait_ident.span();
 
-    let opt_unimock_attr = match attr.default_option(attr.opts.unimock, false) {
+    let opt_unimock_attr = match attr.opts.default_option(attr.opts.unimock, false) {
         SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
             params: attributes::UnimockAttrParams {
                 attr,
@@ -205,7 +211,7 @@ fn gen_trait_def(
         _ => None,
     };
 
-    let opt_mockall_automock_attr = match attr.default_option(attr.opts.mockall, false) {
+    let opt_mockall_automock_attr = match attr.opts.default_option(attr.opts.mockall, false) {
         SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
             params: attributes::MockallAutomockParams { span },
             attr,
@@ -386,9 +392,9 @@ impl InputFn {
         }
     }
 
-    pub fn use_associated_future(&self, attr: &EntraitFnAttr) -> bool {
+    pub fn use_associated_future(&self, opts: &Opts) -> bool {
         matches!(
-            (attr.async_strategy(), self.fn_sig.asyncness),
+            (opts.async_strategy(), self.fn_sig.asyncness),
             (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
         )
     }
@@ -399,7 +405,7 @@ fn opt_async_trait_attribute<'a, 'o>(
     trait_fns: impl Iterator<Item = &'o TraitFn<'o>>,
 ) -> Option<impl ToTokens + 'a> {
     match (
-        attr.async_strategy(),
+        attr.opts.async_strategy(),
         has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
     ) {
         (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
@@ -418,7 +424,7 @@ fn detect_use_associated_future<'i>(
 ) -> generics::UseAssociatedFuture {
     generics::UseAssociatedFuture(matches!(
         (
-            attr.async_strategy(),
+            attr.opts.async_strategy(),
             has_any_async(input_fns.map(|input_fn| &input_fn.fn_sig))
         ),
         (SpanOpt(AsyncStrategy::AssociatedFuture, _), true)

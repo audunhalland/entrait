@@ -2,6 +2,7 @@ use crate::idents::CrateIdents;
 use crate::opt::*;
 
 use syn::parse::{Parse, ParseStream};
+use syn::spanned::Spanned;
 
 pub struct EntraitImplAttr {
     pub dyn_token: Option<syn::token::Dyn>,
@@ -17,9 +18,11 @@ impl Parse for EntraitImplAttr {
         let span = input.span();
 
         let dyn_token = input.parse()?;
-        let trait_path = input.parse()?;
+        let trait_path: syn::Path = input.parse()?;
         let for_token = input.parse()?;
         let type_path = input.parse()?;
+
+        let default_span = trait_path.span();
 
         let mut debug = None;
 
@@ -46,6 +49,7 @@ impl Parse for EntraitImplAttr {
             for_token,
             type_path,
             opts: Opts {
+                default_span,
                 no_deps: None,
                 debug,
                 async_strategy: None,

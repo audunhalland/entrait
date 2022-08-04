@@ -47,6 +47,7 @@ impl Parse for EntraitTraitAttr {
         Ok(Self {
             delegation_trait: None,
             opts: Opts {
+                default_span: proc_macro2::Span::call_site(),
                 no_deps: None,
                 debug,
                 async_strategy: None,

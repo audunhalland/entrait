@@ -1,9 +1,9 @@
 mod fn_params;
 mod lifetimes;
 
-use super::input_attr::EntraitFnAttr;
 use crate::generics::FnDeps;
 use crate::input::InputFn;
+use crate::opt::Opts;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -36,7 +36,8 @@ pub enum SigComponent {
 pub struct UserProvidedLifetime(bool);
 
 pub struct SignatureConverter<'a> {
-    attr: &'a EntraitFnAttr,
+    trait_ident: &'a syn::Ident,
+    opts: &'a Opts,
     input_fn: &'a InputFn,
     deps: &'a FnDeps,
     fn_index: FnIndex,
@@ -51,13 +52,15 @@ enum ReceiverGeneration {
 
 impl<'a> SignatureConverter<'a> {
     pub fn new(
-        attr: &'a EntraitFnAttr,
+        trait_ident: &'a syn::Ident,
+        opts: &'a Opts,
         input_fn: &'a InputFn,
         deps: &'a FnDeps,
         fn_index: FnIndex,
     ) -> SignatureConverter<'a> {
         Self {
-            attr,
+            trait_ident,
+            opts,
             input_fn,
             deps,
             fn_index,
@@ -87,7 +90,7 @@ impl<'a> SignatureConverter<'a> {
         let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
         self.generate_receiver(&mut entrait_sig.sig, receiver_generation);
 
-        if self.input_fn.use_associated_future(self.attr) {
+        if self.input_fn.use_associated_future(self.opts) {
             self.convert_to_associated_future(&mut entrait_sig, receiver_generation);
         }
 
@@ -105,7 +108,7 @@ impl<'a> SignatureConverter<'a> {
             FnDeps::NoDeps { .. } => ReceiverGeneration::Insert,
             _ => {
                 if sig.inputs.is_empty() {
-                    if self.input_fn.use_associated_future(self.attr) {
+                    if self.input_fn.use_associated_future(self.opts) {
                         ReceiverGeneration::Insert
                     } else {
                         ReceiverGeneration::None // bug?
@@ -118,7 +121,7 @@ impl<'a> SignatureConverter<'a> {
     }
 
     fn generate_receiver(&self, sig: &mut syn::Signature, receiver_generation: ReceiverGeneration) {
-        let span = self.attr.trait_ident.span();
+        let span = self.trait_ident.span();
         match receiver_generation {
             ReceiverGeneration::Insert => {
                 sig.inputs
@@ -156,7 +159,7 @@ impl<'a> SignatureConverter<'a> {
         entrait_sig: &mut EntraitSignature,
         receiver_generation: ReceiverGeneration,
     ) {
-        let span = self.attr.trait_ident.span();
+        let span = self.trait_ident.span();
 
         lifetimes::de_elide_lifetimes(entrait_sig, receiver_generation);
 
