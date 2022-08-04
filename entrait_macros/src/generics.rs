@@ -1,3 +1,5 @@
+use proc_macro2::TokenStream;
+
 use crate::{
     analyze_generics::TraitFn,
     idents::GenericIdents,
@@ -101,11 +103,13 @@ impl TraitGenerics {
         &'g self,
         trait_fns: &'s [TraitFn],
         trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
+        impl_indirection: &'s ImplIndirection,
         span: proc_macro2::Span,
     ) -> ImplWhereClauseGenerator<'g, 's, 'c> {
         ImplWhereClauseGenerator {
             trait_where_predicates: &self.where_predicates,
             trait_dependency_mode,
+            impl_indirection,
             trait_fns,
             span,
         }
@@ -243,6 +247,7 @@ impl<'g> quote::ToTokens for TraitWhereClauseGenerator<'g> {
 pub struct ImplWhereClauseGenerator<'g, 's, 'c> {
     trait_where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
     trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
+    impl_indirection: &'s ImplIndirection,
     trait_fns: &'s [TraitFn<'s>],
     span: proc_macro2::Span,
 }
@@ -259,7 +264,7 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
         // The where clause looks quite different depending on what kind of Deps is used in the function.
         match &self.trait_dependency_mode {
             TraitDependencyMode::Generic(generic_idents) => {
-                // Self bounds
+                // Impl<T> bounds
 
                 let has_bounds = self.trait_fns.iter().any(|trait_fn| match &trait_fn.deps {
                     FnDeps::Generic { trait_bounds, .. } => !trait_bounds.is_empty(),
@@ -267,24 +272,22 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
                 });
 
                 if has_bounds {
-                    punctuator.push_fn(|stream| {
-                        let mut bound_punctuator = Punctuator::new(
-                            stream,
-                            TokenPair(
+                    punctuator.push_fn(|stream| match self.impl_indirection {
+                        ImplIndirection::None => {
+                            push_impl_t_bounds(
+                                stream,
+                                syn::token::SelfType(self.span),
+                                self.trait_fns,
+                                self.span,
+                            );
+                        }
+                        ImplIndirection::ImplRef { .. } => {
+                            push_impl_t_bounds(
+                                stream,
                                 generic_idents.impl_path(self.span),
-                                // syn::token::SelfType(self.span),
-                                syn::token::Colon(self.span),
-                            ),
-                            syn::token::Add(self.span),
-                            EmptyToken,
-                        );
-
-                        for trait_fn in self.trait_fns {
-                            if let FnDeps::Generic { trait_bounds, .. } = &trait_fn.deps {
-                                for bound in trait_bounds {
-                                    bound_punctuator.push(bound);
-                                }
-                            }
+                                self.trait_fns,
+                                self.span,
+                            );
                         }
                     });
                 }
@@ -297,6 +300,28 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
 
         for predicate in self.trait_where_predicates {
             punctuator.push(predicate);
+        }
+    }
+}
+
+fn push_impl_t_bounds(
+    stream: &mut TokenStream,
+    bound_param: impl quote::ToTokens,
+    trait_fns: &[TraitFn],
+    span: proc_macro2::Span,
+) {
+    let mut bound_punctuator = Punctuator::new(
+        stream,
+        TokenPair(bound_param, syn::token::Colon(span)),
+        syn::token::Add(span),
+        EmptyToken,
+    );
+
+    for trait_fn in trait_fns {
+        if let FnDeps::Generic { trait_bounds, .. } = &trait_fn.deps {
+            for bound in trait_bounds {
+                bound_punctuator.push(bound);
+            }
         }
     }
 }

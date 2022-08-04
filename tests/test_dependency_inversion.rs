@@ -1,28 +1,33 @@
 mod simple_static {
     use entrait::*;
 
-    #[entrait(delegate_by = DelegateFoo)]
-    trait Foo {
+    #[entrait(delegate_by = DelegateFoobar)]
+    trait Foobar {
         fn foo(&self) -> i32;
+        fn bar(&self) -> u32;
     }
 
-    #[entrait(pub Bar)]
-    fn bar<D>(_: &D) -> i32 {
+    #[entrait(pub Baz)]
+    fn baz<D>(_: &D) -> i32 {
         42
     }
 
     #[entrait_impl]
-    mod my_impl {
-        #[derive_impl(super::Foo)]
-        pub struct MyImpl;
-
-        pub fn foo(deps: &impl super::Bar) -> i32 {
-            deps.bar()
+    mod foobar_impl {
+        pub fn bar<D>(_: &D) -> u32 {
+            0
         }
+
+        pub fn foo(deps: &impl super::Baz) -> i32 {
+            deps.baz()
+        }
+
+        #[derive_impl(super::Foobar)]
+        pub struct FoobarImpl;
     }
 
-    impl DelegateFoo<Self> for () {
-        type By = my_impl::MyImpl;
+    impl DelegateFoobar<Self> for () {
+        type By = foobar_impl::FoobarImpl;
     }
 
     #[test]

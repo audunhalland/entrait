@@ -15,17 +15,17 @@ pub fn output_tokens(
     attr: EntraitImplAttr,
     input_mod: InputMod,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let derive_impl = input_mod
+    let derive_impl = match input_mod
         .items
         .iter()
         .filter_map(ModItem::filter_derive_impl)
         .next()
-        .ok_or_else(|| {
-            syn::Error::new(
-                proc_macro2::Span::call_site(),
-                "Missing `#[derive_impl(Trait)] pub struct Struct;` inside the module.",
-            )
-        })?;
+    {
+        Some(derive_impl) => derive_impl,
+        None => {
+            return missing_derive_impl(input_mod);
+        }
+    };
 
     let impl_ident = &derive_impl.ident;
     let trait_span = derive_impl
@@ -35,7 +35,6 @@ pub fn output_tokens(
         .last()
         .map(|segment| segment.span())
         .unwrap_or(proc_macro2::Span::call_site());
-    // let trait_span = derive_impl.trait_path.0.span();
 
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
     let trait_fns = input_mod
@@ -112,5 +111,31 @@ pub fn output_tokens(
                 #impl_block
             };
         }
+    })
+}
+
+fn missing_derive_impl(input_mod: InputMod) -> syn::Result<proc_macro2::TokenStream> {
+    let InputMod {
+        attrs,
+        vis,
+        mod_token,
+        ident: mod_ident,
+        items,
+        ..
+    } = &input_mod;
+
+    let error = syn::Error::new(
+        proc_macro2::Span::call_site(),
+        format!("Module {mod_ident} contains no `#[derive_impl(Trait)] pub struct SomeStruct;`"),
+    )
+    .into_compile_error();
+
+    Ok(quote! {
+        #(#attrs)*
+        #vis #mod_token #mod_ident {
+            #(#items)*
+        }
+
+        #error
     })
 }

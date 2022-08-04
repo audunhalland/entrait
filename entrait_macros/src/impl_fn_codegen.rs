@@ -44,8 +44,12 @@ pub fn gen_impl_block(
     );
     let args = trait_generics.arguments();
     let self_ty = SelfTy(trait_dependency_mode, &impl_indirection, trait_span);
-    let where_clause =
-        trait_generics.impl_where_clause(trait_fns, trait_dependency_mode, trait_span);
+    let where_clause = trait_generics.impl_where_clause(
+        trait_fns,
+        trait_dependency_mode,
+        &impl_indirection,
+        trait_span,
+    );
 
     let items = trait_fns.iter().map(|trait_fn| {
         let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl;
@@ -137,6 +141,7 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
     }
 }
 
+// i.e. `self,`
 struct SelfArgComma<'g>(&'g ImplIndirection, Span);
 
 impl<'g> quote::ToTokens for SelfArgComma<'g> {
@@ -154,7 +159,6 @@ impl<'g> quote::ToTokens for SelfArgComma<'g> {
                     syn::LitInt::new("0", span),
                     syn::token::Comma(span)
                 );
-                // syn::token::Paren(span).surround(stream, |_| {});
             }
         }
     }
