@@ -49,7 +49,7 @@ pub fn output_tokens(
         None
     };
 
-    let delegation_trait = gen_delegation_trait(&generic_idents, &attr);
+    let delegation_trait = gen_delegation_trait(&generic_idents, &item_trait, &attr);
 
     let impl_attrs = item_trait
         .attrs
@@ -113,6 +113,7 @@ pub fn output_tokens(
 
 fn gen_delegation_trait(
     generic_idents: &GenericIdents,
+    input_trait: &syn::ItemTrait,
     attr: &EntraitTraitAttr,
 ) -> Option<TokenStream> {
     match &attr.delegation_kind {
@@ -124,6 +125,35 @@ fn gen_delegation_trait(
                     type By: ::entrait::BorrowImpl<#impl_t>;
                 }
             })
+        }
+        Some(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), _)) => {
+            let mut trait_copy = input_trait.clone();
+
+            trait_copy.ident = trait_ident.clone();
+            trait_copy.supertraits.push(syn::parse_quote! { 'static });
+            trait_copy.generics.params.insert(
+                0,
+                syn::parse_quote! {
+                    EntraitT
+                },
+            );
+
+            for item in trait_copy.items.iter_mut() {
+                if let syn::TraitItem::Method(method) = item {
+                    if !matches!(method.sig.inputs.first(), Some(syn::FnArg::Receiver(_))) {
+                        continue;
+                    }
+
+                    method.sig.inputs.insert(
+                        1,
+                        syn::parse_quote! {
+                            __impl: &::entrait::Impl<EntraitT>
+                        },
+                    );
+                }
+            }
+
+            Some(quote! { #trait_copy })
         }
         _ => None,
     }
@@ -153,6 +183,14 @@ fn gen_method(
             quote! {
                 #fn_sig {
                     <#impl_t::By as #entrait::BorrowImplRef<#impl_t>>::Ref::from_impl(self).#fn_ident(#(#arguments),*) #opt_dot_await
+                }
+            }
+        }
+        Some(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), _)) => {
+            quote! {
+                #fn_sig {
+                    <#impl_t as ::core::borrow::Borrow<dyn #trait_ident<#impl_t>>>::borrow(&*self)
+                        .#fn_ident(self, #(#arguments),*) #opt_dot_await
                 }
             }
         }
@@ -208,9 +246,8 @@ struct ImplWhereClause<'g, 'c> {
 }
 
 impl<'g, 'c> ImplWhereClause<'g, 'c> {
-    fn impl_t_bounds(&self, stream: &mut TokenStream) {
+    fn push_impl_t_bounds(&self, stream: &mut TokenStream) {
         use syn::token::*;
-        use syn::Ident;
 
         push_tokens!(stream, self.generic_idents.impl_t, Colon(self.span));
 
@@ -224,16 +261,29 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                     Gt(self.span)
                 );
             }
-            Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
+            Some(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), _)) => {
+                self.push_core_borrow_borrow(stream);
                 push_tokens!(
                     stream,
-                    Colon2(self.span),
-                    Ident::new("core", self.span),
-                    Colon2(self.span),
-                    syn::Ident::new("borrow", self.span),
-                    Colon2(self.span),
-                    syn::Ident::new("Borrow", self.span),
                     // Generic arguments:
+                    Lt(self.span),
+                    Dyn(self.span),
+                    trait_ident,
+                    Lt(self.span),
+                    self.generic_idents.impl_t,
+                    Gt(self.span),
+                    Gt(self.span)
+                );
+
+                if self.contains_async {
+                    push_tokens!(stream, self.plus_send(), self.plus_sync());
+                }
+                push_tokens!(stream, self.plus_static());
+            }
+            Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
+                self.push_core_borrow_borrow(stream);
+                push_tokens!(
+                    stream,
                     Lt(self.span),
                     Dyn(self.span),
                     self.trait_with_arguments(),
@@ -251,7 +301,7 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
         }
     }
 
-    fn delegate_borrow_impl_ref_bounds(&self, stream: &mut TokenStream) {
+    fn push_delegate_borrow_impl_ref_bounds(&self, stream: &mut TokenStream) {
         use syn::token::*;
         use syn::Ident;
 
@@ -286,6 +336,20 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
             Ident::new("Ref", span),
             Colon(span),
             self.item_trait.ident
+        );
+    }
+
+    fn push_core_borrow_borrow(&self, stream: &mut TokenStream) {
+        use syn::token::*;
+        use syn::Ident;
+        push_tokens!(
+            stream,
+            Colon2(self.span),
+            Ident::new("core", self.span),
+            Colon2(self.span),
+            syn::Ident::new("borrow", self.span),
+            Colon2(self.span),
+            syn::Ident::new("Borrow", self.span)
         );
     }
 
@@ -326,13 +390,13 @@ impl<'g, 'c> quote::ToTokens for ImplWhereClause<'g, 'c> {
 
         // Bounds on the `T` in `Impl<T>`:
         punctuator.push_fn(|stream| {
-            self.impl_t_bounds(stream);
+            self.push_impl_t_bounds(stream);
         });
 
         // Trait delegation bounds:
         match &self.attr.delegation_kind {
             Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) => punctuator.push_fn(|stream| {
-                self.delegate_borrow_impl_ref_bounds(stream);
+                self.push_delegate_borrow_impl_ref_bounds(stream);
             }),
             _ => {}
         }

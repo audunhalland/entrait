@@ -37,3 +37,26 @@ mod simple_static {
         assert_eq!(42, app.foo());
     }
 }
+
+mod simple_dyn {
+    use entrait::*;
+
+    #[entrait(delegate_by = dyn DelegateFoobar)]
+    trait Foobar {
+        fn foo(&self) -> i32;
+        fn bar(&self) -> u32;
+    }
+
+    impl std::borrow::Borrow<dyn DelegateFoobar<Self>> for () {
+        fn borrow(&self) -> &dyn DelegateFoobar<Self> {
+            panic!()
+        }
+    }
+
+    #[test]
+    fn test() {
+        let app = Impl::new(());
+
+        app.foo();
+    }
+}
