@@ -724,6 +724,8 @@ pub use macros::entrait;
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
 
+pub use entrait_macros::entrait_impl;
+
 /// Re-exported from the [implementation] crate.
 pub use ::implementation::Impl;
 
@@ -738,14 +740,17 @@ pub mod __async_trait {
     pub use ::async_trait::async_trait;
 }
 
+/// TODO: Document
 pub trait ImplRef<'i, T> {
     fn from_impl(_impl: &'i Impl<T>) -> Self;
 
     fn as_impl(&self) -> &'i Impl<T>;
 }
 
+/// TODO: Document
 pub trait BorrowImplRef<'i, T> {
     type Ref: ImplRef<'i, T>;
 }
 
+/// TODO: Document
 pub trait BorrowImpl<T>: for<'i> BorrowImplRef<'i, T> {}

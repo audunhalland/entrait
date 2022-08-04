@@ -33,6 +33,14 @@ pub struct InputMod {
     pub items: Vec<ModItem>,
 }
 
+impl Parse for InputMod {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(syn::Attribute::parse_outer)?;
+        let vis = input.parse()?;
+        Ok(parse_mod(attrs, vis, input)?)
+    }
+}
+
 impl ToTokens for InputMod {
     fn to_tokens(&self, stream: &mut TokenStream) {
         for attr in &self.attrs {
@@ -114,31 +122,7 @@ impl Parse for Input {
                 ..item_trait
             }))
         } else if input.peek(syn::token::Mod) {
-            let mod_token = input.parse()?;
-            let ident = input.parse()?;
-
-            let lookahead = input.lookahead1();
-            if lookahead.peek(syn::token::Brace) {
-                let content;
-                let brace_token = syn::braced!(content in input);
-
-                let mut items = vec![];
-
-                while !content.is_empty() {
-                    items.push(content.parse()?);
-                }
-
-                Ok(Input::Mod(InputMod {
-                    attrs,
-                    vis,
-                    mod_token,
-                    ident,
-                    brace_token,
-                    items,
-                }))
-            } else {
-                Err(lookahead.error())
-            }
+            Ok(Input::Mod(parse_mod(attrs, vis, input)?))
         } else {
             let fn_sig: syn::Signature = input.parse()?;
             let fn_body = input.parse()?;
@@ -150,6 +134,38 @@ impl Parse for Input {
                 fn_body,
             }))
         }
+    }
+}
+
+fn parse_mod(
+    attrs: Vec<syn::Attribute>,
+    vis: syn::Visibility,
+    input: ParseStream,
+) -> syn::Result<InputMod> {
+    let mod_token = input.parse()?;
+    let ident = input.parse()?;
+
+    let lookahead = input.lookahead1();
+    if lookahead.peek(syn::token::Brace) {
+        let content;
+        let brace_token = syn::braced!(content in input);
+
+        let mut items = vec![];
+
+        while !content.is_empty() {
+            items.push(content.parse()?);
+        }
+
+        Ok(InputMod {
+            attrs,
+            vis,
+            mod_token,
+            ident,
+            brace_token,
+            items,
+        })
+    } else {
+        Err(lookahead.error())
     }
 }
 

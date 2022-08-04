@@ -6,17 +6,22 @@ mod simple_static {
         fn foo(&self) -> i32;
     }
 
-    /*
-    impl DelegateFoo<Self> for () {
-        type By = Provider;
+    pub struct MyImpl;
+
+    #[entrait_impl(Foo for MyImpl)]
+    mod my_impl {
+        pub fn foo<D>(deps: &D) -> i32 {
+            42
+        }
     }
 
-    struct Provider;
+    impl DelegateFoo<Self> for () {
+        type By = MyImpl;
+    }
 
     fn test() {
         let app = Impl::new(());
 
-        app.foo();
+        // app.foo();
     }
-    */
 }
