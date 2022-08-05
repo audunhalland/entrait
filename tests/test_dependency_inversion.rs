@@ -77,6 +77,6 @@ mod simple_dyn {
             foobar: Box::new(foobar_impl::FoobarImpl),
         });
 
-        assert_eq!(42, app.foo());
+        assert_eq!(1337, app.foo());
     }
 }
