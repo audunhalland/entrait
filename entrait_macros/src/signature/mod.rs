@@ -9,9 +9,6 @@ use std::ops::Deref;
 use crate::opt::AsyncStrategy;
 use crate::opt::Opts;
 use crate::opt::SpanOpt;
-use crate::token_util::TokenPair;
-
-use proc_macro2::Span;
 
 #[derive(Clone, Copy)]
 pub struct InputSig<'s> {
@@ -21,14 +18,6 @@ pub struct InputSig<'s> {
 impl<'s> InputSig<'s> {
     pub fn new(sig: &'s syn::Signature) -> Self {
         Self { sig }
-    }
-
-    pub fn opt_dot_await(&self, span: Span) -> Option<impl quote::ToTokens> {
-        if self.sig.asyncness.is_some() {
-            Some(TokenPair(syn::token::Dot(span), syn::token::Await(span)))
-        } else {
-            None
-        }
     }
 
     pub fn use_associated_future(&self, opts: &Opts) -> bool {

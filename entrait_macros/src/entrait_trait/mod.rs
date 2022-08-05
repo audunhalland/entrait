@@ -1,6 +1,7 @@
 //! Implementation for invoking entrait on a trait!
 
 pub mod input_attr;
+mod out_trait;
 
 use input_attr::EntraitTraitAttr;
 

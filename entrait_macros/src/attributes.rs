@@ -76,14 +76,14 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
     }
 }
 
-pub struct UnimockAttrParams<'s, 'i> {
+pub struct UnimockAttrParams<'s> {
     pub crate_idents: &'s CrateIdents,
-    pub trait_fns: &'s [TraitFn<'i>],
+    pub trait_fns: &'s [TraitFn],
     pub(super) mode: &'s FnInputMode<'s>,
     pub span: Span,
 }
 
-impl<'s, 'i> ToTokens for UnimockAttrParams<'s, 'i> {
+impl<'s> ToTokens for UnimockAttrParams<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         use syn::token::*;
         use syn::Ident;
@@ -146,7 +146,7 @@ impl<'s, 'i> ToTokens for UnimockAttrParams<'s, 'i> {
     }
 }
 
-impl<'s, 'i> UnimockAttrParams<'s, 'i> {
+impl<'s> UnimockAttrParams<'s> {
     fn unmocked(&self, stream: &mut TokenStream) {
         use syn::token::*;
         use syn::Ident;

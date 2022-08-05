@@ -259,7 +259,7 @@ pub struct ImplWhereClauseGenerator<'g, 's, 'c> {
     trait_where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
     trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
     impl_indirection: &'s ImplIndirection<'s>,
-    trait_fns: &'s [TraitFn<'s>],
+    trait_fns: &'s [TraitFn],
     span: proc_macro2::Span,
 }
 

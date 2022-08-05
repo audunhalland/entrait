@@ -84,7 +84,7 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
         let trait_fn_sig = &trait_fn.sig();
         let deps = &trait_fn.deps;
 
-        let mut fn_ident = trait_fn.input_sig.ident.clone();
+        let mut fn_ident = trait_fn.sig().ident.clone();
         fn_ident.set_span(span);
 
         let opt_self_comma = match (deps, entrait_sig.sig.inputs.first(), &self.impl_indirection) {
@@ -107,7 +107,7 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
                 },
             });
 
-        let mut opt_dot_await = trait_fn.input_sig.opt_dot_await(span);
+        let mut opt_dot_await = trait_fn.opt_dot_await(span);
         if entrait_sig.associated_fut_decl.is_some() {
             opt_dot_await = None;
         }
@@ -189,7 +189,7 @@ impl<'g> quote::ToTokens for SelfArgComma<'g> {
 pub fn opt_async_trait_attribute<'s, 'o>(
     opts: &'s Opts,
     crate_idents: &'s CrateIdents,
-    trait_fns: impl Iterator<Item = &'o TraitFn<'o>>,
+    trait_fns: impl Iterator<Item = &'o TraitFn>,
 ) -> Option<impl ToTokens + 's> {
     match (
         opts.async_strategy(),

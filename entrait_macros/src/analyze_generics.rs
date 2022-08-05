@@ -5,19 +5,28 @@ use crate::opt::Opts;
 use crate::signature::{
     converter::SignatureConverter, EntraitSignature, FnIndex, InjectDynImplParam, InputSig,
 };
+use crate::token_util::TokenPair;
 
 use proc_macro2::Span;
 use syn::spanned::Spanned;
 
-pub struct TraitFn<'i> {
-    pub input_sig: InputSig<'i>,
+pub struct TraitFn {
     pub deps: FnDeps,
     pub entrait_sig: EntraitSignature,
+    pub originally_async: bool,
 }
 
-impl<'i> TraitFn<'i> {
+impl TraitFn {
     pub fn sig(&self) -> &syn::Signature {
         &self.entrait_sig.sig
+    }
+
+    pub fn opt_dot_await(&self, span: Span) -> Option<impl quote::ToTokens> {
+        if self.originally_async {
+            Some(TokenPair(syn::token::Dot(span), syn::token::Await(span)))
+        } else {
+            None
+        }
     }
 }
 
@@ -34,7 +43,7 @@ impl<'s> TraitFnAnalyzer<'s> {
         input_sig: InputSig<'i>,
         fn_index: FnIndex,
         analyzer: &mut GenericsAnalyzer,
-    ) -> syn::Result<TraitFn<'i>> {
+    ) -> syn::Result<TraitFn> {
         let deps = analyzer.analyze_fn_deps(input_sig, self.trait_span, self.opts)?;
         let entrait_sig = SignatureConverter {
             crate_idents: self.crate_idents,
@@ -47,9 +56,9 @@ impl<'s> TraitFnAnalyzer<'s> {
         }
         .convert_fn_to_trait_fn();
         Ok(TraitFn {
-            input_sig,
             deps,
             entrait_sig,
+            originally_async: input_sig.asyncness.is_some(),
         })
     }
 }
