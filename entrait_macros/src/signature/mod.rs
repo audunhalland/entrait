@@ -2,6 +2,7 @@ mod fn_params;
 mod lifetimes;
 
 use crate::generics::FnDeps;
+use crate::idents::CrateIdents;
 use crate::input::InputFn;
 use crate::opt::Opts;
 
@@ -38,12 +39,13 @@ pub enum SigComponent {
 pub struct UserProvidedLifetime(bool);
 
 pub struct SignatureConverter<'a> {
-    trait_span: Span,
-    opts: &'a Opts,
-    input_fn: &'a InputFn,
-    deps: &'a FnDeps,
-    inject_dyn_impl_param: InjectDynImplParam,
-    fn_index: FnIndex,
+    pub crate_idents: &'a CrateIdents,
+    pub trait_span: Span,
+    pub opts: &'a Opts,
+    pub input_fn: &'a InputFn,
+    pub deps: &'a FnDeps,
+    pub inject_dyn_impl_param: InjectDynImplParam,
+    pub fn_index: FnIndex,
 }
 
 #[derive(Clone, Copy)]
@@ -54,24 +56,6 @@ enum ReceiverGeneration {
 }
 
 impl<'a> SignatureConverter<'a> {
-    pub fn new(
-        trait_span: Span,
-        opts: &'a Opts,
-        input_fn: &'a InputFn,
-        deps: &'a FnDeps,
-        fn_index: FnIndex,
-        inject_dyn_impl_param: InjectDynImplParam,
-    ) -> SignatureConverter<'a> {
-        Self {
-            trait_span,
-            opts,
-            input_fn,
-            deps,
-            inject_dyn_impl_param,
-            fn_index,
-        }
-    }
-
     pub fn convert(&self) -> EntraitSignature {
         let mut entrait_sig = EntraitSignature {
             sig: self.input_fn.fn_sig.clone(),
@@ -158,10 +142,11 @@ impl<'a> SignatureConverter<'a> {
         }
 
         if self.inject_dyn_impl_param.0 {
+            let entrait = &self.crate_idents.entrait;
             sig.inputs.insert(
                 1,
                 syn::parse_quote! {
-                    __impl: &::entrait::Impl<EntraitT>
+                    __impl: &::#entrait::Impl<EntraitT>
                 },
             );
         }
@@ -219,14 +204,16 @@ impl<'a> SignatureConverter<'a> {
             -> Self::#fut<#(#fut_lifetimes),*>
         };
 
+        let core = &self.crate_idents.core;
+
         entrait_sig.associated_fut_decl = Some(quote_spanned! { span=>
-            type #fut<#(#fut_lifetimes),*>: ::core::future::Future<Output = #output_ty> + Send
+            type #fut<#(#fut_lifetimes),*>: ::#core::future::Future<Output = #output_ty> + Send
             where
                 Self: #(#self_lifetimes)+*;
         });
 
         entrait_sig.associated_fut_impl = Some(quote_spanned! { span=>
-            type #fut<#(#fut_lifetimes),*> = impl ::core::future::Future<Output = #output_ty>
+            type #fut<#(#fut_lifetimes),*> = impl ::#core::future::Future<Output = #output_ty>
             where
                 Self: #(#self_lifetimes)+*;
         });

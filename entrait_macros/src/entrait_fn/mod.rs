@@ -7,7 +7,7 @@ pub mod input_attr;
 
 use crate::analyze_generics;
 use crate::analyze_generics::GenericsAnalyzer;
-use crate::analyze_generics::TraitFn;
+use crate::analyze_generics::{TraitFn, TraitFnAnalyzer};
 use crate::attributes;
 use crate::generics::{self, TraitDependencyMode};
 use crate::impl_fn_codegen;
@@ -28,14 +28,14 @@ use crate::analyze_generics::detect_trait_dependency_mode;
 pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Result<TokenStream> {
     let fn_input_mode = FnInputMode::SingleFn(&input_fn.fn_sig.ident);
     let mut generics_analyzer = GenericsAnalyzer::new();
-    let trait_fns = [TraitFn::analyze(
-        &input_fn,
-        &mut generics_analyzer,
-        signature::FnIndex(0),
-        signature::InjectDynImplParam(false),
-        attr.trait_ident.span(),
-        &attr.opts,
-    )?];
+
+    let trait_fns = [TraitFnAnalyzer {
+        inject_dyn_impl_param: signature::InjectDynImplParam(false),
+        trait_span: attr.trait_ident.span(),
+        crate_idents: &attr.crate_idents,
+        opts: &attr.opts,
+    }
+    .analyze(&input_fn, signature::FnIndex(0), &mut generics_analyzer)?];
 
     let trait_dependency_mode = detect_trait_dependency_mode(
         &fn_input_mode,
@@ -90,14 +90,13 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         .filter_map(ModItem::filter_pub_fn)
         .enumerate()
         .map(|(index, input_fn)| {
-            TraitFn::analyze(
-                input_fn,
-                &mut generics_analyzer,
-                signature::FnIndex(index),
-                signature::InjectDynImplParam(false),
-                attr.trait_ident.span(),
-                &attr.opts,
-            )
+            TraitFnAnalyzer {
+                inject_dyn_impl_param: signature::InjectDynImplParam(false),
+                trait_span: attr.trait_ident.span(),
+                crate_idents: &attr.crate_idents,
+                opts: &attr.opts,
+            }
+            .analyze(input_fn, signature::FnIndex(index), &mut generics_analyzer)
         })
         .collect::<syn::Result<Vec<_>>>()?;
 

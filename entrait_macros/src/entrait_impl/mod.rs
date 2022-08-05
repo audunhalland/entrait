@@ -2,6 +2,7 @@ pub mod input_attr;
 
 use crate::analyze_generics;
 use crate::analyze_generics::detect_trait_dependency_mode;
+use crate::analyze_generics::TraitFnAnalyzer;
 use crate::generics;
 use crate::impl_fn_codegen;
 use crate::input::{InputMod, ModItem};
@@ -50,14 +51,13 @@ pub fn output_tokens(
         .filter_map(ModItem::filter_pub_fn)
         .enumerate()
         .map(|(index, input_fn)| {
-            analyze_generics::TraitFn::analyze(
-                input_fn,
-                &mut generics_analyzer,
-                signature::FnIndex(index),
-                signature::InjectDynImplParam(matches!(kind, ImplKind::Dyn)),
+            TraitFnAnalyzer {
+                inject_dyn_impl_param: signature::InjectDynImplParam(matches!(kind, ImplKind::Dyn)),
                 trait_span,
-                &attr.opts,
-            )
+                crate_idents: &attr.crate_idents,
+                opts: &attr.opts,
+            }
+            .analyze(input_fn, signature::FnIndex(index), &mut generics_analyzer)
         })
         .collect::<syn::Result<Vec<_>>>()?;
     let trait_generics = generics_analyzer.into_trait_generics();

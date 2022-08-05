@@ -14,33 +14,41 @@ pub struct TraitFn<'i> {
 }
 
 impl<'i> TraitFn<'i> {
-    pub fn analyze(
+    pub fn sig(&self) -> &syn::Signature {
+        &self.entrait_sig.sig
+    }
+}
+
+pub struct TraitFnAnalyzer<'s> {
+    pub inject_dyn_impl_param: InjectDynImplParam,
+    pub trait_span: Span,
+    pub crate_idents: &'s CrateIdents,
+    pub opts: &'s Opts,
+}
+
+impl<'s> TraitFnAnalyzer<'s> {
+    pub fn analyze<'i>(
+        self,
         source: &'i InputFn,
-        analyzer: &mut GenericsAnalyzer,
         fn_index: FnIndex,
-        inject_dyn_impl_param: InjectDynImplParam,
-        trait_span: Span,
-        opts: &Opts,
-    ) -> syn::Result<Self> {
-        let deps = analyzer.analyze_fn_deps(source, trait_span, opts)?;
-        let entrait_sig = SignatureConverter::new(
-            trait_span,
-            opts,
-            source,
-            &deps,
+        analyzer: &mut GenericsAnalyzer,
+    ) -> syn::Result<TraitFn<'i>> {
+        let deps = analyzer.analyze_fn_deps(source, self.trait_span, self.opts)?;
+        let entrait_sig = SignatureConverter {
+            crate_idents: self.crate_idents,
+            trait_span: self.trait_span,
+            opts: self.opts,
+            input_fn: source,
+            deps: &deps,
             fn_index,
-            inject_dyn_impl_param,
-        )
+            inject_dyn_impl_param: self.inject_dyn_impl_param,
+        }
         .convert();
-        Ok(Self {
+        Ok(TraitFn {
             source,
             deps,
             entrait_sig,
         })
-    }
-
-    pub fn sig(&self) -> &syn::Signature {
-        &self.entrait_sig.sig
     }
 }
 
