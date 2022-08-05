@@ -42,7 +42,7 @@ impl Parse for InputMod {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let attrs = input.call(syn::Attribute::parse_outer)?;
         let vis = input.parse()?;
-        Ok(parse_mod(attrs, vis, input)?)
+        parse_mod(attrs, vis, input)
     }
 }
 

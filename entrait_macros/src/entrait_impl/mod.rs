@@ -41,7 +41,7 @@ pub fn output_tokens(
         .segments
         .last()
         .map(|segment| segment.span())
-        .unwrap_or(proc_macro2::Span::call_site());
+        .unwrap_or_else(proc_macro2::Span::call_site);
 
     let mut generics_analyzer = analyze_generics::GenericsAnalyzer::new();
     let trait_fns = input_mod
@@ -76,7 +76,7 @@ pub fn output_tokens(
         ImplKind::Static => generics::ImplIndirection::ImplRef {
             ref_lifetime: syn::Lifetime::new("'impl_life", trait_span),
         },
-        ImplKind::Dyn => generics::ImplIndirection::DynCopy { ident: &impl_ident },
+        ImplKind::Dyn => generics::ImplIndirection::DynCopy { ident: impl_ident },
     };
 
     let impl_block = impl_fn_codegen::gen_impl_block(

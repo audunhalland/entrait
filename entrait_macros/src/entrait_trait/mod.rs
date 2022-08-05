@@ -406,11 +406,10 @@ impl<'g, 'c> quote::ToTokens for ImplWhereClause<'g, 'c> {
         });
 
         // Trait delegation bounds:
-        match &self.attr.delegation_kind {
-            Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) => punctuator.push_fn(|stream| {
+        if let Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) = &self.attr.delegation_kind {
+            punctuator.push_fn(|stream| {
                 self.push_delegate_borrow_impl_ref_bounds(stream);
-            }),
-            _ => {}
+            });
         }
 
         for predicate in &self.trait_generics.where_predicates {

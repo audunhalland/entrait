@@ -55,6 +55,7 @@ pub enum AsyncStrategy {
 }
 
 #[derive(Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum DelegationKind {
     BySelf,
     ByBorrow,
