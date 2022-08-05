@@ -5,6 +5,7 @@ pub mod input_attr;
 use input_attr::EntraitTraitAttr;
 
 use crate::generics;
+use crate::idents::CrateIdents;
 use crate::idents::GenericIdents;
 use crate::opt::*;
 use crate::token_util::*;
@@ -35,10 +36,11 @@ pub fn output_tokens(
         syn::TraitItem::Method(method) => method.sig.asyncness.is_some(),
         _ => false,
     });
+    let entrait = &attr.crate_idents.entrait;
 
     let opt_unimock_attr = if attr.opts.unimock.map(|opt| *opt.value()).unwrap_or(false) {
         Some(quote! {
-            #[::entrait::__unimock::unimock(prefix=::entrait::__unimock)]
+            #[::#entrait::__unimock::unimock(prefix=::#entrait::__unimock)]
         })
     } else {
         None
@@ -82,7 +84,9 @@ pub fn output_tokens(
         .items
         .iter()
         .filter_map(|trait_item| match trait_item {
-            syn::TraitItem::Type(trait_item_type) => Some(impl_assoc_type(trait_item_type)),
+            syn::TraitItem::Type(trait_item_type) => {
+                Some(impl_assoc_type(trait_item_type, &attr.crate_idents))
+            }
             _ => None,
         });
 
@@ -116,13 +120,15 @@ fn gen_delegation_trait(
     input_trait: &syn::ItemTrait,
     attr: &EntraitTraitAttr,
 ) -> Option<TokenStream> {
+    let entrait = &generic_idents.crate_idents.entrait;
+
     match &attr.delegation_kind {
         Some(SpanOpt(DelegationKind::ByTraitStatic(trait_ident), _)) => {
             let span = trait_ident.span();
             let impl_t = &generic_idents.impl_t;
             Some(quote_spanned! { span=>
                 pub trait #trait_ident<#impl_t> {
-                    type By: ::entrait::BorrowImpl<#impl_t>;
+                    type By: ::#entrait::BorrowImpl<#impl_t>;
                 }
             })
         }
@@ -147,7 +153,7 @@ fn gen_delegation_trait(
                     method.sig.inputs.insert(
                         1,
                         syn::parse_quote! {
-                            __impl: &::entrait::Impl<EntraitT>
+                            __impl: &::#entrait::Impl<EntraitT>
                         },
                     );
                 }
@@ -177,19 +183,20 @@ fn gen_method(
         },
     });
     let opt_dot_await = fn_sig.asyncness.map(|_| quote! { .await });
+    let core = &generic_idents.crate_idents.core;
 
     match &attr.delegation_kind {
         Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) => {
             quote! {
                 #fn_sig {
-                    <#impl_t::By as #entrait::BorrowImplRef<#impl_t>>::Ref::from_impl(self).#fn_ident(#(#arguments),*) #opt_dot_await
+                    <#impl_t::By as ::#entrait::BorrowImplRef<#impl_t>>::Ref::from(self).#fn_ident(#(#arguments),*) #opt_dot_await
                 }
             }
         }
         Some(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), _)) => {
             quote! {
                 #fn_sig {
-                    <#impl_t as ::core::borrow::Borrow<dyn #trait_ident<#impl_t>>>::borrow(&*self)
+                    <#impl_t as ::#core::borrow::Borrow<dyn #trait_ident<#impl_t>>>::borrow(&*self)
                         .#fn_ident(self, #(#arguments),*) #opt_dot_await
                 }
             }
@@ -211,14 +218,15 @@ fn gen_method(
     }
 }
 
-fn impl_assoc_type(assoc_type: &syn::TraitItemType) -> TokenStream {
+fn impl_assoc_type(assoc_type: &syn::TraitItemType, crate_idents: &CrateIdents) -> TokenStream {
     if let Some(future_arguments) = assoc_type.bounds.iter().find_map(find_future_arguments) {
         let ident = &assoc_type.ident;
         let generics = &assoc_type.generics;
         let where_clause = &generics.where_clause;
+        let core = &crate_idents.core;
 
         quote! {
-            type #ident #generics = impl ::core::future::Future #future_arguments #where_clause;
+            type #ident #generics = impl ::#core::future::Future #future_arguments #where_clause;
         }
     } else {
         // Probably a compile error

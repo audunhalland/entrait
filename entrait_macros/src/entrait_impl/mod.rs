@@ -100,6 +100,9 @@ pub fn output_tokens(
         ..
     } = &input_mod;
 
+    let entrait = &attr.crate_idents.entrait;
+    let core = &attr.crate_idents.core;
+
     Ok(match kind {
         ImplKind::Static => quote! {
             #(#attrs)*
@@ -109,17 +112,17 @@ pub fn output_tokens(
                 const _: () = {
                     pub struct __ImplRef<'i, T>(&'i ::entrait::Impl<T>);
 
-                    impl<'i, T> ::entrait::ImplRef<'i, T> for __ImplRef<'i, T> {
-                        fn from_impl(_impl: &'i ::entrait::Impl<T>) -> Self {
+                    impl<'i, T> ::#core::convert::From<&'i ::#entrait::Impl<T>> for __ImplRef<'i, T> {
+                        fn from(_impl: &'i ::#entrait::Impl<T>) -> Self {
                             Self(_impl)
                         }
                     }
 
-                    impl<'i, T: 'static> ::entrait::BorrowImplRef<'i, T> for #impl_ident {
+                    impl<'i, T: 'static> ::#entrait::BorrowImplRef<'i, T> for #impl_ident {
                         type Ref = __ImplRef<'i, T>;
                     }
 
-                    impl<T: 'static> ::entrait::BorrowImpl<T> for #impl_ident {}
+                    impl<T: 'static> ::#entrait::BorrowImpl<T> for #impl_ident {}
 
                     #impl_block
                 };

@@ -743,13 +743,8 @@ pub mod __async_trait {
 }
 
 /// TODO: Document
-pub trait ImplRef<'i, T> {
-    fn from_impl(_impl: &'i Impl<T>) -> Self;
-}
-
-/// TODO: Document
-pub trait BorrowImplRef<'i, T> {
-    type Ref: ImplRef<'i, T>;
+pub trait BorrowImplRef<'i, T: 'i> {
+    type Ref: From<&'i Impl<T>>;
 }
 
 /// TODO: Document
