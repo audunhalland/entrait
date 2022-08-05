@@ -324,12 +324,13 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
             Lt(span),
             impl_lifetime,
             Gt(span),
-            // <T::By as framework::BorrowImplRef<'i, T>>
+            // <T::By as ::entrait::BorrowImplRef<'i, T>>
             Lt(span),
             self.generic_idents.impl_t,
             Colon2(span),
             Ident::new("By", span),
             As(span),
+            Colon2(span),
             self.attr.crate_idents.entrait,
             Colon2(span),
             Ident::new("BorrowImplRef", span),
@@ -349,11 +350,10 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
 
     fn push_core_borrow_borrow(&self, stream: &mut TokenStream) {
         use syn::token::*;
-        use syn::Ident;
         push_tokens!(
             stream,
             Colon2(self.span),
-            Ident::new("core", self.span),
+            self.generic_idents.crate_idents.core,
             Colon2(self.span),
             syn::Ident::new("borrow", self.span),
             Colon2(self.span),
