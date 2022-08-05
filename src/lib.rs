@@ -123,7 +123,7 @@
 //! }
 //! # }
 //! ```
-//! This examples generates a `MyModule` trait containing the methods `foo` and `bar`.
+//! This example generates a `MyModule` trait containing the methods `foo` and `bar`.
 //!
 //!
 //! ### Concrete dependencies
