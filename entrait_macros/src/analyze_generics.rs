@@ -3,7 +3,7 @@ use crate::idents::{CrateIdents, GenericIdents};
 use crate::input::FnInputMode;
 use crate::opt::Opts;
 use crate::signature::{
-    EntraitSignature, FnIndex, InjectDynImplParam, InputSig, SignatureConverter,
+    converter::SignatureConverter, EntraitSignature, FnIndex, InjectDynImplParam, InputSig,
 };
 
 use proc_macro2::Span;
@@ -45,7 +45,7 @@ impl<'s> TraitFnAnalyzer<'s> {
             fn_index,
             inject_dyn_impl_param: self.inject_dyn_impl_param,
         }
-        .convert();
+        .convert_fn_to_trait_fn();
         Ok(TraitFn {
             input_sig,
             deps,
