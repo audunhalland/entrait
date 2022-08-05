@@ -724,12 +724,24 @@ pub use macros::entrait;
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
 
+/// TODO: Document
 pub use entrait_macros::entrait_impl;
 
+/// TODO: Document
 pub use entrait_macros::entrait_dyn_impl;
 
 /// Re-exported from the [implementation] crate.
 pub use ::implementation::Impl;
+
+/// A trait for specifying a custom smart pointer to borrow [Impl] via.
+///
+/// The smart pointer has to implement `From<&Impl<T>>`.
+///
+/// The trait must be implemented by types that represent static-dispatch trait delegation targets.
+pub trait BorrowImpl<'a, T: 'a> {
+    /// The target type of the borrow. This should be a type that contains a reference to [Impl] with the lifetime `'a`.
+    type Target: From<&'a Impl<T>>;
+}
 
 /// Optional mock re-exports for macros
 #[cfg(feature = "unimock")]
@@ -741,11 +753,3 @@ pub use ::unimock as __unimock;
 pub mod __async_trait {
     pub use ::async_trait::async_trait;
 }
-
-/// TODO: Document
-pub trait BorrowImplRef<'i, T: 'i> {
-    type Ref: From<&'i Impl<T>>;
-}
-
-/// TODO: Document
-pub trait BorrowImpl<T>: for<'i> BorrowImplRef<'i, T> {}

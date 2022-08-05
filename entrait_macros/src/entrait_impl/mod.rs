@@ -74,7 +74,7 @@ pub fn output_tokens(
     );
     let impl_indirection = match kind {
         ImplKind::Static => generics::ImplIndirection::ImplRef {
-            ref_lifetime: syn::Lifetime::new("'impl_life", trait_span),
+            ref_lifetime: syn::Lifetime::new("'entrait_a", trait_span),
         },
         ImplKind::Dyn => generics::ImplIndirection::DynCopy { ident: impl_ident },
     };
@@ -110,19 +110,17 @@ pub fn output_tokens(
                 #(#items)*
 
                 const _: () = {
-                    pub struct __ImplRef<'i, T>(&'i ::entrait::Impl<T>);
+                    pub struct __ImplRef<'a, T>(&'a ::entrait::Impl<T>);
 
-                    impl<'i, T> ::#core::convert::From<&'i ::#entrait::Impl<T>> for __ImplRef<'i, T> {
-                        fn from(_impl: &'i ::#entrait::Impl<T>) -> Self {
-                            Self(_impl)
+                    impl<'a, T> ::#core::convert::From<&'a ::#entrait::Impl<T>> for __ImplRef<'a, T> {
+                        fn from(__impl: &'a ::#entrait::Impl<T>) -> Self {
+                            Self(__impl)
                         }
                     }
 
-                    impl<'i, T: 'static> ::#entrait::BorrowImplRef<'i, T> for #impl_ident {
-                        type Ref = __ImplRef<'i, T>;
+                    impl<'a, T: 'static> ::#entrait::BorrowImpl<'a, T> for #impl_ident {
+                        type Target = __ImplRef<'a, T>;
                     }
-
-                    impl<T: 'static> ::#entrait::BorrowImpl<T> for #impl_ident {}
 
                     #impl_block
                 };

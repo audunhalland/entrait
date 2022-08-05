@@ -128,7 +128,7 @@ fn gen_delegation_trait(
             let impl_t = &generic_idents.impl_t;
             Some(quote_spanned! { span=>
                 pub trait #trait_ident<#impl_t> {
-                    type By: ::#entrait::BorrowImpl<#impl_t>;
+                    type By: for<'a> ::#entrait::BorrowImpl<'a, #impl_t>;
                 }
             })
         }
@@ -189,7 +189,7 @@ fn gen_method(
         Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) => {
             quote! {
                 #fn_sig {
-                    <#impl_t::By as ::#entrait::BorrowImplRef<#impl_t>>::Ref::from(self).#fn_ident(#(#arguments),*) #opt_dot_await
+                    <#impl_t::By as ::#entrait::BorrowImpl<#impl_t>>::Target::from(self).#fn_ident(#(#arguments),*) #opt_dot_await
                 }
             }
         }
@@ -315,16 +315,16 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
 
         let span = self.span;
 
-        let impl_lifetime = syn::Lifetime::new("'impl_life", self.span);
+        let lifetime = syn::Lifetime::new("'entrait_a", self.span);
 
         push_tokens!(
             stream,
-            // for<'i>
+            // for<'a>
             For(span),
             Lt(span),
-            impl_lifetime,
+            lifetime,
             Gt(span),
-            // <T::By as ::entrait::BorrowImplRef<'i, T>>
+            // <T::By as ::entrait::BorrowImpl<'a, T>>
             Lt(span),
             self.generic_idents.impl_t,
             Colon2(span),
@@ -333,16 +333,16 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
             Colon2(span),
             self.attr.crate_idents.entrait,
             Colon2(span),
-            Ident::new("BorrowImplRef", span),
+            Ident::new("BorrowImpl", span),
             Lt(span),
-            impl_lifetime,
+            lifetime,
             Comma(span),
             self.generic_idents.impl_t,
             Gt(span),
             Gt(span),
-            // ::Ref: #trait_ident
+            // ::Target: #trait_ident
             Colon2(span),
-            Ident::new("Ref", span),
+            Ident::new("Target", span),
             Colon(span),
             self.item_trait.ident
         );
