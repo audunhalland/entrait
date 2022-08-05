@@ -20,6 +20,7 @@ mod input;
 mod opt;
 mod signature;
 mod token_util;
+mod trait_codegen;
 
 use input::Input;
 use opt::AsyncStrategy;
