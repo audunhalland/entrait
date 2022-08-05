@@ -38,6 +38,44 @@ mod simple_static {
     }
 }
 
+/*
+#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+mod async_static {
+    use entrait::*;
+
+    #[entrait(delegate_by = DelegateFoobar)]
+    trait Foobar {
+        async fn foo(&self) -> i32;
+        async fn bar(&self) -> u32;
+    }
+
+    #[entrait_impl]
+    mod foobar_impl {
+        pub async fn bar<D>(_: &D) -> u32 {
+            0
+        }
+
+        pub async fn foo(deps: &impl super::super::Baz) -> i32 {
+            deps.baz()
+        }
+
+        #[derive_impl(super::Foobar)]
+        pub struct FoobarImpl;
+    }
+
+    impl DelegateFoobar<Self> for () {
+        type By = foobar_impl::FoobarImpl;
+    }
+
+    #[test]
+    fn test() {
+        let app = Impl::new(());
+
+        assert_eq!(42, app.foo());
+    }
+}
+*/
+
 mod simple_dyn {
     use entrait::*;
 
