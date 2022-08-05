@@ -79,17 +79,17 @@ pub fn output_tokens(
         ImplKind::Dyn => generics::ImplIndirection::DynCopy { ident: impl_ident },
     };
 
-    let impl_block = impl_fn_codegen::gen_impl_block(
-        &attr.opts,
-        &attr.crate_idents,
-        &derive_impl.trait_path.0,
+    let impl_block = impl_fn_codegen::ImplCodegen {
+        opts: &attr.opts,
+        crate_idents: &attr.crate_idents,
+        trait_ref: &derive_impl.trait_path.0,
         trait_span,
         impl_indirection,
-        &trait_generics,
-        &trait_dependency_mode,
-        &trait_fns,
+        trait_generics: &trait_generics,
+        trait_dependency_mode: &trait_dependency_mode,
         use_associated_future,
-    );
+    }
+    .gen_impl_block(&trait_fns);
 
     let InputMod {
         attrs,

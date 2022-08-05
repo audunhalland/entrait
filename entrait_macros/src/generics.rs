@@ -15,6 +15,7 @@ pub enum ImplIndirection<'s> {
     DynCopy { ident: &'s syn::Ident },
 }
 
+#[derive(Clone, Copy)]
 pub struct UseAssociatedFuture(pub bool);
 
 pub fn detect_use_associated_future<'i>(

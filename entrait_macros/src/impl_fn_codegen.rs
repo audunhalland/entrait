@@ -14,101 +14,110 @@ use crate::opt::{AsyncStrategy, Opts, SpanOpt};
 use crate::token_util::push_tokens;
 use crate::token_util::TokenPair;
 
-///
-/// Generate code like
-///
-/// ```no_compile
-/// impl<__T: ::entrait::Impl + Deps> Trait for __T {
-///     fn the_func(&self, args...) {
-///         the_func(self, args)
-///     }
-/// }
-/// ```
-///
-pub fn gen_impl_block(
-    opts: &Opts,
-    crate_idents: &CrateIdents,
-    trait_ref: &impl ToTokens,
-    trait_span: Span,
-    impl_indirection: ImplIndirection,
-    trait_generics: &generics::TraitGenerics,
-    trait_dependency_mode: &TraitDependencyMode,
-    trait_fns: &[TraitFn],
-    use_associated_future: generics::UseAssociatedFuture,
-) -> TokenStream {
-    let async_trait_attribute = opt_async_trait_attribute(opts, crate_idents, trait_fns.iter());
-    let params = trait_generics.impl_params(
-        trait_dependency_mode,
-        &impl_indirection,
-        use_associated_future,
-    );
-    let args = trait_generics.arguments(&impl_indirection);
-    let self_ty = SelfTy(trait_dependency_mode, &impl_indirection, trait_span);
-    let where_clause = trait_generics.impl_where_clause(
-        trait_fns,
-        trait_dependency_mode,
-        &impl_indirection,
-        trait_span,
-    );
-
-    let items = trait_fns.iter().map(|trait_fn| {
-        let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl;
-
-        let fn_item = gen_delegating_fn_item(trait_fn, &impl_indirection, trait_span);
-
-        quote! {
-            #associated_fut_impl
-            #fn_item
-        }
-    });
-
-    quote_spanned! { trait_span=>
-        #async_trait_attribute
-        impl #params #trait_ref #args for #self_ty #where_clause {
-            #(#items)*
-        }
-    }
+pub struct ImplCodegen<'s, TR> {
+    pub opts: &'s Opts,
+    pub crate_idents: &'s CrateIdents,
+    pub trait_ref: &'s TR,
+    pub trait_span: Span,
+    pub impl_indirection: ImplIndirection<'s>,
+    pub trait_generics: &'s generics::TraitGenerics,
+    pub trait_dependency_mode: &'s TraitDependencyMode<'s, 's>,
+    pub use_associated_future: generics::UseAssociatedFuture,
 }
 
-/// Generate the fn (in the impl block) that calls the entraited fn
-fn gen_delegating_fn_item(
-    trait_fn: &TraitFn,
-    impl_indirection: &ImplIndirection,
-    span: Span,
-) -> TokenStream {
-    let entrait_sig = &trait_fn.entrait_sig;
-    let trait_fn_sig = &trait_fn.sig();
-    let deps = &trait_fn.deps;
+impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
+    ///
+    /// Generate code like
+    ///
+    /// ```no_compile
+    /// impl<__T: ::entrait::Impl + Deps> Trait for __T {
+    ///     fn the_func(&self, args...) {
+    ///         the_func(self, args)
+    ///     }
+    /// }
+    /// ```
+    ///
+    pub fn gen_impl_block(&self, trait_fns: &[TraitFn]) -> TokenStream {
+        let async_trait_attribute =
+            opt_async_trait_attribute(self.opts, self.crate_idents, trait_fns.iter());
+        let params = self.trait_generics.impl_params(
+            self.trait_dependency_mode,
+            &self.impl_indirection,
+            self.use_associated_future,
+        );
+        let args = self.trait_generics.arguments(&self.impl_indirection);
+        let self_ty = SelfTy(
+            self.trait_dependency_mode,
+            &self.impl_indirection,
+            self.trait_span,
+        );
+        let where_clause = self.trait_generics.impl_where_clause(
+            trait_fns,
+            self.trait_dependency_mode,
+            &self.impl_indirection,
+            self.trait_span,
+        );
 
-    let mut fn_ident = trait_fn.source.fn_sig.ident.clone();
-    fn_ident.set_span(span);
+        let items = trait_fns.iter().map(|trait_fn| {
+            let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl;
 
-    let opt_self_comma = match (deps, entrait_sig.sig.inputs.first(), impl_indirection) {
-        (generics::FnDeps::NoDeps { .. }, _, _) | (_, None, _) => None,
-        (_, _, ImplIndirection::DynCopy { .. }) => None,
-        (_, Some(_), _) => Some(SelfArgComma(impl_indirection, span)),
-    };
+            let fn_item = self.gen_delegating_fn_item(trait_fn, self.trait_span);
 
-    let arguments = entrait_sig
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|fn_arg| match fn_arg {
-            syn::FnArg::Receiver(_) => None,
-            syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                syn::Pat::Ident(pat_ident) => Some(&pat_ident.ident),
-                _ => panic!("Found a non-ident pattern, this should be handled in signature.rs"),
-            },
+            quote! {
+                #associated_fut_impl
+                #fn_item
+            }
         });
 
-    let mut opt_dot_await = trait_fn.source.opt_dot_await(span);
-    if entrait_sig.associated_fut_decl.is_some() {
-        opt_dot_await = None;
+        let trait_span = self.trait_span;
+        let trait_ref = &self.trait_ref;
+
+        quote_spanned! { trait_span=>
+            #async_trait_attribute
+            impl #params #trait_ref #args for #self_ty #where_clause {
+                #(#items)*
+            }
+        }
     }
 
-    quote_spanned! { span=>
-        #trait_fn_sig {
-            #fn_ident(#opt_self_comma #(#arguments),*) #opt_dot_await
+    /// Generate the fn (in the impl block) that calls the entraited fn
+    fn gen_delegating_fn_item(&self, trait_fn: &TraitFn, span: Span) -> TokenStream {
+        let entrait_sig = &trait_fn.entrait_sig;
+        let trait_fn_sig = &trait_fn.sig();
+        let deps = &trait_fn.deps;
+
+        let mut fn_ident = trait_fn.source.fn_sig.ident.clone();
+        fn_ident.set_span(span);
+
+        let opt_self_comma = match (deps, entrait_sig.sig.inputs.first(), &self.impl_indirection) {
+            (generics::FnDeps::NoDeps { .. }, _, _) | (_, None, _) => None,
+            (_, _, ImplIndirection::DynCopy { .. }) => None,
+            (_, Some(_), _) => Some(SelfArgComma(&self.impl_indirection, span)),
+        };
+
+        let arguments = entrait_sig
+            .sig
+            .inputs
+            .iter()
+            .filter_map(|fn_arg| match fn_arg {
+                syn::FnArg::Receiver(_) => None,
+                syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                    syn::Pat::Ident(pat_ident) => Some(&pat_ident.ident),
+                    _ => {
+                        panic!("Found a non-ident pattern, this should be handled in signature.rs")
+                    }
+                },
+            });
+
+        let mut opt_dot_await = trait_fn.source.opt_dot_await(span);
+        if entrait_sig.associated_fut_decl.is_some() {
+            opt_dot_await = None;
+        }
+
+        quote_spanned! { span=>
+            #trait_fn_sig {
+                #fn_ident(#opt_self_comma #(#arguments),*) #opt_dot_await
+            }
         }
     }
 }
