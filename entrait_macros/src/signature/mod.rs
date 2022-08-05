@@ -1,4 +1,5 @@
 pub mod converter;
+pub mod future;
 
 mod fn_params;
 mod lifetimes;
@@ -46,6 +47,7 @@ impl<'s> Deref for InputSig<'s> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct FnIndex(pub usize);
 
 pub struct InjectDynImplParam(pub bool);
@@ -75,7 +77,7 @@ pub enum SigComponent {
 pub struct UserProvidedLifetime(bool);
 
 #[derive(Clone, Copy)]
-enum ReceiverGeneration {
+pub enum ReceiverGeneration {
     Insert,
     Rewrite,
     None,

@@ -1,9 +1,8 @@
-use super::{fn_params, lifetimes, ReceiverGeneration, SigComponent};
+use super::{fn_params, ReceiverGeneration};
 use super::{EntraitSignature, FnIndex, InjectDynImplParam, InputSig};
 use crate::{generics::FnDeps, idents::CrateIdents, opt::Opts};
 
-use proc_macro2::{Span, TokenStream};
-use quote::{quote, quote_spanned};
+use proc_macro2::Span;
 
 pub struct SignatureConverter<'a> {
     pub crate_idents: &'a CrateIdents,
@@ -41,7 +40,12 @@ impl<'a> SignatureConverter<'a> {
         self.generate_params(&mut entrait_sig.sig, receiver_generation);
 
         if self.input_sig.use_associated_future(self.opts) {
-            self.convert_to_associated_future(&mut entrait_sig, receiver_generation);
+            entrait_sig.convert_to_associated_future(
+                self.fn_index,
+                receiver_generation,
+                self.trait_span,
+                &self.crate_idents,
+            );
         }
 
         self.remove_generic_type_params(&mut entrait_sig.sig);
@@ -113,73 +117,6 @@ impl<'a> SignatureConverter<'a> {
         }
     }
 
-    fn convert_to_associated_future(
-        &self,
-        entrait_sig: &mut EntraitSignature,
-        receiver_generation: ReceiverGeneration,
-    ) {
-        let span = self.trait_span;
-
-        lifetimes::de_elide_lifetimes(entrait_sig, receiver_generation);
-
-        let output_ty = output_type_tokens(&entrait_sig.sig.output);
-
-        let fut_lifetimes = entrait_sig
-            .lifetimes
-            .iter()
-            .map(|ft| &ft.lifetime)
-            .collect::<Vec<_>>();
-        let self_lifetimes = entrait_sig
-            .lifetimes
-            .iter()
-            .filter(|ft| ft.source == SigComponent::Receiver)
-            .map(|ft| &ft.lifetime)
-            .collect::<Vec<_>>();
-
-        // make the function generic if it wasn't already
-        let sig = &mut entrait_sig.sig;
-        sig.asyncness = None;
-        let generics = &mut sig.generics;
-        generics.lt_token.get_or_insert(syn::parse_quote! { < });
-        generics.gt_token.get_or_insert(syn::parse_quote! { > });
-
-        // insert generated/non-user-provided lifetimes
-        for fut_lifetime in entrait_sig
-            .lifetimes
-            .iter()
-            .filter(|lt| !lt.user_provided.0)
-        {
-            generics
-                .params
-                .push(syn::GenericParam::Lifetime(syn::LifetimeDef {
-                    attrs: vec![],
-                    lifetime: fut_lifetime.lifetime.clone(),
-                    colon_token: None,
-                    bounds: syn::punctuated::Punctuated::new(),
-                }));
-        }
-
-        let fut = quote::format_ident!("Fut{}", self.fn_index.0);
-
-        entrait_sig.sig.output = syn::parse_quote_spanned! {span =>
-            -> Self::#fut<#(#fut_lifetimes),*>
-        };
-
-        let core = &self.crate_idents.core;
-
-        entrait_sig.associated_fut_decl = Some(quote_spanned! { span=>
-            type #fut<#(#fut_lifetimes),*>: ::#core::future::Future<Output = #output_ty> + Send
-            where
-                Self: #(#self_lifetimes)+*;
-        });
-
-        entrait_sig.associated_fut_impl = Some(quote_spanned! { span=>
-            type #fut<#(#fut_lifetimes),*> = impl ::#core::future::Future<Output = #output_ty>
-            where
-                Self: #(#self_lifetimes)+*;
-        });
-    }
-
     fn remove_generic_type_params(&self, sig: &mut syn::Signature) {
         let deps_ident = match &self.deps {
             FnDeps::Generic { generic_param, .. } => generic_param.as_ref(),
@@ -229,13 +166,6 @@ fn is_type_eq_ident(ty: &syn::Type, ident: &syn::Ident) -> bool {
             type_path.path.segments.first().unwrap().ident == *ident
         }
         _ => false,
-    }
-}
-
-fn output_type_tokens(return_type: &syn::ReturnType) -> TokenStream {
-    match return_type {
-        syn::ReturnType::Default => quote! { () },
-        syn::ReturnType::Type(_, ty) => quote! { #ty },
     }
 }
 
