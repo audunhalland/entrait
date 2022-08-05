@@ -4,7 +4,7 @@
 //!
 //!
 
-use crate::token_util::push_tokens;
+use crate::{signature::InputSig, token_util::push_tokens};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -27,6 +27,12 @@ pub struct InputFn {
     pub fn_sig: syn::Signature,
     // don't try to parse fn_body, just pass through the tokens:
     pub fn_body: proc_macro2::TokenStream,
+}
+
+impl InputFn {
+    pub fn input_sig(&self) -> InputSig<'_> {
+        InputSig::new(&self.fn_sig)
+    }
 }
 
 pub struct InputMod {

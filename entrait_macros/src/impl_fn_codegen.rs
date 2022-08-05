@@ -9,10 +9,8 @@ use crate::generics;
 use crate::generics::ImplIndirection;
 use crate::generics::TraitDependencyMode;
 use crate::idents::CrateIdents;
-use crate::input::InputFn;
 use crate::opt::{AsyncStrategy, Opts, SpanOpt};
 use crate::token_util::push_tokens;
-use crate::token_util::TokenPair;
 
 pub struct ImplCodegen<'s, TR> {
     pub opts: &'s Opts,
@@ -86,7 +84,7 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
         let trait_fn_sig = &trait_fn.sig();
         let deps = &trait_fn.deps;
 
-        let mut fn_ident = trait_fn.source.fn_sig.ident.clone();
+        let mut fn_ident = trait_fn.input_sig.ident.clone();
         fn_ident.set_span(span);
 
         let opt_self_comma = match (deps, entrait_sig.sig.inputs.first(), &self.impl_indirection) {
@@ -109,7 +107,7 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
                 },
             });
 
-        let mut opt_dot_await = trait_fn.source.opt_dot_await(span);
+        let mut opt_dot_await = trait_fn.input_sig.opt_dot_await(span);
         if entrait_sig.associated_fut_decl.is_some() {
             opt_dot_await = None;
         }
@@ -204,22 +202,5 @@ pub fn opt_async_trait_attribute<'s, 'o>(
             }))
         }
         _ => None,
-    }
-}
-
-impl InputFn {
-    fn opt_dot_await(&self, span: Span) -> Option<impl ToTokens> {
-        if self.fn_sig.asyncness.is_some() {
-            Some(TokenPair(syn::token::Dot(span), syn::token::Await(span)))
-        } else {
-            None
-        }
-    }
-
-    pub fn use_associated_future(&self, opts: &Opts) -> bool {
-        matches!(
-            (opts.async_strategy(), self.fn_sig.asyncness),
-            (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
-        )
     }
 }

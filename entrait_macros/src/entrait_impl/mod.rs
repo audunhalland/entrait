@@ -57,7 +57,11 @@ pub fn output_tokens(
                 crate_idents: &attr.crate_idents,
                 opts: &attr.opts,
             }
-            .analyze(input_fn, signature::FnIndex(index), &mut generics_analyzer)
+            .analyze(
+                input_fn.input_sig(),
+                signature::FnIndex(index),
+                &mut generics_analyzer,
+            )
         })
         .collect::<syn::Result<Vec<_>>>()?;
     let trait_generics = generics_analyzer.into_trait_generics();

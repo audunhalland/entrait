@@ -1,14 +1,52 @@
 mod fn_params;
 mod lifetimes;
 
+use std::ops::Deref;
+
 use crate::generics::FnDeps;
 use crate::idents::CrateIdents;
-use crate::input::InputFn;
+use crate::opt::AsyncStrategy;
 use crate::opt::Opts;
+use crate::opt::SpanOpt;
+use crate::token_util::TokenPair;
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use quote::quote_spanned;
+
+#[derive(Clone, Copy)]
+pub struct InputSig<'s> {
+    sig: &'s syn::Signature,
+}
+
+impl<'s> InputSig<'s> {
+    pub fn new(sig: &'s syn::Signature) -> Self {
+        Self { sig }
+    }
+
+    pub fn opt_dot_await(&self, span: Span) -> Option<impl quote::ToTokens> {
+        if self.sig.asyncness.is_some() {
+            Some(TokenPair(syn::token::Dot(span), syn::token::Await(span)))
+        } else {
+            None
+        }
+    }
+
+    pub fn use_associated_future(&self, opts: &Opts) -> bool {
+        matches!(
+            (opts.async_strategy(), self.sig.asyncness),
+            (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
+        )
+    }
+}
+
+impl<'s> Deref for InputSig<'s> {
+    type Target = &'s syn::Signature;
+
+    fn deref(&self) -> &Self::Target {
+        &self.sig
+    }
+}
 
 pub struct FnIndex(pub usize);
 
@@ -42,7 +80,7 @@ pub struct SignatureConverter<'a> {
     pub crate_idents: &'a CrateIdents,
     pub trait_span: Span,
     pub opts: &'a Opts,
-    pub input_fn: &'a InputFn,
+    pub input_sig: InputSig<'a>,
     pub deps: &'a FnDeps,
     pub inject_dyn_impl_param: InjectDynImplParam,
     pub fn_index: FnIndex,
@@ -58,7 +96,7 @@ enum ReceiverGeneration {
 impl<'a> SignatureConverter<'a> {
     pub fn convert(&self) -> EntraitSignature {
         let mut entrait_sig = EntraitSignature {
-            sig: self.input_fn.fn_sig.clone(),
+            sig: self.input_sig.sig.clone(),
             associated_fut_decl: None,
             associated_fut_impl: None,
             lifetimes: vec![],
@@ -79,7 +117,7 @@ impl<'a> SignatureConverter<'a> {
         let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
         self.generate_params(&mut entrait_sig.sig, receiver_generation);
 
-        if self.input_fn.use_associated_future(self.opts) {
+        if self.input_sig.use_associated_future(self.opts) {
             self.convert_to_associated_future(&mut entrait_sig, receiver_generation);
         }
 
@@ -96,7 +134,7 @@ impl<'a> SignatureConverter<'a> {
             FnDeps::NoDeps { .. } => ReceiverGeneration::Insert,
             _ => {
                 if sig.inputs.is_empty() {
-                    if self.input_fn.use_associated_future(self.opts) {
+                    if self.input_sig.use_associated_future(self.opts) {
                         ReceiverGeneration::Insert
                     } else {
                         ReceiverGeneration::None // bug?

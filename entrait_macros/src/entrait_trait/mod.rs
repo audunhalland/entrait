@@ -53,16 +53,12 @@ pub fn output_tokens(
 
     let delegation_trait = gen_delegation_trait(&generic_idents, &item_trait, &attr);
 
-    let impl_attrs = item_trait
-        .attrs
-        .iter()
-        .filter(|attr| {
-            matches!(
-                attr.path.segments.last(),
-                Some(last_segment) if last_segment.ident == "async_trait"
-            )
-        })
-        .collect::<Vec<_>>();
+    let impl_attrs = item_trait.attrs.iter().filter(|attr| {
+        matches!(
+            attr.path.segments.last(),
+            Some(last_segment) if last_segment.ident == "async_trait"
+        )
+    });
 
     let params = generics.impl_params_from_idents(
         &generic_idents,

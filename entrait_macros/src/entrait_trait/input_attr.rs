@@ -20,6 +20,7 @@ impl Parse for EntraitTraitAttr {
         let span = input.span();
 
         let mut debug = None;
+        let mut async_strategy = None;
         let mut unimock = None;
         let mut mockall = None;
         let mut delegation_kind = None;
@@ -27,9 +28,15 @@ impl Parse for EntraitTraitAttr {
         if !input.is_empty() {
             loop {
                 match input.parse::<EntraitOpt>()? {
+                    EntraitOpt::Debug(opt) => debug = Some(opt),
+                    EntraitOpt::AsyncTrait(opt) => {
+                        async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, opt.1))
+                    }
+                    EntraitOpt::AssociatedFuture(opt) => {
+                        async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))
+                    }
                     EntraitOpt::Unimock(opt) => unimock = Some(opt),
                     EntraitOpt::Mockall(opt) => mockall = Some(opt),
-                    EntraitOpt::Debug(opt) => debug = Some(opt),
                     EntraitOpt::DelegateBy(kind) => delegation_kind = Some(kind),
                     entrait_opt => {
                         return Err(syn::Error::new(entrait_opt.span(), "Unsupported option"))
@@ -50,7 +57,7 @@ impl Parse for EntraitTraitAttr {
                 default_span: proc_macro2::Span::call_site(),
                 no_deps: None,
                 debug,
-                async_strategy: None,
+                async_strategy,
                 export: None,
                 unimock,
                 mockall,
