@@ -35,6 +35,7 @@ pub fn has_any_async<'s>(mut signatures: impl Iterator<Item = &'s syn::Signature
     signatures.any(|sig| sig.asyncness.is_some())
 }
 
+#[derive(Clone)]
 pub enum FnDeps {
     Generic {
         generic_param: Option<syn::Ident>,
@@ -49,6 +50,7 @@ pub enum TraitDependencyMode<'t, 'c> {
     Concrete(&'t syn::Type),
 }
 
+#[derive(Clone)]
 pub struct TraitGenerics {
     pub params: syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     pub where_predicates: syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,

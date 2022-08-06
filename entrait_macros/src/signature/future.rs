@@ -15,7 +15,7 @@ impl EntraitSignature {
         &mut self,
         fn_index: FnIndex,
         receiver_generation: ReceiverGeneration,
-        span: Span,
+        trait_span: Span,
         crate_idents: &CrateIdents,
     ) {
         lifetimes::de_elide_lifetimes(self, receiver_generation);
@@ -55,19 +55,19 @@ impl EntraitSignature {
 
         let fut = quote::format_ident!("Fut{}", fn_index.0);
 
-        self.sig.output = syn::parse_quote_spanned! {span =>
+        self.sig.output = syn::parse_quote_spanned! { trait_span =>
             -> Self::#fut<#(#fut_lifetimes),*>
         };
 
         let core = &crate_idents.core;
 
-        self.associated_fut_decl = Some(quote_spanned! { span=>
+        self.associated_fut_decl = Some(quote_spanned! { trait_span=>
             type #fut<#(#fut_lifetimes),*>: ::#core::future::Future<Output = #output_ty> + Send
             where
                 Self: #(#self_lifetimes)+*;
         });
 
-        self.associated_fut_impl = Some(quote_spanned! { span=>
+        self.associated_fut_impl = Some(quote_spanned! { trait_span=>
             type #fut<#(#fut_lifetimes),*> = impl ::#core::future::Future<Output = #output_ty>
             where
                 Self: #(#self_lifetimes)+*;

@@ -17,12 +17,21 @@ pub struct TraitCodegen<'s> {
     pub crate_idents: &'s CrateIdents,
 }
 
+pub enum Supertraits {
+    None,
+    Some {
+        colon_token: syn::token::Colon,
+        bounds: syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
+    },
+}
+
 impl<'s> TraitCodegen<'s> {
     pub fn gen_trait_def(
         &self,
         visibility: &syn::Visibility,
         trait_ident: &syn::Ident,
         trait_generics: &generics::TraitGenerics,
+        supertraits: &Supertraits,
         trait_dependency_mode: &TraitDependencyMode,
         trait_fns: &[TraitFn],
         fn_input_mode: &FnInputMode<'_>,
@@ -42,7 +51,6 @@ impl<'s> TraitCodegen<'s> {
             _ => None,
         };
 
-        // let opt_unimock_attr = attr.opt_unimock_attribute(trait_fns, mode);
         let opt_entrait_for_trait_attr = match trait_dependency_mode {
             TraitDependencyMode::Concrete(_) => {
                 Some(attributes::Attr(attributes::EntraitForTraitParams {
@@ -121,7 +129,7 @@ impl<'a> ToTokens for TraitVisibility<'a> {
                     }
                 }
             }
-            FnInputMode::SingleFn(_) => {
+            FnInputMode::SingleFn(_) | FnInputMode::RawTrait => {
                 push_tokens!(stream, self.visibility);
             }
         }

@@ -42,6 +42,7 @@ pub struct FnIndex(pub usize);
 pub struct InjectDynImplParam(pub bool);
 
 /// The fn signature inside the trait
+#[derive(Clone)]
 pub struct EntraitSignature {
     pub sig: syn::Signature,
     pub associated_fut_decl: Option<proc_macro2::TokenStream>,
@@ -49,7 +50,19 @@ pub struct EntraitSignature {
     pub lifetimes: Vec<EntraitLifetime>,
 }
 
+impl EntraitSignature {
+    pub fn new(sig: syn::Signature) -> Self {
+        Self {
+            sig,
+            associated_fut_decl: None,
+            associated_fut_impl: None,
+            lifetimes: vec![],
+        }
+    }
+}
+
 /// Only used for associated future:
+#[derive(Clone)]
 pub struct EntraitLifetime {
     pub lifetime: syn::Lifetime,
     pub source: SigComponent,
@@ -63,6 +76,7 @@ pub enum SigComponent {
     Output,
 }
 
+#[derive(Clone, Copy)]
 pub struct UserProvidedLifetime(bool);
 
 #[derive(Clone, Copy)]

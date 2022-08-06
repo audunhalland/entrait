@@ -17,12 +17,7 @@ pub struct SignatureConverter<'a> {
 impl<'a> SignatureConverter<'a> {
     /// Convert from an standalone `fn` signature to a trait `fn` signature.
     pub fn convert_fn_to_trait_fn(&self) -> EntraitSignature {
-        let mut entrait_sig = EntraitSignature {
-            sig: self.input_sig.sig.clone(),
-            associated_fut_decl: None,
-            associated_fut_impl: None,
-            lifetimes: vec![],
-        };
+        let mut entrait_sig = EntraitSignature::new(self.input_sig.sig.clone());
 
         // strip away attributes
         for fn_arg in entrait_sig.sig.inputs.iter_mut() {

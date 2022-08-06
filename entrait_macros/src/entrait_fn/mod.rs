@@ -13,6 +13,7 @@ use crate::impl_fn_codegen;
 use crate::input::FnInputMode;
 use crate::input::{InputFn, InputMod, ModItem};
 use crate::signature;
+use crate::trait_codegen::Supertraits;
 use crate::trait_codegen::TraitCodegen;
 use input_attr::*;
 
@@ -55,6 +56,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         &attr.trait_visibility,
         &attr.trait_ident,
         &trait_generics,
+        &Supertraits::None,
         &trait_dependency_mode,
         &trait_fns,
         &fn_input_mode,
@@ -129,6 +131,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         &attr.trait_visibility,
         &attr.trait_ident,
         &trait_generics,
+        &Supertraits::None,
         &trait_dependency_mode,
         &trait_fns,
         &fn_input_mode,
