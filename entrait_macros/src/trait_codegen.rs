@@ -65,6 +65,12 @@ impl<'s> TraitCodegen<'s> {
             trait_fns.iter(),
         );
 
+        let literal_attrs = if let FnInputMode::RawTrait(literal_attrs) = fn_input_mode {
+            Some(literal_attrs)
+        } else {
+            None
+        };
+
         let trait_visibility = TraitVisibility {
             visibility,
             fn_input_mode,
@@ -88,6 +94,7 @@ impl<'s> TraitCodegen<'s> {
             #opt_entrait_for_trait_attr
             #opt_mockall_automock_attr
             #opt_async_trait_attr
+            #literal_attrs
             #trait_visibility trait #trait_ident #params #supertraits #where_clause {
                 #(#fn_defs)*
             }
@@ -142,7 +149,7 @@ impl<'a> ToTokens for TraitVisibility<'a> {
                     }
                 }
             }
-            FnInputMode::SingleFn(_) | FnInputMode::RawTrait => {
+            FnInputMode::SingleFn(_) | FnInputMode::RawTrait(_) => {
                 push_tokens!(stream, self.visibility);
             }
         }

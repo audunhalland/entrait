@@ -78,7 +78,7 @@ pub(super) fn detect_trait_dependency_mode<'t, 'c>(
                     ty.span(),
                     "Using concrete dependencies in a module is an anti-pattern. Instead, write a trait manually, use the #[entrait] attribute on it, and implement it for your application type",
                 )),
-                FnInputMode::RawTrait => panic!("Should not detect dependencies for this input mode")
+                FnInputMode::RawTrait(_) => panic!("Should not detect dependencies for this input mode")
             };
         }
     }

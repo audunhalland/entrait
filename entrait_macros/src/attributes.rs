@@ -117,7 +117,7 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
                 );
             });
 
-            if !matches!(self.fn_input_mode, FnInputMode::RawTrait) {
+            if !matches!(self.fn_input_mode, FnInputMode::RawTrait(_)) {
                 // mod=?
                 punctuator.push_fn(|stream| {
                     if let FnInputMode::SingleFn(fn_ident) = &self.fn_input_mode {

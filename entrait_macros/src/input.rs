@@ -13,7 +13,17 @@ use syn::parse::{Parse, ParseStream};
 pub enum FnInputMode<'a> {
     SingleFn(&'a syn::Ident),
     Module(&'a syn::Ident),
-    RawTrait,
+    RawTrait(LiteralAttrs<'a>),
+}
+
+pub struct LiteralAttrs<'a>(pub &'a [syn::Attribute]);
+
+impl<'a> ToTokens for LiteralAttrs<'a> {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        for attr in self.0 {
+            attr.to_tokens(stream);
+        }
+    }
 }
 
 pub enum Input {
