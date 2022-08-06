@@ -171,7 +171,7 @@ fn invoke(
             opts_modifier(&mut attr.opts);
             let debug = attr.opts.debug.map(|opt| *opt.value()).unwrap_or(false);
 
-            (entrait_trait::output_tokens2(attr, item_trait), debug)
+            (entrait_trait::output_tokens(attr, item_trait), debug)
         }
     };
 
