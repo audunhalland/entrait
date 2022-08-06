@@ -343,7 +343,9 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
             Colon2(span),
             Ident::new("Target", span),
             Colon(span),
-            self.out_trait.ident
+            self.out_trait.ident,
+            self.plus_send(),
+            self.plus_sync()
         );
     }
 
