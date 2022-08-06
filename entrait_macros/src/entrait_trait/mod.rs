@@ -322,7 +322,7 @@ fn gen_delegation_trait_def(
                     bounds: syn::parse_quote! { 'static },
                 },
                 trait_dependency_mode,
-                &out_trait.fns,
+                &trait_copy.fns,
                 &FnInputMode::RawTrait(LiteralAttrs(&[])),
             )?;
 
