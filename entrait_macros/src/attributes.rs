@@ -79,7 +79,7 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
 pub struct UnimockAttrParams<'s> {
     pub crate_idents: &'s CrateIdents,
     pub trait_fns: &'s [TraitFn],
-    pub(super) mode: &'s FnInputMode<'s>,
+    pub(super) fn_input_mode: &'s FnInputMode<'s>,
     pub span: Span,
 }
 
@@ -117,30 +117,32 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
                 );
             });
 
-            // mod=?
-            punctuator.push_fn(|stream| {
-                if let FnInputMode::SingleFn(fn_ident) = &self.mode {
-                    push_tokens!(stream, Mod(span), Eq(span), fn_ident);
-                } else {
-                    push_tokens!(stream, Mod(span), Eq(span), Star(span));
-                }
-            });
-
-            // as=Fn
-            punctuator.push_fn(|stream| {
-                push_tokens!(
-                    stream,
-                    Ident::new("as", span),
-                    Eq(span),
-                    Ident::new("Fn", span)
-                );
-            });
-
-            // unmocked=[...]
-            if !self.trait_fns.is_empty() {
+            if !matches!(self.fn_input_mode, FnInputMode::RawTrait) {
+                // mod=?
                 punctuator.push_fn(|stream| {
-                    self.unmocked(stream);
+                    if let FnInputMode::SingleFn(fn_ident) = &self.fn_input_mode {
+                        push_tokens!(stream, Mod(span), Eq(span), fn_ident);
+                    } else {
+                        push_tokens!(stream, Mod(span), Eq(span), Star(span));
+                    }
                 });
+
+                // as=Fn
+                punctuator.push_fn(|stream| {
+                    push_tokens!(
+                        stream,
+                        Ident::new("as", span),
+                        Eq(span),
+                        Ident::new("Fn", span)
+                    );
+                });
+
+                // unmocked=[...]
+                if !self.trait_fns.is_empty() {
+                    punctuator.push_fn(|stream| {
+                        self.unmocked(stream);
+                    });
+                }
             }
         });
     }

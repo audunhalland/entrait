@@ -43,7 +43,7 @@ impl<'s> TraitCodegen<'s> {
                 params: attributes::UnimockAttrParams {
                     crate_idents: &self.crate_idents,
                     trait_fns,
-                    mode: fn_input_mode,
+                    fn_input_mode,
                     span,
                 },
                 opts: &self.opts,
