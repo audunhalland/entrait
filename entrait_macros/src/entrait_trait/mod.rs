@@ -9,6 +9,7 @@ use crate::analyze_generics::TraitFn;
 use crate::generics;
 use crate::generics::TraitDependencyMode;
 use crate::idents::GenericIdents;
+use crate::impl_fn_codegen::opt_async_trait_attribute;
 use crate::input::FnInputMode;
 use crate::input::LiteralAttrs;
 use crate::opt::*;
@@ -52,6 +53,12 @@ pub fn output_tokens(
         TraitDependencyMode::Generic(idents) => idents,
         _ => panic!(),
     };
+
+    let mut impl_async_trait_attr =
+        opt_async_trait_attribute(&attr.opts, &attr.crate_idents, out_trait.fns.iter());
+    if !impl_attrs.is_empty() {
+        impl_async_trait_attr = None;
+    }
 
     let delegation_trait_def =
         gen_delegation_trait_def(&out_trait, &trait_dependency_mode, &generic_idents, &attr)?;
@@ -105,6 +112,7 @@ pub fn output_tokens(
         #delegation_trait_def
 
         #(#impl_attrs)*
+        #impl_async_trait_attr
         impl #params #trait_ident #args for #self_ty #where_clause {
             #(#impl_assoc_types)*
             #(#method_items)*
