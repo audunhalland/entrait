@@ -17,14 +17,6 @@ pub struct TraitCodegen<'s> {
     pub crate_idents: &'s CrateIdents,
 }
 
-pub enum Supertraits {
-    None,
-    Some {
-        colon_token: syn::token::Colon,
-        bounds: syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
-    },
-}
-
 impl<'s> TraitCodegen<'s> {
     pub fn gen_trait_def(
         &self,
@@ -96,10 +88,31 @@ impl<'s> TraitCodegen<'s> {
             #opt_entrait_for_trait_attr
             #opt_mockall_automock_attr
             #opt_async_trait_attr
-            #trait_visibility trait #trait_ident #params #where_clause {
+            #trait_visibility trait #trait_ident #params #supertraits #where_clause {
                 #(#fn_defs)*
             }
         })
+    }
+}
+
+#[derive(Clone)]
+pub enum Supertraits {
+    None,
+    Some {
+        colon_token: syn::token::Colon,
+        bounds: syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
+    },
+}
+
+impl ToTokens for Supertraits {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        if let Self::Some {
+            colon_token,
+            bounds,
+        } = self
+        {
+            push_tokens!(stream, colon_token, bounds);
+        }
     }
 }
 

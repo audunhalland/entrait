@@ -205,6 +205,7 @@ pub fn output_tokens2(
     let delegation_trait_def =
         gen_delegation_trait_def(&out_trait, &trait_dependency_mode, &generic_idents, &attr)?;
 
+    let trait_attrs = &out_trait.attrs;
     let trait_def = TraitCodegen {
         crate_idents: &attr.crate_idents,
         opts: &attr.opts,
@@ -213,7 +214,7 @@ pub fn output_tokens2(
         &out_trait.vis,
         &out_trait.ident,
         &out_trait.generics,
-        &Supertraits::None,
+        &out_trait.supertraits,
         &trait_dependency_mode,
         &out_trait.fns,
         &FnInputMode::RawTrait,
@@ -249,6 +250,7 @@ pub fn output_tokens2(
         .map(|trait_fn| gen_delegation_method2(trait_fn, generic_idents, &attr));
 
     Ok(quote! {
+        #(#trait_attrs)*
         #trait_def
 
         #delegation_trait_def

@@ -4,6 +4,7 @@ use crate::{
     idents::CrateIdents,
     opt::Opts,
     signature::{EntraitSignature, FnIndex, InputSig, ReceiverGeneration},
+    trait_codegen::{self, Supertraits},
 };
 
 use syn::spanned::Spanned;
@@ -15,6 +16,7 @@ pub struct OutTrait {
     pub trait_token: syn::token::Trait,
     pub generics: TraitGenerics,
     pub ident: syn::Ident,
+    pub supertraits: trait_codegen::Supertraits,
     pub fns: Vec<TraitFn>,
 }
 
@@ -38,6 +40,15 @@ pub fn analyze_trait<'i>(
             )),
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    let supertraits = if let Some(colon_token) = item_trait.colon_token {
+        Supertraits::Some {
+            colon_token,
+            bounds: item_trait.supertraits,
+        }
+    } else {
+        Supertraits::None
+    };
 
     let trait_fns = methods
         .into_iter()
@@ -79,6 +90,7 @@ pub fn analyze_trait<'i>(
                 .map(|where_clause| where_clause.predicates)
                 .unwrap_or_default(),
         },
+        supertraits,
         fns: trait_fns,
     })
 }
