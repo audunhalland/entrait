@@ -53,7 +53,7 @@ impl EntraitSignature {
                 }));
         }
 
-        let fut = quote::format_ident!("Fut{}", fn_index.0);
+        let fut = quote::format_ident!("Fut__{}", sig.ident);
 
         self.sig.output = syn::parse_quote_spanned! { trait_span =>
             -> Self::#fut<#(#fut_lifetimes),*>
@@ -62,6 +62,7 @@ impl EntraitSignature {
         let core = &crate_idents.core;
 
         self.associated_fut_decl = Some(quote_spanned! { trait_span=>
+            #[allow(non_camel_case_types)]
             type #fut<#(#fut_lifetimes),*>: ::#core::future::Future<Output = #output_ty> + Send
             where
                 Self: #(#self_lifetimes)+*;
