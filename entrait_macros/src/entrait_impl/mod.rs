@@ -52,7 +52,10 @@ pub fn output_tokens(
         .enumerate()
         .map(|(index, input_fn)| {
             TraitFnAnalyzer {
-                inject_dyn_impl_param: signature::InjectDynImplParam(matches!(kind, ImplKind::Dyn)),
+                impl_receiver_kind: match kind {
+                    ImplKind::Static => signature::ImplReceiverKind::StaticImpl,
+                    ImplKind::Dyn => signature::ImplReceiverKind::DynamicImpl,
+                },
                 trait_span,
                 crate_idents: &attr.crate_idents,
                 opts: &attr.opts,
@@ -77,9 +80,7 @@ pub fn output_tokens(
         input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
     );
     let impl_indirection = match kind {
-        ImplKind::Static => generics::ImplIndirection::ImplRef {
-            ref_lifetime: syn::Lifetime::new("'entrait_a", trait_span),
-        },
+        ImplKind::Static => generics::ImplIndirection::Static { ident: impl_ident },
         ImplKind::Dyn => generics::ImplIndirection::DynCopy { ident: impl_ident },
     };
 
@@ -114,18 +115,6 @@ pub fn output_tokens(
                 #(#items)*
 
                 const _: () = {
-                    pub struct __ImplRef<'a, T>(&'a ::entrait::Impl<T>);
-
-                    impl<'a, T> ::#core::convert::From<&'a ::#entrait::Impl<T>> for __ImplRef<'a, T> {
-                        fn from(__impl: &'a ::#entrait::Impl<T>) -> Self {
-                            Self(__impl)
-                        }
-                    }
-
-                    impl<'a, T: 'static> ::#entrait::BorrowImpl<'a, T> for #impl_ident {
-                        type Target = __ImplRef<'a, T>;
-                    }
-
                     #impl_block
                 };
             }

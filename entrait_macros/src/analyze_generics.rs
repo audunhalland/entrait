@@ -2,9 +2,8 @@ use crate::generics::{FnDeps, TraitDependencyMode, TraitGenerics};
 use crate::idents::{CrateIdents, GenericIdents};
 use crate::input::FnInputMode;
 use crate::opt::Opts;
-use crate::signature::{
-    converter::SignatureConverter, EntraitSignature, FnIndex, InjectDynImplParam, InputSig,
-};
+use crate::signature::ImplReceiverKind;
+use crate::signature::{converter::SignatureConverter, EntraitSignature, FnIndex, InputSig};
 use crate::token_util::TokenPair;
 
 use proc_macro2::Span;
@@ -32,7 +31,7 @@ impl TraitFn {
 }
 
 pub struct TraitFnAnalyzer<'s> {
-    pub inject_dyn_impl_param: InjectDynImplParam,
+    pub impl_receiver_kind: ImplReceiverKind,
     pub trait_span: Span,
     pub crate_idents: &'s CrateIdents,
     pub opts: &'s Opts,
@@ -53,7 +52,7 @@ impl<'s> TraitFnAnalyzer<'s> {
             input_sig,
             deps: &deps,
             fn_index,
-            inject_dyn_impl_param: self.inject_dyn_impl_param,
+            impl_receiver_kind: self.impl_receiver_kind,
         }
         .convert_fn_to_trait_fn();
         Ok(TraitFn {

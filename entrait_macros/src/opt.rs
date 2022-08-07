@@ -56,11 +56,10 @@ pub enum AsyncStrategy {
 
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
-pub enum DelegationKind {
+pub enum Delegate {
     BySelf,
     ByBorrow,
-    ByTraitStatic(syn::Ident),
-    ByTraitDyn(syn::Ident),
+    ByTrait(syn::Ident),
 }
 
 #[derive(Copy, Clone)]
@@ -84,7 +83,7 @@ pub enum EntraitOpt {
     Debug(SpanOpt<bool>),
     AsyncTrait(SpanOpt<bool>),
     AssociatedFuture(SpanOpt<bool>),
-    DelegateBy(SpanOpt<DelegationKind>),
+    DelegateBy(SpanOpt<Delegate>),
     /// Whether to export mocks
     Export(SpanOpt<bool>),
     /// Whether to generate unimock impl
@@ -123,7 +122,7 @@ impl Parse for EntraitOpt {
             "associated_future" => Ok(AssociatedFuture(parse_eq_bool(input, true, span)?)),
             "delegate_by" => Ok(DelegateBy(parse_eq_delegate_by(
                 input,
-                DelegationKind::BySelf,
+                Delegate::BySelf,
                 span,
             )?)),
             "export" => Ok(Export(parse_eq_bool(input, true, span)?)),
@@ -143,29 +142,22 @@ fn parse_eq_bool(input: ParseStream, default: bool, span: Span) -> syn::Result<S
 
 fn parse_eq_delegate_by(
     input: ParseStream,
-    default: DelegationKind,
+    default: Delegate,
     span: Span,
-) -> syn::Result<SpanOpt<DelegationKind>> {
+) -> syn::Result<SpanOpt<Delegate>> {
     if !input.peek(syn::token::Eq) {
         return Ok(SpanOpt(default, span));
     }
 
     input.parse::<syn::token::Eq>()?;
 
-    if input.peek(syn::token::Dyn) {
-        let _: syn::token::Dyn = input.parse()?;
-        let trait_ident = input.parse::<syn::Ident>()?;
-
-        return Ok(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), span));
-    }
-
     let ident = input.parse::<syn::Ident>()?;
 
     Ok(SpanOpt(
         match ident.to_string().as_str() {
-            "Self" => DelegationKind::BySelf,
-            "Borrow" => DelegationKind::ByBorrow,
-            _ => DelegationKind::ByTraitStatic(ident),
+            "Self" => Delegate::BySelf,
+            "Borrow" => Delegate::ByBorrow,
+            _ => Delegate::ByTrait(ident),
         },
         span,
     ))

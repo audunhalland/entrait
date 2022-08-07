@@ -4,20 +4,30 @@ use crate::opt::*;
 use syn::parse::{Parse, ParseStream};
 
 pub struct EntraitTraitAttr {
-    pub delegation_trait: Option<DelegationTrait>,
+    pub impl_trait: Option<ImplTrait>,
     pub opts: Opts,
-    pub delegation_kind: Option<SpanOpt<DelegationKind>>,
+    pub delegation_kind: Option<SpanOpt<Delegate>>,
     pub crate_idents: CrateIdents,
 }
 
-pub struct DelegationTrait {
-    pub trait_visibility: syn::Visibility,
-    pub trait_ident: syn::Ident,
-}
+pub struct ImplTrait(pub syn::Visibility, pub syn::Ident);
 
 impl Parse for EntraitTraitAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let span = input.span();
+
+        let mut impl_trait = None;
+
+        if !input.is_empty() && input.fork().parse::<EntraitOpt>().is_err() {
+            let vis: syn::Visibility = input.parse()?;
+            let ident: syn::Ident = input.parse()?;
+
+            impl_trait = Some(ImplTrait(vis, ident));
+
+            if input.peek(syn::token::Comma) {
+                input.parse::<syn::token::Comma>()?;
+            }
+        }
 
         let mut debug = None;
         let mut async_strategy = None;
@@ -52,7 +62,7 @@ impl Parse for EntraitTraitAttr {
         }
 
         Ok(Self {
-            delegation_trait: None,
+            impl_trait,
             opts: Opts {
                 default_span: proc_macro2::Span::call_site(),
                 no_deps: None,

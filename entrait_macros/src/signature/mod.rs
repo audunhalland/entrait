@@ -39,7 +39,14 @@ impl<'s> Deref for InputSig<'s> {
 #[derive(Clone, Copy)]
 pub struct FnIndex(pub usize);
 
-pub struct InjectDynImplParam(pub bool);
+pub enum ImplReceiverKind {
+    // (&self, ..)
+    SelfRef,
+    // (&__impl, ..)
+    StaticImpl,
+    // (&self, &__impl, ..)
+    DynamicImpl,
+}
 
 /// The fn signature inside the trait
 #[derive(Clone)]

@@ -1,8 +1,9 @@
 use super::{fn_params, ReceiverGeneration};
-use super::{EntraitSignature, FnIndex, InjectDynImplParam, InputSig};
+use super::{EntraitSignature, FnIndex, ImplReceiverKind, InputSig};
 use crate::{generics::FnDeps, idents::CrateIdents, opt::Opts};
 
 use proc_macro2::Span;
+use syn::spanned::Spanned;
 
 pub struct SignatureConverter<'a> {
     pub crate_idents: &'a CrateIdents,
@@ -10,7 +11,7 @@ pub struct SignatureConverter<'a> {
     pub opts: &'a Opts,
     pub input_sig: InputSig<'a>,
     pub deps: &'a FnDeps,
-    pub inject_dyn_impl_param: InjectDynImplParam,
+    pub impl_receiver_kind: ImplReceiverKind,
     pub fn_index: FnIndex,
 }
 
@@ -72,27 +73,29 @@ impl<'a> SignatureConverter<'a> {
         let span = self.trait_span;
         match receiver_generation {
             ReceiverGeneration::Insert => {
-                sig.inputs
-                    .insert(0, syn::parse_quote_spanned! { span=> &self });
+                sig.inputs.insert(
+                    0,
+                    self.gen_first_receiver(
+                        Span::call_site(),
+                        Some((syn::token::And::default(), None)),
+                    ),
+                );
             }
             ReceiverGeneration::Rewrite => {
                 let input = sig.inputs.first_mut().unwrap();
+                let input_span = input.span();
                 match input {
                     syn::FnArg::Typed(pat_type) => match pat_type.ty.as_ref() {
                         syn::Type::Reference(type_reference) => {
                             let and_token = type_reference.and_token;
                             let lifetime = type_reference.lifetime.clone();
 
-                            *input = syn::FnArg::Receiver(syn::Receiver {
-                                attrs: vec![],
-                                reference: Some((and_token, lifetime)),
-                                mutability: None,
-                                self_token: syn::parse_quote_spanned! { span=> self },
-                            });
+                            *input = self
+                                .gen_first_receiver(pat_type.span(), Some((and_token, lifetime)));
                         }
                         _ => {
                             let first_mut = sig.inputs.first_mut().unwrap();
-                            *first_mut = syn::parse_quote_spanned! { span=> &self };
+                            *first_mut = self.gen_first_receiver(input_span, None);
                         }
                     },
                     syn::FnArg::Receiver(_) => panic!(),
@@ -101,14 +104,42 @@ impl<'a> SignatureConverter<'a> {
             ReceiverGeneration::None => {}
         }
 
-        if self.inject_dyn_impl_param.0 {
-            let entrait = &self.crate_idents.entrait;
-            sig.inputs.insert(
-                1,
-                syn::parse_quote! {
-                    __impl: &::#entrait::Impl<EntraitT>
-                },
-            );
+        if matches!(self.impl_receiver_kind, ImplReceiverKind::DynamicImpl) {
+            sig.inputs
+                .insert(1, self.gen_impl_receiver(Span::call_site()));
+        }
+    }
+
+    fn gen_first_receiver(
+        &self,
+        span: Span,
+        reference: Option<(syn::token::And, Option<syn::Lifetime>)>,
+    ) -> syn::FnArg {
+        match &self.impl_receiver_kind {
+            ImplReceiverKind::SelfRef | ImplReceiverKind::DynamicImpl => {
+                self.gen_self_receiver(span, reference)
+            }
+            ImplReceiverKind::StaticImpl => self.gen_impl_receiver(span),
+        }
+    }
+
+    fn gen_self_receiver(
+        &self,
+        span: Span,
+        reference: Option<(syn::token::And, Option<syn::Lifetime>)>,
+    ) -> syn::FnArg {
+        syn::FnArg::Receiver(syn::Receiver {
+            attrs: vec![],
+            reference: reference,
+            mutability: None,
+            self_token: syn::token::SelfValue(span),
+        })
+    }
+
+    fn gen_impl_receiver(&self, span: Span) -> syn::FnArg {
+        let entrait = &self.crate_idents.entrait;
+        syn::parse_quote! {
+            __impl: &::#entrait::Impl<EntraitT>
         }
     }
 

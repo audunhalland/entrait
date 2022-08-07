@@ -134,16 +134,8 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
                 ImplIndirection::None => {
                     push_tokens!(stream, idents.impl_path(span))
                 }
-                ImplIndirection::ImplRef { ref_lifetime } => {
-                    push_tokens!(
-                        stream,
-                        syn::Ident::new("__ImplRef", span),
-                        syn::token::Lt(span),
-                        ref_lifetime,
-                        syn::token::Comma(span),
-                        idents.impl_t,
-                        syn::token::Gt(span)
-                    );
+                ImplIndirection::Static { ident } => {
+                    push_tokens!(stream, ident);
                 }
                 ImplIndirection::DynCopy { ident } => {
                     push_tokens!(stream, ident);
@@ -166,12 +158,10 @@ impl<'g> quote::ToTokens for SelfArgComma<'g> {
             ImplIndirection::None => {
                 push_tokens!(stream, syn::token::SelfValue(span), syn::token::Comma(span));
             }
-            ImplIndirection::ImplRef { .. } => {
+            ImplIndirection::Static { .. } => {
                 push_tokens!(
                     stream,
-                    syn::token::SelfValue(span),
-                    syn::token::Dot(span),
-                    syn::LitInt::new("0", span),
+                    syn::Ident::new("__impl", span),
                     syn::token::Comma(span)
                 );
             }

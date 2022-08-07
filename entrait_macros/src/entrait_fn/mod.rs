@@ -27,7 +27,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
     let mut generics_analyzer = GenericsAnalyzer::new();
 
     let trait_fns = [TraitFnAnalyzer {
-        inject_dyn_impl_param: signature::InjectDynImplParam(false),
+        impl_receiver_kind: signature::ImplReceiverKind::SelfRef,
         trait_span: attr.trait_ident.span(),
         crate_idents: &attr.crate_idents,
         opts: &attr.opts,
@@ -98,7 +98,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         .enumerate()
         .map(|(index, input_fn)| {
             TraitFnAnalyzer {
-                inject_dyn_impl_param: signature::InjectDynImplParam(false),
+                impl_receiver_kind: signature::ImplReceiverKind::SelfRef,
                 trait_span: attr.trait_ident.span(),
                 crate_idents: &attr.crate_idents,
                 opts: &attr.opts,

@@ -6,6 +6,7 @@ mod out_trait;
 use input_attr::EntraitTraitAttr;
 
 use crate::analyze_generics::TraitFn;
+use crate::entrait_trait::input_attr::ImplTrait;
 use crate::generics;
 use crate::generics::TraitDependencyMode;
 use crate::idents::GenericIdents;
@@ -18,8 +19,8 @@ use crate::trait_codegen::Supertraits;
 use crate::trait_codegen::TraitCodegen;
 
 use proc_macro2::TokenStream;
+use quote::quote;
 use quote::ToTokens;
-use quote::{quote, quote_spanned};
 
 use self::out_trait::OutTrait;
 
@@ -61,7 +62,7 @@ pub fn output_tokens(
     }
 
     let delegation_trait_def =
-        gen_delegation_trait_def(&out_trait, &trait_dependency_mode, &generic_idents, &attr)?;
+        gen_impl_delegation_trait_defs(&out_trait, &trait_dependency_mode, &generic_idents, &attr)?;
 
     let trait_def = TraitCodegen {
         crate_idents: &attr.crate_idents,
@@ -120,7 +121,7 @@ pub fn output_tokens(
     })
 }
 
-fn gen_delegation_trait_def(
+fn gen_impl_delegation_trait_defs(
     out_trait: &OutTrait,
     trait_dependency_mode: &TraitDependencyMode,
     generic_idents: &GenericIdents,
@@ -128,20 +129,66 @@ fn gen_delegation_trait_def(
 ) -> syn::Result<Option<TokenStream>> {
     let entrait = &generic_idents.crate_idents.entrait;
 
+    let ImplTrait(_, impl_trait_ident) = match &attr.impl_trait {
+        Some(impl_trait) => impl_trait,
+        None => return Ok(None),
+    };
+
+    let mut trait_copy = out_trait.clone();
+    trait_copy.ident = impl_trait_ident.clone();
+
+    let no_mock_opts = Opts {
+        unimock: None,
+        mockall: None,
+        ..attr.opts
+    };
+
     match &attr.delegation_kind {
-        Some(SpanOpt(DelegationKind::ByTraitStatic(trait_ident), _)) => {
-            let span = trait_ident.span();
-            let impl_t = &generic_idents.impl_t;
-            Ok(Some(quote_spanned! { span=>
-                pub trait #trait_ident<#impl_t> {
-                    type By: for<'a> ::#entrait::BorrowImpl<'a, #impl_t>;
+        Some(SpanOpt(Delegate::ByTrait(delegation_ident), _)) => {
+            trait_copy.generics.params.insert(
+                0,
+                syn::parse_quote! {
+                    EntraitT
+                },
+            );
+            for trait_fn in trait_copy.fns.iter_mut() {
+                if !matches!(trait_fn.sig().inputs.first(), Some(syn::FnArg::Receiver(_))) {
+                    continue;
+                }
+
+                if let Some(first_arg) = trait_fn.entrait_sig.sig.inputs.first_mut() {
+                    *first_arg = syn::parse_quote! {
+                        __impl: &::#entrait::Impl<EntraitT>
+                    };
+                }
+            }
+
+            let trait_def = TraitCodegen {
+                crate_idents: &attr.crate_idents,
+                opts: &no_mock_opts,
+            }
+            .gen_trait_def(
+                &trait_copy.vis,
+                &trait_copy.ident,
+                &trait_copy.generics,
+                &Supertraits::Some {
+                    colon_token: syn::token::Colon::default(),
+                    bounds: syn::parse_quote! { 'static },
+                },
+                trait_dependency_mode,
+                &trait_copy.fns,
+                &FnInputMode::RawTrait(LiteralAttrs(&[])),
+            )?;
+
+            Ok(Some(quote! {
+                #trait_def
+
+                pub trait #delegation_ident<T> {
+                    type By: #impl_trait_ident<T>;
                 }
             }))
         }
-        Some(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), _)) => {
-            let mut trait_copy = out_trait.clone();
-
-            trait_copy.ident = trait_ident.clone();
+        Some(SpanOpt(Delegate::ByBorrow, _)) => {
             trait_copy.generics.params.insert(
                 0,
                 syn::parse_quote! {
@@ -186,15 +233,18 @@ fn gen_delegation_trait_def(
 
             Ok(Some(trait_def))
         }
-        _ => Ok(None),
+        _ => Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "Missing delegate_by",
+        )),
     }
 }
 
-fn gen_delegation_method(
-    trait_fn: &TraitFn,
-    generic_idents: &GenericIdents,
-    attr: &EntraitTraitAttr,
-) -> TokenStream {
+fn gen_delegation_method<'s>(
+    trait_fn: &'s TraitFn,
+    generic_idents: &'s GenericIdents,
+    attr: &'s EntraitTraitAttr,
+) -> DelegatingMethod<'s> {
     let fn_sig = &trait_fn.sig();
     let fn_ident = &fn_sig.ident;
     let impl_t = &generic_idents.impl_t;
@@ -207,39 +257,83 @@ fn gen_delegation_method(
             _ => panic!("Found a non-ident pattern, this should be handled in signature.rs"),
         },
     });
-    let opt_dot_await = trait_fn.originally_async.then(|| quote! { .await });
     let core = &generic_idents.crate_idents.core;
 
-    match &attr.delegation_kind {
-        Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) => {
-            quote! {
-                #fn_sig {
-                    <#impl_t::By as ::#entrait::BorrowImpl<#impl_t>>::Target::from(self).#fn_ident(#(#arguments),*) #opt_dot_await
-                }
+    match (&attr.impl_trait, &attr.delegation_kind) {
+        (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByTrait(_), _))) => {
+            DelegatingMethod {
+                trait_fn,
+                needs_async_move: true,
+                call: quote! {
+                    // TODO: pass additional generic arguments(?)
+                    <#impl_t::By as #impl_trait_ident<#impl_t>>::#fn_ident(self, #(#arguments),*)
+                },
             }
         }
-        Some(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), _)) => {
-            quote! {
-                #fn_sig {
-                    <#impl_t as ::#core::borrow::Borrow<dyn #trait_ident<#impl_t>>>::borrow(&*self)
-                        .#fn_ident(self, #(#arguments),*) #opt_dot_await
-                }
+        (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByBorrow, _))) => {
+            DelegatingMethod {
+                trait_fn,
+                needs_async_move: false,
+                call: quote! {
+                    <#impl_t as ::#core::borrow::Borrow<dyn #impl_trait_ident<#impl_t>>>::borrow(&*self)
+                        .#fn_ident(self, #(#arguments),*)
+                },
             }
         }
-        Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
-            quote! {
-                #fn_sig {
-                    self.as_ref().borrow().#fn_ident(#(#arguments),*) #opt_dot_await
-                }
+        (None, Some(SpanOpt(Delegate::ByBorrow, _))) => DelegatingMethod {
+            trait_fn,
+            needs_async_move: false,
+            call: quote! {
+                self.as_ref().borrow().#fn_ident(#(#arguments),*)
+            },
+        },
+        _ => DelegatingMethod {
+            trait_fn,
+            needs_async_move: false,
+            call: quote! {
+                self.as_ref().#fn_ident(#(#arguments),*)
+            },
+        },
+    }
+}
+
+struct DelegatingMethod<'s> {
+    trait_fn: &'s TraitFn,
+    needs_async_move: bool,
+    call: TokenStream,
+}
+
+impl<'s> ToTokens for DelegatingMethod<'s> {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        self.trait_fn.sig().to_tokens(stream);
+        syn::token::Brace::default().surround(stream, |stream| {
+            if self.needs_async_move && self.trait_fn.entrait_sig.associated_fut_impl.is_some() {
+                push_tokens!(
+                    stream,
+                    syn::token::Async::default(),
+                    syn::token::Move::default()
+                );
+                syn::token::Brace::default().surround(stream, |stream| {
+                    self.call.to_tokens(stream);
+                    push_tokens!(
+                        stream,
+                        syn::token::Dot::default(),
+                        syn::token::Await::default()
+                    );
+                });
+            } else if self.trait_fn.originally_async {
+                syn::token::Brace::default().surround(stream, |stream| {
+                    self.call.to_tokens(stream);
+                });
+                push_tokens!(
+                    stream,
+                    syn::token::Dot::default(),
+                    syn::token::Await::default()
+                );
+            } else {
+                self.call.to_tokens(stream);
             }
-        }
-        _ => {
-            quote! {
-                #fn_sig {
-                    self.as_ref().#fn_ident(#(#arguments),*) #opt_dot_await
-                }
-            }
-        }
+        });
     }
 }
 
@@ -258,24 +352,26 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
 
         push_tokens!(stream, self.generic_idents.impl_t, Colon(self.span));
 
-        match &self.attr.delegation_kind {
-            Some(SpanOpt(DelegationKind::ByTraitStatic(trait_ident), _)) => {
+        match (&self.attr.impl_trait, &self.attr.delegation_kind) {
+            (Some(_), Some(SpanOpt(Delegate::ByTrait(delegate_ident), _))) => {
                 push_tokens!(
                     stream,
-                    trait_ident,
+                    delegate_ident,
                     Lt(self.span),
                     self.generic_idents.impl_t,
-                    Gt(self.span)
+                    Gt(self.span),
+                    self.plus_sync(),
+                    self.plus_static()
                 );
             }
-            Some(SpanOpt(DelegationKind::ByTraitDyn(trait_ident), _)) => {
+            (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByBorrow, _))) => {
                 self.push_core_borrow_borrow(stream);
                 push_tokens!(
                     stream,
                     // Generic arguments:
                     Lt(self.span),
                     Dyn(self.span),
-                    trait_ident,
+                    impl_trait_ident,
                     Lt(self.span),
                     self.generic_idents.impl_t,
                     Gt(self.span),
@@ -287,7 +383,7 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                 }
                 push_tokens!(stream, self.plus_static());
             }
-            Some(SpanOpt(DelegationKind::ByBorrow, _)) => {
+            (None, Some(SpanOpt(Delegate::ByBorrow, _))) => {
                 self.push_core_borrow_borrow(stream);
                 push_tokens!(
                     stream,
@@ -407,11 +503,15 @@ impl<'g, 'c> quote::ToTokens for ImplWhereClause<'g, 'c> {
         });
 
         // Trait delegation bounds:
-        if let Some(SpanOpt(DelegationKind::ByTraitStatic(_), _)) = &self.attr.delegation_kind {
+        /*
+        if let (Some(_), Some(SpanOpt(Delegate::ByTrait(_), _))) =
+            (&self.attr.impl_trait, &self.attr.delegation_kind)
+        {
             punctuator.push_fn(|stream| {
                 self.push_delegate_borrow_impl_ref_bounds(stream);
             });
         }
+        */
 
         for predicate in &self.trait_generics.where_predicates {
             punctuator.push(predicate);

@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "use-associated-future", feature(generic_associated_types))]
+#![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
+
 #[entrait::entrait(pub Baz)]
 fn baz<D>(_: &D) -> i32 {
     42
@@ -6,7 +9,7 @@ fn baz<D>(_: &D) -> i32 {
 mod simple_static {
     use entrait::*;
 
-    #[entrait(delegate_by = DelegateFoobar)]
+    #[entrait(FoobarImpl, delegate_by = DelegateFoobar)]
     trait Foobar {
         fn foo(&self) -> i32;
         fn bar(&self) -> u32;
@@ -22,7 +25,7 @@ mod simple_static {
             deps.baz()
         }
 
-        #[derive_impl(super::Foobar)]
+        #[derive_impl(super::FoobarImpl)]
         pub struct FoobarImpl;
     }
 
@@ -41,7 +44,7 @@ mod simple_static {
 mod simple_dyn {
     use entrait::*;
 
-    #[entrait(delegate_by = dyn DelegateFoobar)]
+    #[entrait(FoobarImpl, delegate_by = Borrow)]
     trait Foobar {
         fn foo(&self) -> i32;
         fn bar(&self) -> u32;
@@ -57,16 +60,16 @@ mod simple_dyn {
             deps.baz()
         }
 
-        #[derive_impl(super::DelegateFoobar)]
+        #[derive_impl(super::FoobarImpl)]
         pub struct FoobarImpl;
     }
 
     struct App {
-        foobar: Box<dyn DelegateFoobar<Self> + Sync>,
+        foobar: Box<dyn FoobarImpl<Self> + Sync>,
     }
 
-    impl std::borrow::Borrow<dyn DelegateFoobar<Self>> for App {
-        fn borrow(&self) -> &dyn DelegateFoobar<Self> {
+    impl std::borrow::Borrow<dyn FoobarImpl<Self>> for App {
+        fn borrow(&self) -> &dyn FoobarImpl<Self> {
             self.foobar.as_ref()
         }
     }
@@ -85,7 +88,7 @@ mod simple_dyn {
 mod async_static {
     use entrait::*;
 
-    #[entrait(delegate_by = DelegateFoobar)]
+    #[entrait(FoobarImpl, delegate_by = DelegateFoobar)]
     trait Foobar {
         async fn foo(&self) -> i32;
         async fn bar(&self) -> u32;

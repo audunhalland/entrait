@@ -11,7 +11,7 @@ use crate::{
 #[derive(Clone)]
 pub enum ImplIndirection<'s> {
     None,
-    ImplRef { ref_lifetime: syn::Lifetime },
+    Static { ident: &'s syn::Ident },
     DynCopy { ident: &'s syn::Ident },
 }
 
@@ -174,10 +174,6 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
             syn::token::Gt::default(),
         );
 
-        if let ImplIndirection::ImplRef { ref_lifetime } = &self.impl_indirection {
-            punctuator.push(ref_lifetime);
-        }
-
         if let Some(impl_t) = &self.impl_t {
             punctuator.push_fn(|stream| {
                 push_tokens!(
@@ -294,7 +290,7 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
                                 self.span,
                             );
                         }
-                        ImplIndirection::ImplRef { .. } | ImplIndirection::DynCopy { .. } => {
+                        ImplIndirection::Static { .. } | ImplIndirection::DynCopy { .. } => {
                             push_impl_t_bounds(
                                 stream,
                                 generic_idents.impl_path(self.span),
