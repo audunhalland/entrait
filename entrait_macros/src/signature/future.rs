@@ -5,6 +5,8 @@ use quote::ToTokens;
 
 use crate::generics::TraitIndirection;
 use crate::idents::CrateIdents;
+use crate::token_util::EmptyToken;
+use crate::token_util::Punctuator;
 
 use super::lifetimes;
 use super::AssociatedFut;
@@ -77,26 +79,20 @@ pub struct FutDecl<'s> {
 impl<'s> ToTokens for FutDecl<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let ident = &self.associated_fut.ident;
-        let bound_target = match self.trait_indirection {
-            TraitIndirection::Static | TraitIndirection::Dynamic => quote! { EntraitT },
-            TraitIndirection::None => quote! { Self },
-        };
         let core = &self.crate_idents.core;
         let output = &self.associated_fut.output;
 
-        let fut_lifetimes = self.signature.lifetimes.iter().map(|ft| &ft.lifetime);
-        let receiver_lifetimes = self
-            .signature
-            .lifetimes
-            .iter()
-            .filter(|ft| ft.source == SigComponent::Receiver)
-            .map(|ft| &ft.lifetime);
+        let params = FutParams {
+            signature: self.signature,
+        };
+        let where_clause = WhereClause {
+            signature: self.signature,
+            trait_indirection: self.trait_indirection,
+        };
 
         let tokens = quote! {
             #[allow(non_camel_case_types)]
-            type #ident<#(#fut_lifetimes),*>: ::#core::future::Future<Output = #output> + Send
-            where
-                #bound_target: #(#receiver_lifetimes)+*;
+            type #ident #params: ::#core::future::Future<Output = #output> + Send #where_clause;
         };
 
         tokens.to_tokens(stream);
@@ -113,27 +109,72 @@ pub struct FutImpl<'s> {
 impl<'s> ToTokens for FutImpl<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let ident = &self.associated_fut.ident;
+        let core = &self.crate_idents.core;
+        let output = &self.associated_fut.output;
+
+        let params = FutParams {
+            signature: self.signature,
+        };
+        let where_clause = WhereClause {
+            signature: self.signature,
+            trait_indirection: self.trait_indirection,
+        };
+
+        let tokens = quote! {
+            #[allow(non_camel_case_types)]
+            type #ident #params = impl ::#core::future::Future<Output = #output> #where_clause;
+        };
+        tokens.to_tokens(stream);
+    }
+}
+
+struct FutParams<'s> {
+    signature: &'s EntraitSignature,
+}
+
+impl<'s> ToTokens for FutParams<'s> {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        let mut punctuator = Punctuator::new(
+            stream,
+            syn::token::Lt::default(),
+            syn::token::Comma::default(),
+            syn::token::Gt::default(),
+        );
+
+        for lt in &self.signature.lifetimes {
+            punctuator.push(&lt.lifetime);
+        }
+    }
+}
+
+struct WhereClause<'s> {
+    signature: &'s EntraitSignature,
+    trait_indirection: TraitIndirection,
+}
+
+impl<'s> ToTokens for WhereClause<'s> {
+    fn to_tokens(&self, stream: &mut TokenStream) {
         let bound_target = match self.trait_indirection {
             TraitIndirection::Static | TraitIndirection::Dynamic => quote! { EntraitT },
             TraitIndirection::None => quote! { Self },
         };
-        let core = &self.crate_idents.core;
-        let output = &self.associated_fut.output;
 
-        let fut_lifetimes = self.signature.lifetimes.iter().map(|ft| &ft.lifetime);
-        let receiver_lifetimes = self
+        let mut punctuator = Punctuator::new(
+            stream,
+            quote! {
+                where #bound_target:
+            },
+            syn::token::Add::default(),
+            EmptyToken,
+        );
+
+        for lt in self
             .signature
             .lifetimes
             .iter()
             .filter(|ft| ft.source == SigComponent::Receiver)
-            .map(|ft| &ft.lifetime);
-
-        let tokens = quote! {
-            #[allow(non_camel_case_types)]
-            type #ident<#(#fut_lifetimes),*> = impl ::#core::future::Future<Output = #output>
-            where
-                #bound_target: #(#receiver_lifetimes)+*;
-        };
-        tokens.to_tokens(stream);
+        {
+            punctuator.push(&lt.lifetime);
+        }
     }
 }
