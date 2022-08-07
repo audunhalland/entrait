@@ -31,12 +31,17 @@ pub fn analyze_trait<'i>(item_trait: syn::ItemTrait, opts: &Opts) -> syn::Result
                 let originally_async = input_sig.asyncness.is_some();
                 let use_associated_future = input_sig.use_associated_future(opts);
 
+                let receiver_generation = match method.sig.inputs.first() {
+                    Some(syn::FnArg::Receiver(_)) => ReceiverGeneration::Rewrite,
+                    _ => ReceiverGeneration::None,
+                };
+
                 let mut entrait_sig = EntraitSignature::new(method.sig);
 
                 if use_associated_future {
-                    entrait_sig.convert_to_associated_future(ReceiverGeneration::None, trait_span);
+                    entrait_sig.convert_to_associated_future(receiver_generation, trait_span);
                 } else {
-                    lifetimes::collect_lifetimes(&mut entrait_sig, ReceiverGeneration::Rewrite);
+                    lifetimes::collect_lifetimes(&mut entrait_sig, receiver_generation);
                 }
 
                 fns.push(TraitFn {
