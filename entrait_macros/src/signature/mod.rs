@@ -1,11 +1,13 @@
 pub mod converter;
 pub mod future;
+pub mod lifetimes;
 
 mod fn_params;
-mod lifetimes;
 
 use std::ops::Deref;
 
+use crate::generics::TraitIndirection;
+use crate::idents::CrateIdents;
 use crate::opt::AsyncStrategy;
 use crate::opt::Opts;
 use crate::opt::SpanOpt;
@@ -49,8 +51,7 @@ pub enum ImplReceiverKind {
 #[derive(Clone)]
 pub struct EntraitSignature {
     pub sig: syn::Signature,
-    pub associated_fut_decl: Option<proc_macro2::TokenStream>,
-    pub associated_fut_impl: Option<proc_macro2::TokenStream>,
+    pub associated_fut: Option<AssociatedFut>,
     pub lifetimes: Vec<EntraitLifetime>,
 }
 
@@ -58,11 +59,46 @@ impl EntraitSignature {
     pub fn new(sig: syn::Signature) -> Self {
         Self {
             sig,
-            associated_fut_decl: None,
-            associated_fut_impl: None,
+            associated_fut: None,
             lifetimes: vec![],
         }
     }
+
+    pub fn associated_fut_decl<'s>(
+        &'s self,
+        trait_indirection: TraitIndirection,
+        crate_idents: &'s CrateIdents,
+    ) -> Option<future::FutDecl<'s>> {
+        self.associated_fut
+            .as_ref()
+            .map(|associated_fut| future::FutDecl {
+                signature: self,
+                associated_fut,
+                trait_indirection,
+                crate_idents,
+            })
+    }
+
+    pub fn associated_fut_impl<'s>(
+        &'s self,
+        trait_indirection: TraitIndirection,
+        crate_idents: &'s CrateIdents,
+    ) -> Option<future::FutImpl<'s>> {
+        self.associated_fut
+            .as_ref()
+            .map(|associated_fut| future::FutImpl {
+                signature: self,
+                associated_fut,
+                trait_indirection,
+                crate_idents,
+            })
+    }
+}
+
+#[derive(Clone)]
+pub struct AssociatedFut {
+    pub ident: syn::Ident,
+    pub output: syn::Type,
 }
 
 /// Only used for associated future:

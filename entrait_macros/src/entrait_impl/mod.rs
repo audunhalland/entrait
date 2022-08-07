@@ -35,7 +35,7 @@ pub fn output_tokens(
         }
     };
 
-    let impl_ident = &derive_impl.ident;
+    let impl_type_ident = &derive_impl.type_ident;
     let trait_span = derive_impl
         .trait_path
         .0
@@ -75,8 +75,12 @@ pub fn output_tokens(
         input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
     );
     let impl_indirection = match kind {
-        ImplKind::Static => generics::ImplIndirection::Static { ident: impl_ident },
-        ImplKind::Dyn => generics::ImplIndirection::Dynamic { ident: impl_ident },
+        ImplKind::Static => generics::ImplIndirection::Static {
+            type_ident: impl_type_ident,
+        },
+        ImplKind::Dyn => generics::ImplIndirection::Dynamic {
+            type_ident: impl_type_ident,
+        },
     };
 
     let impl_block = impl_fn_codegen::ImplCodegen {

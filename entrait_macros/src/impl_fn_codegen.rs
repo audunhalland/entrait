@@ -57,7 +57,10 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
         );
 
         let items = trait_fns.iter().map(|trait_fn| {
-            let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl;
+            let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl(
+                self.impl_indirection.to_trait_indirection(),
+                self.crate_idents,
+            );
 
             let fn_item = self.gen_delegating_fn_item(trait_fn, self.trait_span);
 
@@ -108,7 +111,7 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
             });
 
         let mut opt_dot_await = trait_fn.opt_dot_await(span);
-        if entrait_sig.associated_fut_decl.is_some() {
+        if entrait_sig.associated_fut.is_some() {
             opt_dot_await = None;
         }
 
@@ -134,11 +137,11 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
                 ImplIndirection::None => {
                     push_tokens!(stream, idents.impl_path(span))
                 }
-                ImplIndirection::Static { ident } => {
-                    push_tokens!(stream, ident);
+                ImplIndirection::Static { type_ident } => {
+                    push_tokens!(stream, type_ident);
                 }
-                ImplIndirection::Dynamic { ident } => {
-                    push_tokens!(stream, ident);
+                ImplIndirection::Dynamic { type_ident } => {
+                    push_tokens!(stream, type_ident);
                 }
             },
             TraitDependencyMode::Concrete(ty) => {

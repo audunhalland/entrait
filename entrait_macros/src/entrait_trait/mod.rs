@@ -45,7 +45,7 @@ pub fn output_tokens(
         .cloned()
         .collect::<Vec<_>>();
 
-    let out_trait = out_trait::analyze_trait(item_trait, &attr.crate_idents, &attr.opts)?;
+    let out_trait = out_trait::analyze_trait(item_trait, &attr.opts)?;
     let trait_dependency_mode = TraitDependencyMode::Generic(GenericIdents::new(
         &attr.crate_idents,
         out_trait.ident.span(),
@@ -67,13 +67,14 @@ pub fn output_tokens(
     let trait_def = TraitCodegen {
         crate_idents: &attr.crate_idents,
         opts: &attr.opts,
+        trait_indirection: generics::TraitIndirection::None,
+        trait_dependency_mode: &trait_dependency_mode,
     }
     .gen_trait_def(
         &out_trait.vis,
         &out_trait.ident,
         &out_trait.generics,
         &out_trait.supertraits,
-        &trait_dependency_mode,
         &out_trait.fns,
         &FnInputMode::RawTrait(LiteralAttrs(&out_trait.attrs)),
     )?;
@@ -97,10 +98,11 @@ pub fn output_tokens(
         span: trait_ident_span,
     };
 
-    let impl_assoc_types = out_trait
-        .fns
-        .iter()
-        .filter_map(|trait_fn| trait_fn.entrait_sig.associated_fut_impl.as_ref());
+    let impl_assoc_types = out_trait.fns.iter().filter_map(|trait_fn| {
+        trait_fn
+            .entrait_sig
+            .associated_fut_impl(generics::TraitIndirection::None, &attr.crate_idents)
+    });
 
     let method_items = out_trait
         .fns
@@ -166,6 +168,8 @@ fn gen_impl_delegation_trait_defs(
             let trait_def = TraitCodegen {
                 crate_idents: &attr.crate_idents,
                 opts: &no_mock_opts,
+                trait_indirection: generics::TraitIndirection::Static,
+                trait_dependency_mode: trait_dependency_mode,
             }
             .gen_trait_def(
                 &trait_copy.vis,
@@ -175,7 +179,6 @@ fn gen_impl_delegation_trait_defs(
                     colon_token: syn::token::Colon::default(),
                     bounds: syn::parse_quote! { 'static },
                 },
-                trait_dependency_mode,
                 &trait_copy.fns,
                 &FnInputMode::RawTrait(LiteralAttrs(&[])),
             )?;
@@ -217,6 +220,8 @@ fn gen_impl_delegation_trait_defs(
             let trait_def = TraitCodegen {
                 crate_idents: &attr.crate_idents,
                 opts: &no_mock_opts,
+                trait_indirection: generics::TraitIndirection::Dynamic,
+                trait_dependency_mode,
             }
             .gen_trait_def(
                 &trait_copy.vis,
@@ -226,7 +231,6 @@ fn gen_impl_delegation_trait_defs(
                     colon_token: syn::token::Colon::default(),
                     bounds: syn::parse_quote! { 'static },
                 },
-                trait_dependency_mode,
                 &trait_copy.fns,
                 &FnInputMode::RawTrait(LiteralAttrs(&[])),
             )?;
@@ -307,7 +311,7 @@ impl<'s> ToTokens for DelegatingMethod<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         self.trait_fn.sig().to_tokens(stream);
         syn::token::Brace::default().surround(stream, |stream| {
-            if self.needs_async_move && self.trait_fn.entrait_sig.associated_fut_impl.is_some() {
+            if self.needs_async_move && self.trait_fn.entrait_sig.associated_fut.is_some() {
                 push_tokens!(
                     stream,
                     syn::token::Async::default(),

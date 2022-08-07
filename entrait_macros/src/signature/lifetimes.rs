@@ -5,46 +5,64 @@ use super::{
 use std::collections::HashSet;
 use syn::visit_mut::VisitMut;
 
-pub(super) fn de_elide_lifetimes(
+pub fn de_elide_lifetimes(
     entrait_sig: &mut EntraitSignature,
     receiver_generation: ReceiverGeneration,
 ) {
     let mut elision_detector = ElisionDetector::new(receiver_generation);
     elision_detector.detect(&mut entrait_sig.sig);
 
-    let mut de_elider = LifetimeDeElider::new(elision_detector.elided_params);
+    let mut visitor = LifetimeMutVisitor::new(true, elision_detector.elided_params);
 
+    process(entrait_sig, &mut visitor, receiver_generation);
+}
+
+pub fn collect_lifetimes(
+    entrait_sig: &mut EntraitSignature,
+    receiver_generation: ReceiverGeneration,
+) {
+    let mut visitor = LifetimeMutVisitor::new(false, HashSet::new());
+    process(entrait_sig, &mut visitor, receiver_generation);
+}
+
+fn process(
+    entrait_sig: &mut EntraitSignature,
+    visitor: &mut LifetimeMutVisitor,
+    receiver_generation: ReceiverGeneration,
+) {
     match receiver_generation {
         ReceiverGeneration::None => {
             for (index, arg) in entrait_sig.sig.inputs.iter_mut().enumerate() {
-                de_elider.de_elide_param(index, arg);
+                visitor.de_elide_param(index, arg);
             }
         }
         ReceiverGeneration::Rewrite | ReceiverGeneration::Insert => {
-            de_elider.de_elide_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
+            visitor.de_elide_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
 
             for (index, arg) in entrait_sig.sig.inputs.iter_mut().skip(1).enumerate() {
-                de_elider.de_elide_param(index, arg);
+                visitor.de_elide_param(index, arg);
             }
         }
     }
 
-    de_elider.de_elide_output(&mut entrait_sig.sig.output);
+    visitor.de_elide_output(&mut entrait_sig.sig.output);
 
-    entrait_sig.lifetimes.append(&mut de_elider.lifetimes);
+    entrait_sig.lifetimes.append(&mut visitor.lifetimes);
 }
 
 /// Looks at elided lifetimes and makes them explicit.
 /// Also collects all lifetimes into `lifetimes`.
-struct LifetimeDeElider {
+struct LifetimeMutVisitor {
+    de_elide: bool,
     current_component: SigComponent,
     elided_params: HashSet<usize>,
     lifetimes: Vec<EntraitLifetime>,
 }
 
-impl LifetimeDeElider {
-    fn new(elided_params: HashSet<usize>) -> Self {
+impl LifetimeMutVisitor {
+    fn new(de_elide: bool, elided_params: HashSet<usize>) -> Self {
         Self {
+            de_elide,
             current_component: SigComponent::Receiver,
             elided_params,
             lifetimes: vec![],
@@ -64,6 +82,16 @@ impl LifetimeDeElider {
     fn de_elide_output(&mut self, output: &mut syn::ReturnType) {
         self.current_component = SigComponent::Output;
         self.visit_return_type_mut(output);
+    }
+
+    fn process_opt_lifetime(&mut self, lifetime: Option<syn::Lifetime>) -> Option<syn::Lifetime> {
+        if self.de_elide {
+            Some(self.make_lifetime_explicit(lifetime))
+        } else if let Some(lifetime) = lifetime {
+            Some(self.register_user_lifetime(lifetime))
+        } else {
+            None
+        }
     }
 
     fn make_lifetime_explicit(&mut self, lifetime: Option<syn::Lifetime>) -> syn::Lifetime {
@@ -134,16 +162,16 @@ impl LifetimeDeElider {
     }
 }
 
-impl syn::visit_mut::VisitMut for LifetimeDeElider {
+impl syn::visit_mut::VisitMut for LifetimeMutVisitor {
     fn visit_receiver_mut(&mut self, receiver: &mut syn::Receiver) {
         if let Some((_, lifetime)) = &mut receiver.reference {
-            *lifetime = Some(self.make_lifetime_explicit(lifetime.clone()));
+            *lifetime = self.process_opt_lifetime(lifetime.clone());
         }
         syn::visit_mut::visit_receiver_mut(self, receiver);
     }
 
     fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
-        reference.lifetime = Some(self.make_lifetime_explicit(reference.lifetime.clone()));
+        reference.lifetime = self.process_opt_lifetime(reference.lifetime.clone());
         syn::visit_mut::visit_type_reference_mut(self, reference);
     }
 

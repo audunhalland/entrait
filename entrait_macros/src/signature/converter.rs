@@ -35,11 +35,7 @@ impl<'a> SignatureConverter<'a> {
         self.generate_params(&mut entrait_sig.sig, receiver_generation);
 
         if self.input_sig.use_associated_future(self.opts) {
-            entrait_sig.convert_to_associated_future(
-                receiver_generation,
-                self.trait_span,
-                &self.crate_idents,
-            );
+            entrait_sig.convert_to_associated_future(receiver_generation, self.trait_span);
         }
 
         self.remove_generic_type_params(&mut entrait_sig.sig);

@@ -123,7 +123,7 @@ impl ToTokens for ModItem {
                     stream,
                     derive_impl.vis,
                     derive_impl.struct_token,
-                    derive_impl.ident,
+                    derive_impl.type_ident,
                     derive_impl.semi
                 );
             }
@@ -139,7 +139,7 @@ pub struct DeriveImpl {
     pub trait_path: DeriveImplTraitPath,
     pub vis: syn::Visibility,
     pub struct_token: syn::token::Struct,
-    pub ident: syn::Ident,
+    pub type_ident: syn::Ident,
     pub semi: syn::token::Semi,
 }
 
@@ -229,7 +229,7 @@ impl Parse for ModItem {
         if let Some(trait_path) = find_and_remove_derive_impl(&mut attrs)? {
             let vis: syn::Visibility = input.parse()?;
             let struct_token = input.parse()?;
-            let ident = input.parse()?;
+            let type_ident = input.parse()?;
             let semi = input.parse()?;
 
             return Ok(ModItem::DeriveImpl(DeriveImpl {
@@ -237,7 +237,7 @@ impl Parse for ModItem {
                 trait_path,
                 vis,
                 struct_token,
-                ident,
+                type_ident,
                 semi,
             }));
         }

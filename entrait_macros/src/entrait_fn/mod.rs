@@ -47,13 +47,14 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
     let trait_def = TraitCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
+        trait_indirection: generics::TraitIndirection::None,
+        trait_dependency_mode: &trait_dependency_mode,
     }
     .gen_trait_def(
         &attr.trait_visibility,
         &attr.trait_ident,
         &trait_generics,
         &Supertraits::None,
-        &trait_dependency_mode,
         &trait_fns,
         &fn_input_mode,
     )?;
@@ -117,13 +118,14 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
     let trait_def = TraitCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
+        trait_indirection: generics::TraitIndirection::None,
+        trait_dependency_mode: &trait_dependency_mode,
     }
     .gen_trait_def(
         &attr.trait_visibility,
         &attr.trait_ident,
         &trait_generics,
         &Supertraits::None,
-        &trait_dependency_mode,
         &trait_fns,
         &fn_input_mode,
     )?;

@@ -4,7 +4,7 @@ use quote::{quote, quote_spanned, ToTokens};
 use crate::{
     analyze_generics::TraitFn,
     attributes,
-    generics::{self, TraitDependencyMode},
+    generics::{self, TraitDependencyMode, TraitIndirection},
     idents::CrateIdents,
     impl_fn_codegen,
     input::FnInputMode,
@@ -15,6 +15,8 @@ use crate::{
 pub struct TraitCodegen<'s> {
     pub opts: &'s Opts,
     pub crate_idents: &'s CrateIdents,
+    pub trait_indirection: TraitIndirection,
+    pub trait_dependency_mode: &'s TraitDependencyMode<'s, 's>,
 }
 
 impl<'s> TraitCodegen<'s> {
@@ -24,7 +26,6 @@ impl<'s> TraitCodegen<'s> {
         trait_ident: &syn::Ident,
         trait_generics: &generics::TraitGenerics,
         supertraits: &Supertraits,
-        trait_dependency_mode: &TraitDependencyMode,
         trait_fns: &[TraitFn],
         fn_input_mode: &FnInputMode<'_>,
     ) -> syn::Result<TokenStream> {
@@ -43,7 +44,7 @@ impl<'s> TraitCodegen<'s> {
             _ => None,
         };
 
-        let opt_entrait_for_trait_attr = match trait_dependency_mode {
+        let opt_entrait_for_trait_attr = match self.trait_dependency_mode {
             TraitDependencyMode::Concrete(_) => {
                 Some(attributes::Attr(attributes::EntraitForTraitParams {
                     crate_idents: &self.crate_idents,
@@ -77,7 +78,9 @@ impl<'s> TraitCodegen<'s> {
         };
 
         let fn_defs = trait_fns.iter().map(|trait_fn| {
-            let opt_associated_fut_decl = &trait_fn.entrait_sig.associated_fut_decl;
+            let opt_associated_fut_decl = &trait_fn
+                .entrait_sig
+                .associated_fut_decl(self.trait_indirection, &self.crate_idents);
             let trait_fn_sig = trait_fn.sig();
 
             quote! {

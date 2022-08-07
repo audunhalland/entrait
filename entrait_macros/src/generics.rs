@@ -11,8 +11,25 @@ use crate::{
 #[derive(Clone)]
 pub enum ImplIndirection<'s> {
     None,
-    Static { ident: &'s syn::Ident },
-    Dynamic { ident: &'s syn::Ident },
+    Static { type_ident: &'s syn::Ident },
+    Dynamic { type_ident: &'s syn::Ident },
+}
+
+impl<'s> ImplIndirection<'s> {
+    pub fn to_trait_indirection(&'s self) -> TraitIndirection {
+        match self {
+            Self::None => TraitIndirection::None,
+            Self::Static { .. } => TraitIndirection::Static,
+            Self::Dynamic { .. } => TraitIndirection::Dynamic,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum TraitIndirection {
+    None,
+    Static,
+    Dynamic,
 }
 
 #[derive(Clone, Copy)]
