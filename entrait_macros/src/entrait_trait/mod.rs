@@ -196,7 +196,7 @@ fn gen_impl_delegation_trait_defs(
                 #trait_def
 
                 pub trait #delegation_ident<T> {
-                    type By: #impl_trait_ident<T>;
+                    type Target: #impl_trait_ident<T>;
                 }
             }))
         }
@@ -278,7 +278,7 @@ fn gen_delegation_method<'s>(
                 needs_async_move: true,
                 call: quote! {
                     // TODO: pass additional generic arguments(?)
-                    <#impl_t::By as #impl_trait_ident<#impl_t>>::#fn_ident(self, #(#arguments),*)
+                    <#impl_t::Target as #impl_trait_ident<#impl_t>>::#fn_ident(self, #(#arguments),*)
                 },
             }
         }

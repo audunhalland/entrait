@@ -135,7 +135,7 @@ fn missing_derive_impl(input_mod: InputMod) -> syn::Result<proc_macro2::TokenStr
 
     let error = syn::Error::new(
         proc_macro2::Span::call_site(),
-        format!("Module {mod_ident} contains no `#[derive_impl(Trait)] pub struct SomeStruct;`"),
+        format!("Module {mod_ident} contains no `#[derive_impl(Trait)] pub struct SomeStruct;`. Without this, it will be impossible to delegate to this implementation"),
     )
     .into_compile_error();
 

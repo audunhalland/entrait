@@ -30,7 +30,7 @@ mod simple_static {
     }
 
     impl DelegateFoobar<Self> for () {
-        type By = foobar_impl::MyImpl;
+        type Target = foobar_impl::MyImpl;
     }
 
     #[test]
@@ -109,7 +109,7 @@ mod async_static {
     }
 
     impl DelegateFoobar<Self> for () {
-        type By = foobar_impl::MyImpl;
+        type Target = foobar_impl::MyImpl;
     }
 
     #[tokio::test]
