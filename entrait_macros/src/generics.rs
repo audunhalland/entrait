@@ -78,7 +78,6 @@ impl TraitGenerics {
         ParamsGenerator {
             params: &self.params,
             impl_t: None,
-            impl_indirection: &ImplIndirection::None,
             use_associated_future: UseAssociatedFuture(false),
         }
     }
@@ -92,7 +91,6 @@ impl TraitGenerics {
     pub fn impl_params<'i>(
         &'i self,
         trait_dependency_mode: &'i TraitDependencyMode<'i, '_>,
-        impl_indirection: &'i ImplIndirection,
         use_associated_future: UseAssociatedFuture,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
@@ -101,7 +99,6 @@ impl TraitGenerics {
                 TraitDependencyMode::Generic(idents) => Some(&idents.impl_t),
                 TraitDependencyMode::Concrete(_) => None,
             },
-            impl_indirection,
             use_associated_future,
         }
     }
@@ -109,13 +106,11 @@ impl TraitGenerics {
     pub fn impl_params_from_idents<'i>(
         &'i self,
         idents: &'i GenericIdents,
-        impl_indirection: &'i ImplIndirection,
         use_associated_future: UseAssociatedFuture,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
             params: &self.params,
             impl_t: Some(&idents.impl_t),
-            impl_indirection,
             use_associated_future,
         }
     }
@@ -178,7 +173,6 @@ impl<'g, 'c> quote::ToTokens for ImplPath<'g, 'c> {
 pub struct ParamsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     impl_t: Option<&'g syn::Ident>,
-    impl_indirection: &'g ImplIndirection<'g>,
     use_associated_future: UseAssociatedFuture,
 }
 
@@ -201,10 +195,13 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
                 );
 
                 if self.use_associated_future.0 {
-                    // Deps must be 'static for zero-cost futures to work
                     push_tokens!(
                         stream,
                         syn::token::Add::default(),
+                        // In case T is not a reference, it has to be Send
+                        syn::Ident::new("Send", proc_macro2::Span::call_site()),
+                        syn::token::Add::default(),
+                        // Deps must be 'static for zero-cost futures to work
                         syn::Lifetime::new("'static", proc_macro2::Span::call_site())
                     );
                 }

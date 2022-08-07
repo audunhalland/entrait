@@ -38,11 +38,9 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
     pub fn gen_impl_block(&self, trait_fns: &[TraitFn]) -> TokenStream {
         let async_trait_attribute =
             opt_async_trait_attribute(self.opts, self.crate_idents, trait_fns.iter());
-        let params = self.trait_generics.impl_params(
-            self.trait_dependency_mode,
-            &self.impl_indirection,
-            self.use_associated_future,
-        );
+        let params = self
+            .trait_generics
+            .impl_params(self.trait_dependency_mode, self.use_associated_future);
         let args = self.trait_generics.arguments(&self.impl_indirection);
         let self_ty = SelfTy(
             self.trait_dependency_mode,
