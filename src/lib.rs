@@ -739,16 +739,6 @@ pub use entrait_macros::entrait_dyn_impl;
 /// Re-exported from the [implementation] crate.
 pub use ::implementation::Impl;
 
-/// A trait for specifying a custom smart pointer to borrow [Impl] via.
-///
-/// The smart pointer has to implement `From<&Impl<T>>`.
-///
-/// The trait must be implemented by types that represent static-dispatch trait delegation targets.
-pub trait BorrowImpl<'a, T: 'a> {
-    /// The target type of the borrow. This should be a type that contains a reference to [Impl] with the lifetime `'a`.
-    type Target: From<&'a Impl<T>>;
-}
-
 /// Optional mock re-exports for macros
 #[cfg(feature = "unimock")]
 #[doc(hidden)]

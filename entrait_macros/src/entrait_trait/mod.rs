@@ -473,17 +473,6 @@ impl<'g, 'c> quote::ToTokens for ImplWhereClause<'g, 'c> {
             self.push_impl_t_bounds(stream);
         });
 
-        // Trait delegation bounds:
-        /*
-        if let (Some(_), Some(SpanOpt(Delegate::ByTrait(_), _))) =
-            (&self.attr.impl_trait, &self.attr.delegation_kind)
-        {
-            punctuator.push_fn(|stream| {
-                self.push_delegate_borrow_impl_ref_bounds(stream);
-            });
-        }
-        */
-
         for predicate in &self.trait_generics.where_predicates {
             punctuator.push(predicate);
         }
