@@ -81,7 +81,7 @@ pub fn output_tokens(
     );
     let impl_indirection = match kind {
         ImplKind::Static => generics::ImplIndirection::Static { ident: impl_ident },
-        ImplKind::Dyn => generics::ImplIndirection::DynCopy { ident: impl_ident },
+        ImplKind::Dyn => generics::ImplIndirection::Dynamic { ident: impl_ident },
     };
 
     let impl_block = impl_fn_codegen::ImplCodegen {
@@ -105,18 +105,13 @@ pub fn output_tokens(
         ..
     } = &input_mod;
 
-    let entrait = &attr.crate_idents.entrait;
-    let core = &attr.crate_idents.core;
-
+    // BUG: Identical
     Ok(match kind {
         ImplKind::Static => quote! {
             #(#attrs)*
             #vis #mod_token #mod_ident {
                 #(#items)*
-
-                const _: () = {
-                    #impl_block
-                };
+                #impl_block
             }
         },
         ImplKind::Dyn => quote! {

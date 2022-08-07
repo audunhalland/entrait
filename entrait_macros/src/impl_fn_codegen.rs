@@ -89,7 +89,7 @@ impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
 
         let opt_self_comma = match (deps, entrait_sig.sig.inputs.first(), &self.impl_indirection) {
             (generics::FnDeps::NoDeps { .. }, _, _) | (_, None, _) => None,
-            (_, _, ImplIndirection::DynCopy { .. }) => None,
+            (_, _, ImplIndirection::Static { .. } | ImplIndirection::Dynamic { .. }) => None,
             (_, Some(_), _) => Some(SelfArgComma(&self.impl_indirection, span)),
         };
 
@@ -137,7 +137,7 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
                 ImplIndirection::Static { ident } => {
                     push_tokens!(stream, ident);
                 }
-                ImplIndirection::DynCopy { ident } => {
+                ImplIndirection::Dynamic { ident } => {
                     push_tokens!(stream, ident);
                 }
             },
@@ -165,7 +165,7 @@ impl<'g> quote::ToTokens for SelfArgComma<'g> {
                     syn::token::Comma(span)
                 );
             }
-            ImplIndirection::DynCopy { .. } => {
+            ImplIndirection::Dynamic { .. } => {
                 push_tokens!(
                     stream,
                     syn::Ident::new("__impl", span),

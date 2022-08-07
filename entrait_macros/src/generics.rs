@@ -12,7 +12,7 @@ use crate::{
 pub enum ImplIndirection<'s> {
     None,
     Static { ident: &'s syn::Ident },
-    DynCopy { ident: &'s syn::Ident },
+    Dynamic { ident: &'s syn::Ident },
 }
 
 #[derive(Clone, Copy)]
@@ -215,7 +215,10 @@ impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
             syn::token::Gt::default(),
         );
 
-        if let ImplIndirection::DynCopy { .. } = &self.impl_indirection {
+        if matches!(
+            &self.impl_indirection,
+            ImplIndirection::Static { .. } | ImplIndirection::Dynamic { .. }
+        ) {
             punctuator.push(syn::Ident::new("EntraitT", proc_macro2::Span::call_site()));
         }
 
@@ -290,7 +293,7 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
                                 self.span,
                             );
                         }
-                        ImplIndirection::Static { .. } | ImplIndirection::DynCopy { .. } => {
+                        ImplIndirection::Static { .. } | ImplIndirection::Dynamic { .. } => {
                             push_impl_t_bounds(
                                 stream,
                                 generic_idents.impl_path(self.span),

@@ -26,11 +26,11 @@ mod simple_static {
         }
 
         #[derive_impl(super::FoobarImpl)]
-        pub struct FoobarImpl;
+        pub struct MyImpl;
     }
 
     impl DelegateFoobar<Self> for () {
-        type By = foobar_impl::FoobarImpl;
+        type By = foobar_impl::MyImpl;
     }
 
     #[test]
@@ -105,11 +105,11 @@ mod async_static {
         }
 
         #[derive_impl(super::Foobar)]
-        pub struct FoobarImpl;
+        pub struct MyImpl;
     }
 
     impl DelegateFoobar<Self> for () {
-        type By = foobar_impl::FoobarImpl;
+        type By = foobar_impl::MyImpl;
     }
 
     #[tokio::test]
