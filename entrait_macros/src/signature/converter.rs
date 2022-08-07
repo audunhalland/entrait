@@ -1,5 +1,5 @@
 use super::{fn_params, ReceiverGeneration};
-use super::{EntraitSignature, FnIndex, ImplReceiverKind, InputSig};
+use super::{EntraitSignature, ImplReceiverKind, InputSig};
 use crate::{generics::FnDeps, idents::CrateIdents, opt::Opts};
 
 use proc_macro2::Span;
@@ -12,7 +12,6 @@ pub struct SignatureConverter<'a> {
     pub input_sig: InputSig<'a>,
     pub deps: &'a FnDeps,
     pub impl_receiver_kind: ImplReceiverKind,
-    pub fn_index: FnIndex,
 }
 
 impl<'a> SignatureConverter<'a> {
@@ -37,7 +36,6 @@ impl<'a> SignatureConverter<'a> {
 
         if self.input_sig.use_associated_future(self.opts) {
             entrait_sig.convert_to_associated_future(
-                self.fn_index,
                 receiver_generation,
                 self.trait_span,
                 &self.crate_idents,
@@ -70,7 +68,6 @@ impl<'a> SignatureConverter<'a> {
     }
 
     fn generate_params(&self, sig: &mut syn::Signature, receiver_generation: ReceiverGeneration) {
-        let span = self.trait_span;
         match receiver_generation {
             ReceiverGeneration::Insert => {
                 sig.inputs.insert(
@@ -136,7 +133,7 @@ impl<'a> SignatureConverter<'a> {
         })
     }
 
-    fn gen_impl_receiver(&self, span: Span) -> syn::FnArg {
+    fn gen_impl_receiver(&self, _: Span) -> syn::FnArg {
         let entrait = &self.crate_idents.entrait;
         syn::parse_quote! {
             __impl: &::#entrait::Impl<EntraitT>

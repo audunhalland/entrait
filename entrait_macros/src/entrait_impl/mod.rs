@@ -49,8 +49,7 @@ pub fn output_tokens(
         .items
         .iter()
         .filter_map(ModItem::filter_pub_fn)
-        .enumerate()
-        .map(|(index, input_fn)| {
+        .map(|input_fn| {
             TraitFnAnalyzer {
                 impl_receiver_kind: match kind {
                     ImplKind::Static => signature::ImplReceiverKind::StaticImpl,
@@ -60,11 +59,7 @@ pub fn output_tokens(
                 crate_idents: &attr.crate_idents,
                 opts: &attr.opts,
             }
-            .analyze(
-                input_fn.input_sig(),
-                signature::FnIndex(index),
-                &mut generics_analyzer,
-            )
+            .analyze(input_fn.input_sig(), &mut generics_analyzer)
         })
         .collect::<syn::Result<Vec<_>>>()?;
     let trait_generics = generics_analyzer.into_trait_generics();

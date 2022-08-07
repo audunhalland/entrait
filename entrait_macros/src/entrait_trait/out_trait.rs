@@ -3,7 +3,7 @@ use crate::{
     generics::{FnDeps, TraitGenerics},
     idents::CrateIdents,
     opt::Opts,
-    signature::{EntraitSignature, FnIndex, InputSig, ReceiverGeneration},
+    signature::{EntraitSignature, InputSig, ReceiverGeneration},
     trait_codegen::{self, Supertraits},
 };
 
@@ -30,7 +30,7 @@ pub fn analyze_trait<'i>(
     let mut associated_types = vec![];
     let mut fns = vec![];
 
-    for (index, item) in item_trait.items.into_iter().enumerate() {
+    for item in item_trait.items.into_iter() {
         match item {
             syn::TraitItem::Method(method) => {
                 let input_sig = InputSig::new(&method.sig);
@@ -41,7 +41,6 @@ pub fn analyze_trait<'i>(
 
                 if use_associated_future {
                     entrait_sig.convert_to_associated_future(
-                        FnIndex(index),
                         ReceiverGeneration::Rewrite,
                         trait_span,
                         crate_idents,

@@ -6,14 +6,12 @@ use crate::idents::CrateIdents;
 
 use super::lifetimes;
 use super::EntraitSignature;
-use super::FnIndex;
 use super::ReceiverGeneration;
 use super::SigComponent;
 
 impl EntraitSignature {
     pub fn convert_to_associated_future(
         &mut self,
-        fn_index: FnIndex,
         receiver_generation: ReceiverGeneration,
         trait_span: Span,
         crate_idents: &CrateIdents,

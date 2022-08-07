@@ -3,7 +3,7 @@ use crate::idents::{CrateIdents, GenericIdents};
 use crate::input::FnInputMode;
 use crate::opt::Opts;
 use crate::signature::ImplReceiverKind;
-use crate::signature::{converter::SignatureConverter, EntraitSignature, FnIndex, InputSig};
+use crate::signature::{converter::SignatureConverter, EntraitSignature, InputSig};
 use crate::token_util::TokenPair;
 
 use proc_macro2::Span;
@@ -41,7 +41,6 @@ impl<'s> TraitFnAnalyzer<'s> {
     pub fn analyze<'i>(
         self,
         input_sig: InputSig<'i>,
-        fn_index: FnIndex,
         analyzer: &mut GenericsAnalyzer,
     ) -> syn::Result<TraitFn> {
         let deps = analyzer.analyze_fn_deps(input_sig, self.trait_span, self.opts)?;
@@ -51,7 +50,6 @@ impl<'s> TraitFnAnalyzer<'s> {
             opts: self.opts,
             input_sig,
             deps: &deps,
-            fn_index,
             impl_receiver_kind: self.impl_receiver_kind,
         }
         .convert_fn_to_trait_fn();

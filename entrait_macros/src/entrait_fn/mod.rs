@@ -32,11 +32,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         crate_idents: &attr.crate_idents,
         opts: &attr.opts,
     }
-    .analyze(
-        input_fn.input_sig(),
-        signature::FnIndex(0),
-        &mut generics_analyzer,
-    )?];
+    .analyze(input_fn.input_sig(), &mut generics_analyzer)?];
 
     let trait_dependency_mode = detect_trait_dependency_mode(
         &fn_input_mode,
@@ -95,19 +91,14 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         .items
         .iter()
         .filter_map(ModItem::filter_pub_fn)
-        .enumerate()
-        .map(|(index, input_fn)| {
+        .map(|input_fn| {
             TraitFnAnalyzer {
                 impl_receiver_kind: signature::ImplReceiverKind::SelfRef,
                 trait_span: attr.trait_ident.span(),
                 crate_idents: &attr.crate_idents,
                 opts: &attr.opts,
             }
-            .analyze(
-                input_fn.input_sig(),
-                signature::FnIndex(index),
-                &mut generics_analyzer,
-            )
+            .analyze(input_fn.input_sig(), &mut generics_analyzer)
         })
         .collect::<syn::Result<Vec<_>>>()?;
 

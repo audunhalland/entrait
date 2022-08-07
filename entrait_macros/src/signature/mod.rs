@@ -36,9 +36,6 @@ impl<'s> Deref for InputSig<'s> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct FnIndex(pub usize);
-
 pub enum ImplReceiverKind {
     // (&self, ..)
     SelfRef,
