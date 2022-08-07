@@ -6,7 +6,7 @@ use crate::{
     attributes,
     generics::{self, TraitDependencyMode, TraitIndirection},
     idents::CrateIdents,
-    impl_fn_codegen,
+    impl_codegen,
     input::FnInputMode,
     opt::{Opts, SpanOpt},
     token_util::push_tokens,
@@ -60,7 +60,7 @@ impl<'s> TraitCodegen<'s> {
             }),
             _ => None,
         };
-        let opt_async_trait_attr = impl_fn_codegen::opt_async_trait_attribute(
+        let opt_async_trait_attr = impl_codegen::opt_async_trait_attribute(
             &self.opts,
             &self.crate_idents,
             trait_fns.iter(),

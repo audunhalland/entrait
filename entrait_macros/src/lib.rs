@@ -15,7 +15,7 @@ mod entrait_impl;
 mod entrait_trait;
 mod generics;
 mod idents;
-mod impl_fn_codegen;
+mod impl_codegen;
 mod input;
 mod opt;
 mod signature;

@@ -9,7 +9,7 @@ use crate::analyze_generics;
 use crate::analyze_generics::GenericsAnalyzer;
 use crate::analyze_generics::TraitFnAnalyzer;
 use crate::generics;
-use crate::impl_fn_codegen;
+use crate::impl_codegen;
 use crate::input::FnInputMode;
 use crate::input::{InputFn, InputMod, ModItem};
 use crate::signature;
@@ -58,7 +58,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         &trait_fns,
         &fn_input_mode,
     )?;
-    let impl_block = impl_fn_codegen::ImplCodegen {
+    let impl_block = impl_codegen::ImplCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
         trait_ref: &attr.trait_ident,
@@ -129,7 +129,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         &trait_fns,
         &fn_input_mode,
     )?;
-    let impl_block = impl_fn_codegen::ImplCodegen {
+    let impl_block = impl_codegen::ImplCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
         trait_ref: &attr.trait_ident,

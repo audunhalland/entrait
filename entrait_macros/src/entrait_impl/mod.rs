@@ -4,7 +4,7 @@ use crate::analyze_generics;
 use crate::analyze_generics::detect_trait_dependency_mode;
 use crate::analyze_generics::TraitFnAnalyzer;
 use crate::generics;
-use crate::impl_fn_codegen;
+use crate::impl_codegen;
 use crate::input::{InputMod, ModItem};
 use crate::signature;
 use input_attr::EntraitImplAttr;
@@ -83,7 +83,7 @@ pub fn output_tokens(
         },
     };
 
-    let impl_block = impl_fn_codegen::ImplCodegen {
+    let impl_block = impl_codegen::ImplCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
         trait_ref: &derive_impl.trait_path.0,
