@@ -157,9 +157,20 @@ fn gen_impl_delegation_trait_defs(
                 }
 
                 if let Some(first_arg) = trait_fn.entrait_sig.sig.inputs.first_mut() {
-                    *first_arg = syn::parse_quote! {
-                        __impl: &::#entrait::Impl<EntraitT>
-                    };
+                    match first_arg {
+                        syn::FnArg::Receiver(receiver) => {
+                            *first_arg = if let Some((and, lifetime)) = receiver.reference.clone() {
+                                syn::parse_quote! {
+                                    __impl: #and #lifetime ::#entrait::Impl<EntraitT>
+                                }
+                            } else {
+                                syn::parse_quote! {
+                                    __impl: ::#entrait::Impl<EntraitT>
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
 
@@ -250,7 +261,6 @@ fn gen_delegation_method<'s>(
     let fn_sig = &trait_fn.sig();
     let fn_ident = &fn_sig.ident;
     let impl_t = &generic_idents.impl_t;
-    let entrait = &attr.crate_idents.entrait;
 
     let arguments = fn_sig.inputs.iter().filter_map(|arg| match arg {
         syn::FnArg::Receiver(_) => None,
@@ -404,47 +414,6 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                 push_tokens!(stream, self.trait_with_arguments(), self.plus_sync());
             }
         }
-    }
-
-    fn push_delegate_borrow_impl_ref_bounds(&self, stream: &mut TokenStream) {
-        use syn::token::*;
-        use syn::Ident;
-
-        let span = self.span;
-
-        let lifetime = syn::Lifetime::new("'entrait_a", self.span);
-
-        push_tokens!(
-            stream,
-            // for<'a>
-            For(span),
-            Lt(span),
-            lifetime,
-            Gt(span),
-            // <T::By as ::entrait::BorrowImpl<'a, T>>
-            Lt(span),
-            self.generic_idents.impl_t,
-            Colon2(span),
-            Ident::new("By", span),
-            As(span),
-            Colon2(span),
-            self.attr.crate_idents.entrait,
-            Colon2(span),
-            Ident::new("BorrowImpl", span),
-            Lt(span),
-            lifetime,
-            Comma(span),
-            self.generic_idents.impl_t,
-            Gt(span),
-            Gt(span),
-            // ::Target: #trait_ident
-            Colon2(span),
-            Ident::new("Target", span),
-            Colon(span),
-            self.out_trait.ident,
-            self.plus_send(),
-            self.plus_sync()
-        );
     }
 
     fn push_core_borrow_borrow(&self, stream: &mut TokenStream) {

@@ -10,7 +10,7 @@ mod simple_static {
     use entrait::*;
 
     #[entrait(FoobarImpl, delegate_by = DelegateFoobar)]
-    trait Foobar {
+    pub trait Foobar {
         fn foo(&self) -> i32;
         fn bar(&self) -> u32;
     }
@@ -89,7 +89,7 @@ mod async_static {
     use entrait::*;
 
     #[entrait(FoobarImpl, delegate_by = DelegateFoobar)]
-    trait Foobar {
+    pub trait Foobar {
         async fn foo(&self) -> i32;
         async fn bar(&self) -> u32;
     }
@@ -104,7 +104,7 @@ mod async_static {
             deps.baz()
         }
 
-        #[derive_impl(super::Foobar)]
+        #[derive_impl(super::FoobarImpl)]
         pub struct MyImpl;
     }
 
