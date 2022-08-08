@@ -62,7 +62,7 @@ pub fn output_tokens(
     }
 
     let delegation_trait_def =
-        gen_impl_delegation_trait_defs(&out_trait, &trait_dependency_mode, &generic_idents, &attr)?;
+        gen_impl_delegation_trait_defs(&out_trait, &trait_dependency_mode, generic_idents, &attr)?;
 
     let trait_def = TraitCodegen {
         crate_idents: &attr.crate_idents,
@@ -81,7 +81,7 @@ pub fn output_tokens(
 
     let trait_ident = &out_trait.ident;
     let params = out_trait.generics.impl_params_from_idents(
-        &generic_idents,
+        generic_idents,
         generics::UseAssociatedFuture(false),
         generics::TakesSelfByValue(false), // BUG?
     );
@@ -93,7 +93,7 @@ pub fn output_tokens(
         out_trait: &out_trait,
         contains_async,
         trait_generics: &out_trait.generics,
-        generic_idents: &generic_idents,
+        generic_idents,
         attr: &attr,
         span: trait_ident_span,
     };
@@ -159,19 +159,16 @@ fn gen_impl_delegation_trait_defs(
                 }
 
                 if let Some(first_arg) = trait_fn.entrait_sig.sig.inputs.first_mut() {
-                    match first_arg {
-                        syn::FnArg::Receiver(receiver) => {
-                            *first_arg = if let Some((and, lifetime)) = receiver.reference.clone() {
-                                syn::parse_quote! {
-                                    __impl: #and #lifetime ::#entrait::Impl<EntraitT>
-                                }
-                            } else {
-                                syn::parse_quote! {
-                                    __impl: ::#entrait::Impl<EntraitT>
-                                }
+                    if let syn::FnArg::Receiver(receiver) = first_arg {
+                        *first_arg = if let Some((and, lifetime)) = receiver.reference.clone() {
+                            syn::parse_quote! {
+                                __impl: #and #lifetime ::#entrait::Impl<EntraitT>
+                            }
+                        } else {
+                            syn::parse_quote! {
+                                __impl: ::#entrait::Impl<EntraitT>
                             }
                         }
-                        _ => {}
                     }
                 }
             }
@@ -180,7 +177,7 @@ fn gen_impl_delegation_trait_defs(
                 crate_idents: &attr.crate_idents,
                 opts: &no_mock_opts,
                 trait_indirection: generics::TraitIndirection::Static,
-                trait_dependency_mode: trait_dependency_mode,
+                trait_dependency_mode,
             }
             .gen_trait_def(
                 &trait_copy.vis,

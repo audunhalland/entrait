@@ -155,10 +155,7 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
 }
 
 fn convert_sig(sig: syn::Signature, span: Span) -> (EntraitSignature, bool) {
-    let has_receiver = match sig.inputs.first() {
-        Some(syn::FnArg::Receiver(_)) => true,
-        _ => false,
-    };
+    let has_receiver = matches!(sig.inputs.first(), Some(syn::FnArg::Receiver(_)));
 
     let mut entrait_sig = EntraitSignature::new(sig);
     entrait_sig.convert_to_associated_future(ReceiverGeneration::Rewrite, span);

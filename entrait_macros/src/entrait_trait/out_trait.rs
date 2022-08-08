@@ -18,7 +18,7 @@ pub struct OutTrait {
     pub fns: Vec<TraitFn>,
 }
 
-pub fn analyze_trait<'i>(item_trait: syn::ItemTrait) -> syn::Result<OutTrait> {
+pub fn analyze_trait(item_trait: syn::ItemTrait) -> syn::Result<OutTrait> {
     let mut associated_types = vec![];
     let mut fns = vec![];
 

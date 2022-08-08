@@ -71,10 +71,8 @@ impl LifetimeMutVisitor {
     fn process_opt_lifetime(&mut self, lifetime: Option<syn::Lifetime>) -> Option<syn::Lifetime> {
         if self.de_elide {
             Some(self.make_lifetime_explicit(lifetime))
-        } else if let Some(lifetime) = lifetime {
-            Some(self.register_user_lifetime(lifetime))
         } else {
-            None
+            lifetime.map(|lifetime| self.register_user_lifetime(lifetime))
         }
     }
 

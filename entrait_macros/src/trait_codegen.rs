@@ -33,12 +33,12 @@ impl<'s> TraitCodegen<'s> {
         let opt_unimock_attr = match self.opts.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
                 params: attributes::UnimockAttrParams {
-                    crate_idents: &self.crate_idents,
+                    crate_idents: self.crate_idents,
                     trait_fns,
                     fn_input_mode,
                     span,
                 },
-                opts: &self.opts,
+                opts: self.opts,
             }),
             _ => None,
         };
@@ -46,7 +46,7 @@ impl<'s> TraitCodegen<'s> {
         let opt_entrait_for_trait_attr = match self.trait_dependency_mode {
             TraitDependencyMode::Concrete(_) => {
                 Some(attributes::Attr(attributes::EntraitForTraitParams {
-                    crate_idents: &self.crate_idents,
+                    crate_idents: self.crate_idents,
                 }))
             }
             _ => None,
@@ -55,12 +55,12 @@ impl<'s> TraitCodegen<'s> {
         let opt_mockall_automock_attr = match self.opts.default_option(self.opts.mockall, false) {
             SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
                 params: attributes::MockallAutomockParams { span },
-                opts: &self.opts,
+                opts: self.opts,
             }),
             _ => None,
         };
         let opt_async_trait_attr =
-            attributes::opt_async_trait_attr(&self.opts, &self.crate_idents, trait_fns.iter());
+            attributes::opt_async_trait_attr(self.opts, self.crate_idents, trait_fns.iter());
 
         let literal_attrs = if let FnInputMode::RawTrait(literal_attrs) = fn_input_mode {
             Some(literal_attrs)
@@ -76,7 +76,7 @@ impl<'s> TraitCodegen<'s> {
         let fn_defs = trait_fns.iter().map(|trait_fn| {
             let opt_associated_fut_decl = &trait_fn
                 .entrait_sig
-                .associated_fut_decl(self.trait_indirection, &self.crate_idents);
+                .associated_fut_decl(self.trait_indirection, self.crate_idents);
             let trait_fn_sig = trait_fn.sig();
 
             quote! {

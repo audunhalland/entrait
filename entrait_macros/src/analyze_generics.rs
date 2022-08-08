@@ -38,9 +38,9 @@ pub struct TraitFnAnalyzer<'s> {
 }
 
 impl<'s> TraitFnAnalyzer<'s> {
-    pub fn analyze<'i>(
+    pub fn analyze(
         self,
-        input_sig: InputSig<'i>,
+        input_sig: InputSig<'_>,
         analyzer: &mut GenericsAnalyzer,
     ) -> syn::Result<TraitFn> {
         let deps = analyzer.analyze_fn_deps(input_sig, self.trait_span, self.opts)?;

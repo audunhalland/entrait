@@ -115,7 +115,7 @@ impl<'a> SignatureConverter<'a> {
     ) -> syn::FnArg {
         syn::FnArg::Receiver(syn::Receiver {
             attrs: vec![],
-            reference: reference,
+            reference,
             mutability: None,
             self_token: syn::token::SelfValue(span),
         })
