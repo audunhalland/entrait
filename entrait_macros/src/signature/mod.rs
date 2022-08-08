@@ -8,9 +8,6 @@ use std::ops::Deref;
 
 use crate::generics::TraitIndirection;
 use crate::idents::CrateIdents;
-use crate::opt::AsyncStrategy;
-use crate::opt::Opts;
-use crate::opt::SpanOpt;
 
 #[derive(Clone, Copy)]
 pub struct InputSig<'s> {
@@ -20,16 +17,6 @@ pub struct InputSig<'s> {
 impl<'s> InputSig<'s> {
     pub fn new(sig: &'s syn::Signature) -> Self {
         Self { sig }
-    }
-
-    pub fn use_associated_future(&self, opts: &Opts) -> bool {
-        /*
-        matches!(
-            (opts.async_strategy(), self.sig.asyncness),
-            (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
-        )
-        */
-        false
     }
 }
 

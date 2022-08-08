@@ -34,10 +34,6 @@ impl<'a> SignatureConverter<'a> {
         let receiver_generation = self.detect_receiver_generation(&entrait_sig.sig);
         self.generate_params(&mut entrait_sig.sig, receiver_generation);
 
-        if self.input_sig.use_associated_future(self.opts) {
-            entrait_sig.convert_to_associated_future(receiver_generation, self.trait_span);
-        }
-
         self.remove_generic_type_params(&mut entrait_sig.sig);
         tidy_generics(&mut entrait_sig.sig.generics);
 
@@ -51,11 +47,7 @@ impl<'a> SignatureConverter<'a> {
             FnDeps::NoDeps { .. } => ReceiverGeneration::Insert,
             _ => {
                 if sig.inputs.is_empty() {
-                    if self.input_sig.use_associated_future(self.opts) {
-                        ReceiverGeneration::Insert
-                    } else {
-                        ReceiverGeneration::None // bug?
-                    }
+                    ReceiverGeneration::None // bug?
                 } else {
                     ReceiverGeneration::Rewrite
                 }

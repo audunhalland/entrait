@@ -14,22 +14,6 @@ pub fn de_elide_lifetimes(
 
     let mut visitor = LifetimeMutVisitor::new(true, elision_detector.elided_params);
 
-    process(entrait_sig, &mut visitor, receiver_generation);
-}
-
-pub fn collect_lifetimes(
-    entrait_sig: &mut EntraitSignature,
-    receiver_generation: ReceiverGeneration,
-) {
-    let mut visitor = LifetimeMutVisitor::new(false, HashSet::new());
-    process(entrait_sig, &mut visitor, receiver_generation);
-}
-
-fn process(
-    entrait_sig: &mut EntraitSignature,
-    visitor: &mut LifetimeMutVisitor,
-    receiver_generation: ReceiverGeneration,
-) {
     match receiver_generation {
         ReceiverGeneration::None => {
             for (index, arg) in entrait_sig.sig.inputs.iter_mut().enumerate() {

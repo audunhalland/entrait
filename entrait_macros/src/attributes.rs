@@ -2,7 +2,7 @@ use crate::analyze_generics::TraitFn;
 use crate::generics;
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
-use crate::opt::{AsyncStrategy, Opts};
+use crate::opt::Opts;
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};

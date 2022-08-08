@@ -45,7 +45,7 @@ pub fn output_tokens(
         .cloned()
         .collect::<Vec<_>>();
 
-    let out_trait = out_trait::analyze_trait(item_trait, &attr.opts)?;
+    let out_trait = out_trait::analyze_trait(item_trait)?;
     let trait_dependency_mode = TraitDependencyMode::Generic(GenericIdents::new(
         &attr.crate_idents,
         out_trait.ident.span(),

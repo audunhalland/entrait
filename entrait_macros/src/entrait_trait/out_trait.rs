@@ -1,8 +1,7 @@
 use crate::{
     analyze_generics::TraitFn,
     generics::{FnDeps, TraitGenerics},
-    opt::Opts,
-    signature::{lifetimes, AssociatedFut, EntraitSignature, InputSig, ReceiverGeneration},
+    signature::EntraitSignature,
     trait_codegen::{self, Supertraits},
 };
 
@@ -19,30 +18,16 @@ pub struct OutTrait {
     pub fns: Vec<TraitFn>,
 }
 
-pub fn analyze_trait<'i>(item_trait: syn::ItemTrait, opts: &Opts) -> syn::Result<OutTrait> {
-    let trait_span = item_trait.ident.span();
+pub fn analyze_trait<'i>(item_trait: syn::ItemTrait) -> syn::Result<OutTrait> {
     let mut associated_types = vec![];
     let mut fns = vec![];
 
     for item in item_trait.items.into_iter() {
         match item {
             syn::TraitItem::Method(method) => {
-                let input_sig = InputSig::new(&method.sig);
-                let originally_async = input_sig.asyncness.is_some();
-                let use_associated_future = input_sig.use_associated_future(opts);
+                let originally_async = method.sig.asyncness.is_some();
 
-                let receiver_generation = match method.sig.inputs.first() {
-                    Some(syn::FnArg::Receiver(_)) => ReceiverGeneration::Rewrite,
-                    _ => ReceiverGeneration::None,
-                };
-
-                let mut entrait_sig = EntraitSignature::new(method.sig);
-
-                if use_associated_future {
-                    entrait_sig.convert_to_associated_future(receiver_generation, trait_span);
-                } else {
-                    lifetimes::collect_lifetimes(&mut entrait_sig, receiver_generation);
-                }
+                let entrait_sig = EntraitSignature::new(method.sig);
 
                 fns.push(TraitFn {
                     deps: FnDeps::NoDeps,
@@ -60,34 +45,6 @@ pub fn analyze_trait<'i>(item_trait: syn::ItemTrait, opts: &Opts) -> syn::Result
                 ));
             }
         }
-    }
-
-    // Find types that are future return values
-    for associated_type in associated_types {
-        let future_bound = match find_future_bound(&associated_type) {
-            Some(bound) => bound,
-            None => return Err(syn::Error::new(associated_type.span(), "This associated type is not a future. Only returned futures are accepted as associated types.")),
-        };
-        let output_binding = match find_output_binding(future_bound) {
-            Some(binding) => binding,
-            None => return Err(syn::Error::new(associated_type.span(), "No Output found")),
-        };
-        let output_ty = output_binding.ty.clone();
-
-        let trait_fn = fns
-            .iter_mut()
-            .find(|trait_fn| is_return_type_associated_to(&trait_fn.sig().output, &associated_type))
-            .ok_or_else(|| {
-                syn::Error::new(
-                    associated_type.span(),
-                    "Did not find a method returning this associated future",
-                )
-            })?;
-
-        trait_fn.entrait_sig.associated_fut = Some(AssociatedFut {
-            ident: associated_type.ident,
-            output: output_ty,
-        });
     }
 
     let supertraits = if let Some(colon_token) = item_trait.colon_token {
@@ -115,75 +72,4 @@ pub fn analyze_trait<'i>(item_trait: syn::ItemTrait, opts: &Opts) -> syn::Result
         supertraits,
         fns,
     })
-}
-
-fn find_future_bound(associated_type: &syn::TraitItemType) -> Option<&syn::TraitBound> {
-    associated_type.bounds.iter().find_map(|bound| {
-        if let syn::TypeParamBound::Trait(trait_bound) = bound {
-            if trait_bound
-                .path
-                .segments
-                .iter()
-                .any(|segment| segment.ident == "Future")
-            {
-                Some(trait_bound)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    })
-}
-
-fn find_output_binding(bound: &syn::TraitBound) -> Option<&syn::Binding> {
-    let last_segment = bound.path.segments.last()?;
-
-    match &last_segment.arguments {
-        syn::PathArguments::AngleBracketed(arguments) => {
-            arguments.args.iter().find_map(|arg| match arg {
-                syn::GenericArgument::Binding(binding) => {
-                    if binding.ident == "Output" {
-                        Some(binding)
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-        }
-        _ => None,
-    }
-}
-
-fn is_return_type_associated_to(
-    return_type: &syn::ReturnType,
-    associated: &syn::TraitItemType,
-) -> bool {
-    fn path_association_match(path: &syn::Path, associated: &syn::TraitItemType) -> Option<()> {
-        let mut path_iter = path.segments.iter();
-        let first_segment = path_iter.next()?;
-
-        if first_segment.ident != "Self" {
-            return None;
-        }
-
-        let second_segment = path_iter.next()?;
-
-        if second_segment.ident == associated.ident {
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    match return_type {
-        syn::ReturnType::Default => false,
-        syn::ReturnType::Type(_, ty) => match ty.as_ref() {
-            syn::Type::Path(type_path) => {
-                path_association_match(&type_path.path, associated).is_some()
-            }
-            _ => false,
-        },
-    }
 }
