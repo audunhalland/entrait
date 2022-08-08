@@ -23,10 +23,13 @@ impl<'s> InputSig<'s> {
     }
 
     pub fn use_associated_future(&self, opts: &Opts) -> bool {
+        /*
         matches!(
             (opts.async_strategy(), self.sig.asyncness),
             (SpanOpt(AsyncStrategy::AssociatedFuture, _), Some(_async))
         )
+        */
+        false
     }
 }
 

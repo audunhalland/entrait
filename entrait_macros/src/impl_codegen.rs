@@ -189,6 +189,14 @@ pub fn opt_async_trait_attribute<'s, 'o>(
         (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
             Some(attributes::Attr(attributes::AsyncTraitParams {
                 crate_idents,
+                use_static: false,
+                span,
+            }))
+        }
+        (SpanOpt(AsyncStrategy::AssociatedFuture, span), true) => {
+            Some(attributes::Attr(attributes::AsyncTraitParams {
+                crate_idents,
+                use_static: true,
                 span,
             }))
         }

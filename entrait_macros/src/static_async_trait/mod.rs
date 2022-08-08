@@ -139,14 +139,16 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
     }
 
     let trait_ = if let Some((bang, path, for_)) = trait_ {
-        Some(quote! { #bang #path, #for_ })
+        Some(quote! { #bang #path #for_ })
     } else {
         None
     };
 
+    let where_clause = &generics.where_clause;
+
     Ok(quote! {
         #(#attrs)*
-        #defaultness #unsafety #impl_token #generics #trait_ #self_ty {
+        #defaultness #unsafety #impl_token #generics #trait_ #self_ty #where_clause {
             #new_items
         }
     })
@@ -159,14 +161,7 @@ fn convert_sig(sig: syn::Signature, span: Span) -> (EntraitSignature, bool) {
     };
 
     let mut entrait_sig = EntraitSignature::new(sig);
-    entrait_sig.convert_to_associated_future(
-        if has_receiver {
-            ReceiverGeneration::Rewrite
-        } else {
-            ReceiverGeneration::None
-        },
-        span,
-    );
+    entrait_sig.convert_to_associated_future(ReceiverGeneration::Rewrite, span);
 
     (entrait_sig, has_receiver)
 }

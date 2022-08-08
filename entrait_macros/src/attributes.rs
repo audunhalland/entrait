@@ -2,7 +2,7 @@ use crate::analyze_generics::TraitFn;
 use crate::generics;
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
-use crate::opt::Opts;
+use crate::opt::{AsyncStrategy, Opts};
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
@@ -212,20 +212,33 @@ impl ToTokens for MockallAutomockParams {
 
 pub struct AsyncTraitParams<'a> {
     pub crate_idents: &'a CrateIdents,
+    pub use_static: bool,
     pub span: Span,
 }
 
 impl<'a> ToTokens for AsyncTraitParams<'a> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.span;
-        push_tokens!(
-            stream,
-            syn::token::Colon2(span),
-            self.crate_idents.entrait,
-            syn::token::Colon2(span),
-            syn::Ident::new("__async_trait", span),
-            syn::token::Colon2(span),
-            syn::Ident::new("async_trait", span)
-        );
+        if self.use_static {
+            push_tokens!(
+                stream,
+                syn::token::Colon2(span),
+                self.crate_idents.entrait,
+                syn::token::Colon2(span),
+                syn::Ident::new("static_async", span),
+                syn::token::Colon2(span),
+                syn::Ident::new("async_trait", span)
+            );
+        } else {
+            push_tokens!(
+                stream,
+                syn::token::Colon2(span),
+                self.crate_idents.entrait,
+                syn::token::Colon2(span),
+                syn::Ident::new("__async_trait", span),
+                syn::token::Colon2(span),
+                syn::Ident::new("async_trait", span)
+            );
+        }
     }
 }
