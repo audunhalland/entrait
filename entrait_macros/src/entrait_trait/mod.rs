@@ -6,8 +6,8 @@ mod out_trait;
 use input_attr::EntraitTraitAttr;
 
 use crate::analyze_generics::TraitFn;
+use crate::attributes;
 use crate::entrait_trait::input_attr::ImplTrait;
-use crate::fn_delegation_codegen::opt_async_trait_attribute;
 use crate::generics;
 use crate::generics::TraitDependencyMode;
 use crate::idents::GenericIdents;
@@ -56,7 +56,7 @@ pub fn output_tokens(
     };
 
     let mut impl_async_trait_attr =
-        opt_async_trait_attribute(&attr.opts, &attr.crate_idents, out_trait.fns.iter());
+        attributes::opt_async_trait_attr(&attr.opts, &attr.crate_idents, out_trait.fns.iter());
     if !impl_attrs.is_empty() {
         impl_async_trait_attr = None;
     }

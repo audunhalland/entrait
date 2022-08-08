@@ -2,7 +2,7 @@ use crate::analyze_generics::TraitFn;
 use crate::generics;
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
-use crate::opt::Opts;
+use crate::opt::{AsyncStrategy, Opts, SpanOpt};
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
@@ -207,6 +207,29 @@ impl ToTokens for MockallAutomockParams {
             syn::token::Colon2(span),
             syn::Ident::new("automock", span)
         );
+    }
+}
+
+pub fn opt_async_trait_attr<'s, 'o>(
+    opts: &'s Opts,
+    crate_idents: &'s CrateIdents,
+    trait_fns: impl Iterator<Item = &'o TraitFn>,
+) -> Option<impl ToTokens + 's> {
+    match (
+        opts.async_strategy(),
+        generics::has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
+    ) {
+        (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => Some(Attr(AsyncTraitParams {
+            crate_idents,
+            use_static: false,
+            span,
+        })),
+        (SpanOpt(AsyncStrategy::AssociatedFuture, span), true) => Some(Attr(AsyncTraitParams {
+            crate_idents,
+            use_static: true,
+            span,
+        })),
+        _ => None,
     }
 }
 

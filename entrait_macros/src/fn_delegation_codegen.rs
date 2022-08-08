@@ -9,7 +9,7 @@ use crate::generics;
 use crate::generics::ImplIndirection;
 use crate::generics::TraitDependencyMode;
 use crate::idents::CrateIdents;
-use crate::opt::{AsyncStrategy, Opts, SpanOpt};
+use crate::opt::Opts;
 use crate::token_util::push_tokens;
 
 /// Generate impls that call standalone generic functions
@@ -38,7 +38,7 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
     ///
     pub fn gen_impl_block(&self, trait_fns: &[TraitFn]) -> TokenStream {
         let async_trait_attribute =
-            opt_async_trait_attribute(self.opts, self.crate_idents, trait_fns.iter());
+            attributes::opt_async_trait_attr(self.opts, self.crate_idents, trait_fns.iter());
         let params = self
             .trait_generics
             .impl_params(self.trait_dependency_mode, self.use_associated_future);
@@ -175,32 +175,5 @@ impl<'g> quote::ToTokens for SelfArgComma<'g> {
                 );
             }
         }
-    }
-}
-
-pub fn opt_async_trait_attribute<'s, 'o>(
-    opts: &'s Opts,
-    crate_idents: &'s CrateIdents,
-    trait_fns: impl Iterator<Item = &'o TraitFn>,
-) -> Option<impl ToTokens + 's> {
-    match (
-        opts.async_strategy(),
-        generics::has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
-    ) {
-        (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => {
-            Some(attributes::Attr(attributes::AsyncTraitParams {
-                crate_idents,
-                use_static: false,
-                span,
-            }))
-        }
-        (SpanOpt(AsyncStrategy::AssociatedFuture, span), true) => {
-            Some(attributes::Attr(attributes::AsyncTraitParams {
-                crate_idents,
-                use_static: true,
-                span,
-            }))
-        }
-        _ => None,
     }
 }

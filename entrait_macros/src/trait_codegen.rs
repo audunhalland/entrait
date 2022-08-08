@@ -3,7 +3,7 @@ use quote::{quote, quote_spanned, ToTokens};
 
 use crate::{
     analyze_generics::TraitFn,
-    attributes, fn_delegation_codegen,
+    attributes,
     generics::{self, TraitDependencyMode, TraitIndirection},
     idents::CrateIdents,
     input::FnInputMode,
@@ -59,11 +59,8 @@ impl<'s> TraitCodegen<'s> {
             }),
             _ => None,
         };
-        let opt_async_trait_attr = fn_delegation_codegen::opt_async_trait_attribute(
-            &self.opts,
-            &self.crate_idents,
-            trait_fns.iter(),
-        );
+        let opt_async_trait_attr =
+            attributes::opt_async_trait_attr(&self.opts, &self.crate_idents, trait_fns.iter());
 
         let literal_attrs = if let FnInputMode::RawTrait(literal_attrs) = fn_input_mode {
             Some(literal_attrs)
