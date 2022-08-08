@@ -410,8 +410,13 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                 }
                 push_tokens!(stream, self.plus_static());
             }
-            _ => {
+            _delegate_to_impl_t => {
                 push_tokens!(stream, self.trait_with_arguments(), self.plus_sync());
+                if self.contains_async {
+                    // There will be a `self.as_ref().fn().await`,
+                    // that borrow will need to be 'static for the future to be Send
+                    push_tokens!(stream, self.plus_static());
+                }
             }
         }
     }
