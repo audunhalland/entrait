@@ -7,10 +7,10 @@ use input_attr::EntraitTraitAttr;
 
 use crate::analyze_generics::TraitFn;
 use crate::entrait_trait::input_attr::ImplTrait;
+use crate::fn_delegation_codegen::opt_async_trait_attribute;
 use crate::generics;
 use crate::generics::TraitDependencyMode;
 use crate::idents::GenericIdents;
-use crate::impl_codegen::opt_async_trait_attribute;
 use crate::input::FnInputMode;
 use crate::input::LiteralAttrs;
 use crate::opt::*;

@@ -12,7 +12,8 @@ use crate::idents::CrateIdents;
 use crate::opt::{AsyncStrategy, Opts, SpanOpt};
 use crate::token_util::push_tokens;
 
-pub struct ImplCodegen<'s, TR> {
+/// Generate impls that call standalone generic functions
+pub struct FnDelegationCodegen<'s, TR> {
     pub opts: &'s Opts,
     pub crate_idents: &'s CrateIdents,
     pub trait_ref: &'s TR,
@@ -23,7 +24,7 @@ pub struct ImplCodegen<'s, TR> {
     pub use_associated_future: generics::UseAssociatedFuture,
 }
 
-impl<'s, TR: ToTokens> ImplCodegen<'s, TR> {
+impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
     ///
     /// Generate code like
     ///
