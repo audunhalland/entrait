@@ -1,12 +1,68 @@
-use super::input_attr::EntraitFnAttr;
-use super::{InputFn, TraitFn};
 use crate::generics::{FnDeps, TraitDependencyMode, TraitGenerics};
 use crate::idents::{CrateIdents, GenericIdents};
+use crate::input::FnInputMode;
+use crate::opt::Opts;
+use crate::signature::ImplReceiverKind;
+use crate::signature::{converter::SignatureConverter, EntraitSignature, InputSig};
+use crate::token_util::TokenPair;
 
+use proc_macro2::Span;
 use syn::spanned::Spanned;
 
+#[derive(Clone)]
+pub struct TraitFn {
+    pub deps: FnDeps,
+    pub entrait_sig: EntraitSignature,
+    pub originally_async: bool,
+}
+
+impl TraitFn {
+    pub fn sig(&self) -> &syn::Signature {
+        &self.entrait_sig.sig
+    }
+
+    pub fn opt_dot_await(&self, span: Span) -> Option<impl quote::ToTokens> {
+        if self.originally_async {
+            Some(TokenPair(syn::token::Dot(span), syn::token::Await(span)))
+        } else {
+            None
+        }
+    }
+}
+
+pub struct TraitFnAnalyzer<'s> {
+    pub impl_receiver_kind: ImplReceiverKind,
+    pub trait_span: Span,
+    pub crate_idents: &'s CrateIdents,
+    pub opts: &'s Opts,
+}
+
+impl<'s> TraitFnAnalyzer<'s> {
+    pub fn analyze(
+        self,
+        input_sig: InputSig<'_>,
+        analyzer: &mut GenericsAnalyzer,
+    ) -> syn::Result<TraitFn> {
+        let deps = analyzer.analyze_fn_deps(input_sig, self.trait_span, self.opts)?;
+        let entrait_sig = SignatureConverter {
+            crate_idents: self.crate_idents,
+            trait_span: self.trait_span,
+            opts: self.opts,
+            input_sig,
+            deps: &deps,
+            impl_receiver_kind: self.impl_receiver_kind,
+        }
+        .convert_fn_to_trait_fn();
+        Ok(TraitFn {
+            deps,
+            entrait_sig,
+            originally_async: input_sig.asyncness.is_some(),
+        })
+    }
+}
+
 pub(super) fn detect_trait_dependency_mode<'t, 'c>(
-    input_mode: &super::InputMode,
+    input_mode: &FnInputMode,
     trait_fns: &'t [TraitFn],
     crate_idents: &'c CrateIdents,
     span: proc_macro2::Span,
@@ -14,11 +70,12 @@ pub(super) fn detect_trait_dependency_mode<'t, 'c>(
     for trait_fn in trait_fns {
         if let FnDeps::Concrete(ty) = &trait_fn.deps {
             return match input_mode {
-                super::InputMode::SingleFn(_) => Ok(TraitDependencyMode::Concrete(ty.as_ref())),
-                super::InputMode::Module => Err(syn::Error::new(
+                FnInputMode::SingleFn(_) => Ok(TraitDependencyMode::Concrete(ty.as_ref())),
+                FnInputMode::Module(_) => Err(syn::Error::new(
                     ty.span(),
                     "Using concrete dependencies in a module is an anti-pattern. Instead, write a trait manually, use the #[entrait] attribute on it, and implement it for your application type",
                 )),
+                FnInputMode::RawTrait(_) => panic!("Should not detect dependencies for this input mode")
             };
         }
     }
@@ -47,17 +104,21 @@ impl GenericsAnalyzer {
         self.trait_generics
     }
 
-    pub fn analyze_fn_deps(&mut self, func: &InputFn, attr: &EntraitFnAttr) -> syn::Result<FnDeps> {
-        let span = attr.trait_ident.span();
-        if attr.no_deps_value() {
-            return self.deps_with_generics(FnDeps::NoDeps, &func.fn_sig.generics);
+    pub fn analyze_fn_deps(
+        &mut self,
+        input_sig: InputSig<'_>,
+        trait_span: proc_macro2::Span,
+        opts: &Opts,
+    ) -> syn::Result<FnDeps> {
+        if opts.no_deps_value() {
+            return self.deps_with_generics(FnDeps::NoDeps, &input_sig.generics);
         }
 
         let first_input =
-            match func.fn_sig.inputs.first() {
+            match input_sig.inputs.first() {
                 Some(fn_arg) => fn_arg,
                 None => return Err(syn::Error::new(
-                    func.fn_sig.ident.span(),
+                    input_sig.ident.span(),
                     "Function must have a dependency 'receiver' as its first parameter. Pass `no_deps` to entrait to disable dependency injection.",
                 )),
             };
@@ -72,13 +133,13 @@ impl GenericsAnalyzer {
             }
         };
 
-        self.extract_deps_from_type(span, func, pat_type, pat_type.ty.as_ref())
+        self.extract_deps_from_type(trait_span, input_sig, pat_type, pat_type.ty.as_ref())
     }
 
     fn extract_deps_from_type(
         &mut self,
-        span: proc_macro2::Span,
-        func: &InputFn,
+        trait_span: proc_macro2::Span,
+        input_sig: InputSig<'_>,
         arg_pat: &syn::PatType,
         ty: &syn::Type,
     ) -> syn::Result<FnDeps> {
@@ -90,7 +151,7 @@ impl GenericsAnalyzer {
                         generic_param: None,
                         trait_bounds: extract_trait_bounds(&type_impl_trait.bounds),
                     },
-                    &func.fn_sig.generics,
+                    &input_sig.generics,
                 )
             }
             syn::Type::Path(type_path) => {
@@ -107,39 +168,41 @@ impl GenericsAnalyzer {
                 if type_path.path.segments.len() != 1 {
                     return self.deps_with_generics(
                         FnDeps::Concrete(Box::new(ty.clone())),
-                        &func.fn_sig.generics,
+                        &input_sig.generics,
                     );
                 }
 
                 let first_segment = type_path.path.segments.first().unwrap();
 
-                match self.find_deps_generic_bounds(func, &first_segment.ident) {
+                match self.find_deps_generic_bounds(input_sig, &first_segment.ident) {
                     Some(generics) => Ok(generics),
                     None => self.deps_with_generics(
                         FnDeps::Concrete(Box::new(ty.clone())),
-                        &func.fn_sig.generics,
+                        &input_sig.generics,
                     ),
                 }
             }
-            syn::Type::Reference(type_reference) => {
-                self.extract_deps_from_type(span, func, arg_pat, type_reference.elem.as_ref())
-            }
-            syn::Type::Paren(paren) => {
-                self.extract_deps_from_type(span, func, arg_pat, paren.elem.as_ref())
-            }
-            ty => self.deps_with_generics(
-                FnDeps::Concrete(Box::new(ty.clone())),
-                &func.fn_sig.generics,
+            syn::Type::Reference(type_reference) => self.extract_deps_from_type(
+                trait_span,
+                input_sig,
+                arg_pat,
+                type_reference.elem.as_ref(),
             ),
+            syn::Type::Paren(paren) => {
+                self.extract_deps_from_type(trait_span, input_sig, arg_pat, paren.elem.as_ref())
+            }
+            ty => {
+                self.deps_with_generics(FnDeps::Concrete(Box::new(ty.clone())), &input_sig.generics)
+            }
         }
     }
 
     fn find_deps_generic_bounds(
         &mut self,
-        func: &InputFn,
+        input_sig: InputSig<'_>,
         generic_param_ident: &syn::Ident,
     ) -> Option<FnDeps> {
-        let generics = &func.fn_sig.generics;
+        let generics = &input_sig.generics;
         let generic_params = &generics.params;
 
         let (matching_index, matching_type_param) = generic_params

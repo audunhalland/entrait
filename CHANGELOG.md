@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Added
+- Dependency inversion support with the `#[entrait(TraitImpl, delegate_by = DelegationTrait)] trait Trait {}` syntax.
+### Changed
+- Make zero-cost futures using a separate macro (`unimock::static_async::async_trait`), comparable to `async_trait`.
 
 ## [0.4.3] - 2022-08-01
 ### Added

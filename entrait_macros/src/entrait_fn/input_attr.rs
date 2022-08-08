@@ -12,37 +12,12 @@ pub struct EntraitFnAttr {
     pub crate_idents: CrateIdents,
 }
 
-impl EntraitFnAttr {
-    pub fn no_deps_value(&self) -> bool {
-        self.default_option(self.opts.no_deps, false).0
-    }
-
-    pub fn debug_value(&self) -> bool {
-        self.default_option(self.opts.debug, false).0
-    }
-
-    pub fn async_strategy(&self) -> SpanOpt<AsyncStrategy> {
-        self.default_option(self.opts.async_strategy, AsyncStrategy::NoHack)
-    }
-
-    pub fn export_value(&self) -> bool {
-        self.default_option(self.opts.export, false).0
-    }
-
-    pub fn default_option<T>(&self, option: Option<SpanOpt<T>>, default: T) -> SpanOpt<T> {
-        match option {
-            Some(option) => option,
-            None => SpanOpt(default, self.trait_ident.span()),
-        }
-    }
-}
-
 impl Parse for EntraitFnAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let span = input.span();
         let trait_visibility: syn::Visibility = input.parse()?;
 
-        let trait_ident = input.parse()?;
+        let trait_ident: syn::Ident = input.parse()?;
 
         let mut no_deps = None;
         let mut debug = None;
@@ -70,10 +45,13 @@ impl Parse for EntraitFnAttr {
             };
         }
 
+        let default_span = trait_ident.span();
+
         Ok(EntraitFnAttr {
             trait_visibility,
             trait_ident,
             opts: Opts {
+                default_span,
                 no_deps,
                 debug,
                 async_strategy,

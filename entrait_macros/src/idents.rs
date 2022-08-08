@@ -1,11 +1,13 @@
 pub struct CrateIdents {
     pub entrait: syn::Ident,
+    pub core: syn::Ident,
 }
 
 impl CrateIdents {
     pub fn new(span: proc_macro2::Span) -> Self {
         Self {
             entrait: syn::Ident::new("entrait", span),
+            core: syn::Ident::new("core", span),
         }
     }
 }

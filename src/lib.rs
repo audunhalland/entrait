@@ -606,18 +606,21 @@ mod macros {
     #[cfg(feature = "use-async-trait")]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock_use_async_trait as entrait_export;
+        pub use entrait_macros::entrait_impl_use_async_trait as entrait_impl;
         pub use entrait_macros::entrait_unimock_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock_use_associated_future as entrait_export;
+        pub use entrait_macros::entrait_impl_use_associated_future as entrait_impl;
         pub use entrait_macros::entrait_unimock_use_associated_future as entrait;
     }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock as entrait_export;
+        pub use entrait_macros::entrait_impl;
         pub use entrait_macros::entrait_unimock as entrait;
     }
 
@@ -629,12 +632,14 @@ mod macros {
     #[cfg(feature = "use-async-trait")]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_use_async_trait as entrait_export;
+        pub use entrait_macros::entrait_impl_use_async_trait as entrait_impl;
         pub use entrait_macros::entrait_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_use_associated_future as entrait_export;
+        pub use entrait_macros::entrait_impl_use_associated_future as entrait_impl;
         pub use entrait_macros::entrait_use_associated_future as entrait;
     }
 
@@ -642,6 +647,7 @@ mod macros {
     mod entrait_auto_async {
         pub use entrait_macros::entrait;
         pub use entrait_macros::entrait_export;
+        pub use entrait_macros::entrait_impl;
     }
 
     pub use entrait_auto_async::*;
@@ -724,6 +730,12 @@ pub use macros::entrait;
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
 
+/// TODO: Document
+pub use macros::entrait_impl;
+
+/// TODO: Document
+pub use entrait_macros::entrait_dyn_impl;
+
 /// Re-exported from the [implementation] crate.
 pub use ::implementation::Impl;
 
@@ -736,4 +748,9 @@ pub use ::unimock as __unimock;
 #[doc(hidden)]
 pub mod __async_trait {
     pub use ::async_trait::async_trait;
+}
+
+#[doc(hidden)]
+pub mod static_async {
+    pub use entrait_macros::static_async_trait as async_trait;
 }

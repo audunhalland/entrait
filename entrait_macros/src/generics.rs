@@ -1,11 +1,70 @@
+use proc_macro2::TokenStream;
+
 use crate::{
-    entrait_fn::TraitFn,
+    analyze_generics::TraitFn,
     idents::GenericIdents,
+    input::InputFn,
+    opt::{AsyncStrategy, Opts, SpanOpt},
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
 
+#[derive(Clone)]
+pub enum ImplIndirection<'s> {
+    None,
+    Static { type_ident: &'s syn::Ident },
+    Dynamic { type_ident: &'s syn::Ident },
+}
+
+impl<'s> ImplIndirection<'s> {
+    pub fn to_trait_indirection(&'s self) -> TraitIndirection {
+        match self {
+            Self::None => TraitIndirection::None,
+            Self::Static { .. } => TraitIndirection::Static,
+            Self::Dynamic { .. } => TraitIndirection::Dynamic,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum TraitIndirection {
+    None,
+    Static,
+    Dynamic,
+}
+
+#[derive(Clone, Copy)]
 pub struct UseAssociatedFuture(pub bool);
 
+pub fn detect_use_associated_future<'i>(
+    opts: &Opts,
+    input_fns: impl Iterator<Item = &'i InputFn>,
+) -> UseAssociatedFuture {
+    UseAssociatedFuture(matches!(
+        (
+            opts.async_strategy(),
+            has_any_async(input_fns.map(|input_fn| &input_fn.fn_sig))
+        ),
+        (SpanOpt(AsyncStrategy::AssociatedFuture, _), true)
+    ))
+}
+
+pub fn has_any_async<'s>(mut signatures: impl Iterator<Item = &'s syn::Signature>) -> bool {
+    signatures.any(|sig| sig.asyncness.is_some())
+}
+
+#[derive(Clone, Copy)]
+pub struct TakesSelfByValue(pub bool);
+
+pub fn has_any_self_by_value<'s>(
+    mut signatures: impl Iterator<Item = &'s syn::Signature>,
+) -> TakesSelfByValue {
+    TakesSelfByValue(signatures.any(|sig| match sig.inputs.first() {
+        Some(syn::FnArg::Receiver(receiver)) => receiver.reference.is_none(),
+        _ => false,
+    }))
+}
+
+#[derive(Clone)]
 pub enum FnDeps {
     Generic {
         generic_param: Option<syn::Ident>,
@@ -20,6 +79,7 @@ pub enum TraitDependencyMode<'t, 'c> {
     Concrete(&'t syn::Type),
 }
 
+#[derive(Clone)]
 pub struct TraitGenerics {
     pub params: syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     pub where_predicates: syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
@@ -31,6 +91,7 @@ impl TraitGenerics {
             params: &self.params,
             impl_t: None,
             use_associated_future: UseAssociatedFuture(false),
+            takes_self_by_value: TakesSelfByValue(false),
         }
     }
 
@@ -44,6 +105,7 @@ impl TraitGenerics {
         &'i self,
         trait_dependency_mode: &'i TraitDependencyMode<'i, '_>,
         use_associated_future: UseAssociatedFuture,
+        takes_self_by_value: TakesSelfByValue,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
             params: &self.params,
@@ -52,6 +114,7 @@ impl TraitGenerics {
                 TraitDependencyMode::Concrete(_) => None,
             },
             use_associated_future,
+            takes_self_by_value,
         }
     }
 
@@ -59,11 +122,13 @@ impl TraitGenerics {
         &'i self,
         idents: &'i GenericIdents,
         use_associated_future: UseAssociatedFuture,
+        takes_self_by_value: TakesSelfByValue,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
             params: &self.params,
             impl_t: Some(&idents.impl_t),
             use_associated_future,
+            takes_self_by_value,
         }
     }
 
@@ -71,19 +136,25 @@ impl TraitGenerics {
         &'g self,
         trait_fns: &'s [TraitFn],
         trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
+        impl_indirection: &'s ImplIndirection,
         span: proc_macro2::Span,
     ) -> ImplWhereClauseGenerator<'g, 's, 'c> {
         ImplWhereClauseGenerator {
             trait_where_predicates: &self.where_predicates,
             trait_dependency_mode,
+            impl_indirection,
             trait_fns,
             span,
         }
     }
 
-    pub fn arguments(&self) -> ArgumentsGenerator {
+    pub fn arguments<'s>(
+        &'s self,
+        impl_indirection: &'s ImplIndirection,
+    ) -> ArgumentsGenerator<'s> {
         ArgumentsGenerator {
             params: &self.params,
+            impl_indirection,
         }
     }
 }
@@ -120,6 +191,7 @@ pub struct ParamsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     impl_t: Option<&'g syn::Ident>,
     use_associated_future: UseAssociatedFuture,
+    takes_self_by_value: TakesSelfByValue,
 }
 
 impl<'g> quote::ToTokens for ParamsGenerator<'g> {
@@ -140,11 +212,20 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
                     syn::Ident::new("Sync", proc_macro2::Span::call_site())
                 );
 
-                if self.use_associated_future.0 {
-                    // Deps must be 'static for zero-cost futures to work
+                if self.takes_self_by_value.0 {
                     push_tokens!(
                         stream,
                         syn::token::Add::default(),
+                        // In case T is not a reference, it has to be Send
+                        syn::Ident::new("Send", proc_macro2::Span::call_site())
+                    );
+                }
+
+                if self.use_associated_future.0 {
+                    push_tokens!(
+                        stream,
+                        syn::token::Add::default(),
+                        // Deps must be 'static for zero-cost futures to work
                         syn::Lifetime::new("'static", proc_macro2::Span::call_site())
                     );
                 }
@@ -160,6 +241,7 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
 // Args as in impl<..Param> T for U<..Arg>
 pub struct ArgumentsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
+    impl_indirection: &'g ImplIndirection<'g>,
 }
 
 impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
@@ -170,6 +252,13 @@ impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
             syn::token::Comma::default(),
             syn::token::Gt::default(),
         );
+
+        if matches!(
+            &self.impl_indirection,
+            ImplIndirection::Static { .. } | ImplIndirection::Dynamic { .. }
+        ) {
+            punctuator.push(syn::Ident::new("EntraitT", proc_macro2::Span::call_site()));
+        }
 
         for pair in self.params.pairs() {
             match pair.value() {
@@ -208,7 +297,8 @@ impl<'g> quote::ToTokens for TraitWhereClauseGenerator<'g> {
 pub struct ImplWhereClauseGenerator<'g, 's, 'c> {
     trait_where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
     trait_dependency_mode: &'s TraitDependencyMode<'s, 'c>,
-    trait_fns: &'s [TraitFn<'s>],
+    impl_indirection: &'s ImplIndirection<'s>,
+    trait_fns: &'s [TraitFn],
     span: proc_macro2::Span,
 }
 
@@ -223,8 +313,8 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
 
         // The where clause looks quite different depending on what kind of Deps is used in the function.
         match &self.trait_dependency_mode {
-            TraitDependencyMode::Generic(_) => {
-                // Self bounds
+            TraitDependencyMode::Generic(generic_idents) => {
+                // Impl<T> bounds
 
                 let has_bounds = self.trait_fns.iter().any(|trait_fn| match &trait_fn.deps {
                     FnDeps::Generic { trait_bounds, .. } => !trait_bounds.is_empty(),
@@ -232,23 +322,22 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
                 });
 
                 if has_bounds {
-                    punctuator.push_fn(|stream| {
-                        let mut bound_punctuator = Punctuator::new(
-                            stream,
-                            TokenPair(
+                    punctuator.push_fn(|stream| match self.impl_indirection {
+                        ImplIndirection::None => {
+                            push_impl_t_bounds(
+                                stream,
                                 syn::token::SelfType(self.span),
-                                syn::token::Colon(self.span),
-                            ),
-                            syn::token::Add(self.span),
-                            EmptyToken,
-                        );
-
-                        for trait_fn in self.trait_fns {
-                            if let FnDeps::Generic { trait_bounds, .. } = &trait_fn.deps {
-                                for bound in trait_bounds {
-                                    bound_punctuator.push(bound);
-                                }
-                            }
+                                self.trait_fns,
+                                self.span,
+                            );
+                        }
+                        ImplIndirection::Static { .. } | ImplIndirection::Dynamic { .. } => {
+                            push_impl_t_bounds(
+                                stream,
+                                generic_idents.impl_path(self.span),
+                                self.trait_fns,
+                                self.span,
+                            );
                         }
                     });
                 }
@@ -261,6 +350,28 @@ impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
 
         for predicate in self.trait_where_predicates {
             punctuator.push(predicate);
+        }
+    }
+}
+
+fn push_impl_t_bounds(
+    stream: &mut TokenStream,
+    bound_param: impl quote::ToTokens,
+    trait_fns: &[TraitFn],
+    span: proc_macro2::Span,
+) {
+    let mut bound_punctuator = Punctuator::new(
+        stream,
+        TokenPair(bound_param, syn::token::Colon(span)),
+        syn::token::Add(span),
+        EmptyToken,
+    );
+
+    for trait_fn in trait_fns {
+        if let FnDeps::Generic { trait_bounds, .. } = &trait_fn.deps {
+            for bound in trait_bounds {
+                bound_punctuator.push(bound);
+            }
         }
     }
 }
