@@ -334,9 +334,7 @@ impl<'s> ToTokens for DelegatingMethod<'s> {
                     );
                 });
             } else if self.trait_fn.originally_async {
-                syn::token::Brace::default().surround(stream, |stream| {
-                    self.call.to_tokens(stream);
-                });
+                self.call.to_tokens(stream);
                 push_tokens!(
                     stream,
                     syn::token::Dot::default(),
