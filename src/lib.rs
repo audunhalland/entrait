@@ -749,3 +749,8 @@ pub use ::unimock as __unimock;
 pub mod __async_trait {
     pub use ::async_trait::async_trait;
 }
+
+#[doc(hidden)]
+pub mod static_async {
+    pub use entrait_macros::static_async_trait as async_trait;
+}

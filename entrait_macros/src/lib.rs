@@ -19,6 +19,7 @@ mod impl_codegen;
 mod input;
 mod opt;
 mod signature;
+mod static_async_trait;
 mod token_util;
 mod trait_codegen;
 
@@ -145,6 +146,15 @@ pub fn entrait_impl_use_associated_future(attr: TokenStream, input: TokenStream)
 #[proc_macro_attribute]
 pub fn entrait_dyn_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Dyn, |_| {})
+}
+
+#[proc_macro_attribute]
+pub fn static_async_trait(_: TokenStream, input: TokenStream) -> TokenStream {
+    let item = syn::parse_macro_input!(input as syn::Item);
+    match static_async_trait::output_tokens(item) {
+        Ok(stream) => stream.into(),
+        Err(error) => error.into_compile_error().into(),
+    }
 }
 
 fn set_fallbacks<const N: usize>(opts: [&mut Option<opt::SpanOpt<bool>>; N]) {
