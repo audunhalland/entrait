@@ -31,4 +31,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - uses: taiki-e/install-action@cargo-hack
       - name: Test nightly features
-        run: cargo hack --feature-powerset --optional-deps "unimock" --exclude-features "default use-async-trait" --exclude-no-default-features test
+        run: cargo hack --feature-powerset --optional-deps "unimock" --exclude-features "default async-trait use-async-trait" --exclude-no-default-features test
