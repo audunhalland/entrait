@@ -52,6 +52,18 @@ pub fn has_any_async<'s>(mut signatures: impl Iterator<Item = &'s syn::Signature
     signatures.any(|sig| sig.asyncness.is_some())
 }
 
+#[derive(Clone, Copy)]
+pub struct TakesSelfByValue(pub bool);
+
+pub fn has_any_self_by_value<'s>(
+    mut signatures: impl Iterator<Item = &'s syn::Signature>,
+) -> TakesSelfByValue {
+    TakesSelfByValue(signatures.any(|sig| match sig.inputs.first() {
+        Some(syn::FnArg::Receiver(receiver)) => receiver.reference.is_none(),
+        _ => false,
+    }))
+}
+
 #[derive(Clone)]
 pub enum FnDeps {
     Generic {
@@ -79,6 +91,7 @@ impl TraitGenerics {
             params: &self.params,
             impl_t: None,
             use_associated_future: UseAssociatedFuture(false),
+            takes_self_by_value: TakesSelfByValue(false),
         }
     }
 
@@ -92,6 +105,7 @@ impl TraitGenerics {
         &'i self,
         trait_dependency_mode: &'i TraitDependencyMode<'i, '_>,
         use_associated_future: UseAssociatedFuture,
+        takes_self_by_value: TakesSelfByValue,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
             params: &self.params,
@@ -100,6 +114,7 @@ impl TraitGenerics {
                 TraitDependencyMode::Concrete(_) => None,
             },
             use_associated_future,
+            takes_self_by_value,
         }
     }
 
@@ -107,11 +122,13 @@ impl TraitGenerics {
         &'i self,
         idents: &'i GenericIdents,
         use_associated_future: UseAssociatedFuture,
+        takes_self_by_value: TakesSelfByValue,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
             params: &self.params,
             impl_t: Some(&idents.impl_t),
             use_associated_future,
+            takes_self_by_value,
         }
     }
 
@@ -174,6 +191,7 @@ pub struct ParamsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     impl_t: Option<&'g syn::Ident>,
     use_associated_future: UseAssociatedFuture,
+    takes_self_by_value: TakesSelfByValue,
 }
 
 impl<'g> quote::ToTokens for ParamsGenerator<'g> {
@@ -194,12 +212,18 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
                     syn::Ident::new("Sync", proc_macro2::Span::call_site())
                 );
 
-                if self.use_associated_future.0 {
+                if self.takes_self_by_value.0 {
                     push_tokens!(
                         stream,
                         syn::token::Add::default(),
                         // In case T is not a reference, it has to be Send
-                        syn::Ident::new("Send", proc_macro2::Span::call_site()),
+                        syn::Ident::new("Send", proc_macro2::Span::call_site())
+                    );
+                }
+
+                if self.use_associated_future.0 {
+                    push_tokens!(
+                        stream,
                         syn::token::Add::default(),
                         // Deps must be 'static for zero-cost futures to work
                         syn::Lifetime::new("'static", proc_macro2::Span::call_site())

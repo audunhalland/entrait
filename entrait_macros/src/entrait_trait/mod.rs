@@ -80,9 +80,11 @@ pub fn output_tokens(
     )?;
 
     let trait_ident = &out_trait.ident;
-    let params = out_trait
-        .generics
-        .impl_params_from_idents(&generic_idents, generics::UseAssociatedFuture(false));
+    let params = out_trait.generics.impl_params_from_idents(
+        &generic_idents,
+        generics::UseAssociatedFuture(false),
+        generics::TakesSelfByValue(false), // BUG?
+    );
     let args = out_trait
         .generics
         .arguments(&generics::ImplIndirection::None);

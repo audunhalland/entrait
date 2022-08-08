@@ -225,6 +225,7 @@ mod tokio_spawn {
         result
     }
 
+    // important: takes T _by value_
     #[entrait(Bar)]
     async fn bar<T>(_: T) -> i32 {
         1
