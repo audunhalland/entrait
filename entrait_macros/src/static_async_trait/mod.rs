@@ -40,27 +40,23 @@ fn process_trait(item_trait: syn::ItemTrait) -> syn::Result<TokenStream> {
 
     for item in items.into_iter() {
         match item {
-            syn::TraitItem::Method(method) => {
-                if method.sig.asyncness.is_some() {
-                    let (sig, has_receiver) = convert_sig(method.sig, trait_span);
-                    let fut = sig.associated_fut_decl(
-                        if has_receiver {
-                            TraitIndirection::None
-                        } else {
-                            TraitIndirection::Static
-                        },
-                        &crate_idents,
-                    );
-                    let trait_fn_sig = &sig.sig;
+            syn::TraitItem::Method(method) if method.sig.asyncness.is_some() => {
+                let (sig, has_receiver) = convert_sig(method.sig, trait_span);
+                let fut = sig.associated_fut_decl(
+                    if has_receiver {
+                        TraitIndirection::None
+                    } else {
+                        TraitIndirection::Static
+                    },
+                    &crate_idents,
+                );
+                let trait_fn_sig = &sig.sig;
 
-                    quote! {
-                        #fut
-                        #trait_fn_sig;
-                    }
-                    .to_tokens(&mut new_items);
-                } else {
-                    method.to_tokens(&mut new_items);
+                quote! {
+                    #fut
+                    #trait_fn_sig;
                 }
+                .to_tokens(&mut new_items);
             }
             item => {
                 item.to_tokens(&mut new_items);
@@ -95,39 +91,35 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
         let crate_idents = CrateIdents::new(impl_token.span());
         for item in items.into_iter() {
             match item {
-                syn::ImplItem::Method(method) => {
-                    if method.sig.asyncness.is_some() {
-                        let ImplItemMethod {
-                            attrs,
-                            vis,
-                            defaultness,
-                            sig,
-                            block: syn::Block { stmts, .. },
-                        } = method;
+                syn::ImplItem::Method(method) if method.sig.asyncness.is_some() => {
+                    let ImplItemMethod {
+                        attrs,
+                        vis,
+                        defaultness,
+                        sig,
+                        block: syn::Block { stmts, .. },
+                    } = method;
 
-                        let (sig, has_receiver) = convert_sig(sig, impl_span);
-                        let fut = sig.associated_fut_impl(
-                            if has_receiver {
-                                TraitIndirection::None
-                            } else {
-                                TraitIndirection::Static
-                            },
-                            &crate_idents,
-                        );
-                        let trait_fn_sig = &sig.sig;
+                    let (sig, has_receiver) = convert_sig(sig, impl_span);
+                    let fut = sig.associated_fut_impl(
+                        if has_receiver {
+                            TraitIndirection::None
+                        } else {
+                            TraitIndirection::Static
+                        },
+                        &crate_idents,
+                    );
+                    let trait_fn_sig = &sig.sig;
 
-                        quote! {
-                            #fut
+                    quote! {
+                        #fut
 
-                            #(#attrs)*
-                            #vis #defaultness #trait_fn_sig {
-                                async move { #(#stmts)* }
-                            }
+                        #(#attrs)*
+                        #vis #defaultness #trait_fn_sig {
+                            async move { #(#stmts)* }
                         }
-                        .to_tokens(&mut new_items);
-                    } else {
-                        method.to_tokens(&mut new_items);
                     }
+                    .to_tokens(&mut new_items);
                 }
                 item => {
                     item.to_tokens(&mut new_items);
@@ -138,12 +130,7 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
         new_items = quote! { #(#items)* };
     }
 
-    let trait_ = if let Some((bang, path, for_)) = trait_ {
-        Some(quote! { #bang #path #for_ })
-    } else {
-        None
-    };
-
+    let trait_ = trait_.map(|(bang, path, for_)| quote! { #bang #path #for_ });
     let where_clause = &generics.where_clause;
 
     Ok(quote! {
