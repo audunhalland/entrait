@@ -41,15 +41,8 @@ fn process_trait(item_trait: syn::ItemTrait) -> syn::Result<TokenStream> {
     for item in items.into_iter() {
         match item {
             syn::TraitItem::Method(method) if method.sig.asyncness.is_some() => {
-                let (sig, has_receiver) = convert_sig(method.sig, trait_span);
-                let fut = sig.associated_fut_decl(
-                    if has_receiver {
-                        TraitIndirection::None
-                    } else {
-                        TraitIndirection::Static
-                    },
-                    &crate_idents,
-                );
+                let (sig, trait_indirection) = convert_sig(method.sig, trait_span);
+                let fut = sig.associated_fut_decl(trait_indirection, &crate_idents);
                 let trait_fn_sig = &sig.sig;
 
                 quote! {
@@ -100,15 +93,8 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
                         block: syn::Block { stmts, .. },
                     } = method;
 
-                    let (sig, has_receiver) = convert_sig(sig, impl_span);
-                    let fut = sig.associated_fut_impl(
-                        if has_receiver {
-                            TraitIndirection::None
-                        } else {
-                            TraitIndirection::Static
-                        },
-                        &crate_idents,
-                    );
+                    let (sig, trait_indirection) = convert_sig(sig, impl_span);
+                    let fut = sig.associated_fut_impl(trait_indirection, &crate_idents);
                     let trait_fn_sig = &sig.sig;
 
                     quote! {
@@ -141,11 +127,15 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
     })
 }
 
-fn convert_sig(sig: syn::Signature, span: Span) -> (EntraitSignature, bool) {
-    let has_receiver = matches!(sig.inputs.first(), Some(syn::FnArg::Receiver(_)));
+fn convert_sig(sig: syn::Signature, span: Span) -> (EntraitSignature, TraitIndirection) {
+    let trait_indirection = if matches!(sig.inputs.first(), Some(syn::FnArg::Receiver(_))) {
+        TraitIndirection::None
+    } else {
+        TraitIndirection::Static
+    };
 
     let mut entrait_sig = EntraitSignature::new(sig);
     entrait_sig.convert_to_associated_future(ReceiverGeneration::Rewrite, span);
 
-    (entrait_sig, has_receiver)
+    (entrait_sig, trait_indirection)
 }
