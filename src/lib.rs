@@ -908,7 +908,43 @@ pub use macros::entrait_export;
 /// ```
 pub use macros::entrait_impl;
 
-/// TODO: Document
+/// Syntax sugar for implementing dynamic-dispatch inverted dependencies.
+///
+/// The syntax is the same as for [entrait_impl].
+///
+/// The only difference is that this version of the macro must be used when the trait delegation happens via dynamic dispatch (`delegate_by = Borrow`):
+///
+/// ```rust
+/// # mod demo {
+/// # use entrait::*;
+/// #[entrait(TraitImpl, delegate_by = Borrow)]
+/// pub trait Trait {
+///     fn foo(&self) -> i32;
+/// }
+///
+/// #[entrait_dyn_impl]
+/// mod my_dynamic_impl {
+///     pub fn foo(_deps: &impl std::any::Any) -> i32 {
+///         42
+///     }
+///
+///     #[derive_impl(super::TraitImpl)]
+///     pub struct MyDynamicImpl;
+/// }
+///
+/// struct App(my_dynamic_impl::MyDynamicImpl);
+///
+/// impl std::borrow::Borrow<dyn TraitImpl<Self>> for App {
+///     fn borrow(&self) -> &dyn TraitImpl<Self> {
+///         &self.0
+///     }
+/// }
+///
+/// fn test() {
+///     assert_eq!(42, Impl::new(App(my_dynamic_impl::MyDynamicImpl)).foo());
+/// }
+/// } // demo
+/// ```
 pub use entrait_macros::entrait_dyn_impl;
 
 /// Re-exported from the [implementation] crate.
