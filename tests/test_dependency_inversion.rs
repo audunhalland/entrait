@@ -119,3 +119,43 @@ mod async_static {
         assert_eq!(42, app.foo().await);
     }
 }
+
+#[cfg(any(feature = "async-trait"))]
+mod async_dyn {
+    use entrait::*;
+
+    #[entrait(FoobarImpl, delegate_by = Borrow, async_trait = true)]
+    pub trait Foobar {
+        async fn foo(&self) -> i32;
+        async fn bar(&self) -> u32;
+    }
+
+    #[entrait_dyn_impl]
+    mod foobar_impl {
+        pub async fn bar<D>(_: &D) -> u32 {
+            0
+        }
+
+        pub async fn foo(deps: &impl super::super::Baz) -> i32 {
+            deps.baz()
+        }
+
+        #[derive_impl(super::FoobarImpl)]
+        pub struct MyImpl;
+    }
+
+    struct App(foobar_impl::MyImpl);
+
+    impl std::borrow::Borrow<dyn FoobarImpl<Self> + Sync> for App {
+        fn borrow(&self) -> &(dyn FoobarImpl<Self> + Sync) {
+            &self.0
+        }
+    }
+
+    #[tokio::test]
+    async fn test() {
+        let app = Impl::new(App(foobar_impl::MyImpl));
+
+        assert_eq!(42, app.foo().await);
+    }
+}

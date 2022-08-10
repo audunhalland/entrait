@@ -4,6 +4,7 @@ pub mod input_attr;
 mod out_trait;
 
 use input_attr::EntraitTraitAttr;
+use proc_macro2::Span;
 
 use crate::analyze_generics::TraitFn;
 use crate::attributes;
@@ -24,6 +25,9 @@ use quote::ToTokens;
 
 use self::out_trait::OutTrait;
 
+#[derive(Clone, Copy)]
+struct ContainsAsync(bool);
+
 pub fn output_tokens(
     attr: EntraitTraitAttr,
     item_trait: syn::ItemTrait,
@@ -38,10 +42,10 @@ pub fn output_tokens(
     }
 
     let trait_ident_span = item_trait.ident.span();
-    let contains_async = item_trait.items.iter().any(|item| match item {
+    let contains_async = ContainsAsync(item_trait.items.iter().any(|item| match item {
         syn::TraitItem::Method(method) => method.sig.asyncness.is_some(),
         _ => false,
-    });
+    }));
     let impl_attrs = item_trait
         .attrs
         .iter()
@@ -116,7 +120,7 @@ pub fn output_tokens(
     let method_items = out_trait
         .fns
         .iter()
-        .map(|trait_fn| gen_delegation_method(trait_fn, generic_idents, &attr));
+        .map(|trait_fn| gen_delegation_method(trait_fn, generic_idents, &attr, contains_async));
 
     Ok(quote! {
         #trait_def
@@ -265,6 +269,7 @@ fn gen_delegation_method<'s>(
     trait_fn: &'s TraitFn,
     generic_idents: &'s GenericIdents,
     attr: &'s EntraitTraitAttr,
+    contains_async: ContainsAsync,
 ) -> DelegatingMethod<'s> {
     let fn_sig = &trait_fn.sig();
     let fn_ident = &fn_sig.ident;
@@ -291,11 +296,19 @@ fn gen_delegation_method<'s>(
             }
         }
         (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByBorrow, _))) => {
+            let plus_send = if contains_async.0 {
+                Some(TokenPair(
+                    syn::token::Add::default(),
+                    syn::Ident::new("Sync", Span::call_site()),
+                ))
+            } else {
+                None
+            };
             DelegatingMethod {
                 trait_fn,
                 needs_async_move: false,
                 call: quote! {
-                    <#impl_t as ::#core::borrow::Borrow<dyn #impl_trait_ident<#impl_t>>>::borrow(&*self)
+                    <#impl_t as ::#core::borrow::Borrow<dyn #impl_trait_ident<#impl_t> #plus_send>>::borrow(&*self)
                         .#fn_ident(self, #(#arguments),*)
                 },
             }
@@ -357,7 +370,7 @@ impl<'s> ToTokens for DelegatingMethod<'s> {
 
 struct ImplWhereClause<'g, 'c> {
     out_trait: &'g OutTrait,
-    contains_async: bool,
+    contains_async: ContainsAsync,
     trait_generics: &'g generics::TraitGenerics,
     generic_idents: &'g GenericIdents<'c>,
     attr: &'g EntraitTraitAttr,
@@ -393,10 +406,15 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                     Lt(self.span),
                     self.generic_idents.impl_t,
                     Gt(self.span),
+                    if self.contains_async.0 {
+                        Some(self.plus_sync())
+                    } else {
+                        None
+                    },
                     Gt(self.span)
                 );
 
-                if self.contains_async {
+                if self.contains_async.0 {
                     push_tokens!(stream, self.plus_send(), self.plus_sync());
                 }
                 push_tokens!(stream, self.plus_static());
@@ -411,14 +429,14 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                     Gt(self.span)
                 );
 
-                if self.contains_async {
+                if self.contains_async.0 {
                     push_tokens!(stream, self.plus_send(), self.plus_sync());
                 }
                 push_tokens!(stream, self.plus_static());
             }
             _delegate_to_impl_t => {
                 push_tokens!(stream, self.trait_with_arguments(), self.plus_sync());
-                if self.contains_async {
+                if self.contains_async.0 {
                     // There will be a `self.as_ref().fn().await`,
                     // that borrow will need to be 'static for the future to be Send
                     push_tokens!(stream, self.plus_static());

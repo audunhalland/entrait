@@ -6,6 +6,8 @@ use crate::analyze_generics::TraitFnAnalyzer;
 use crate::fn_delegation_codegen;
 use crate::generics;
 use crate::input::{InputMod, ModItem};
+use crate::opt::AsyncStrategy;
+use crate::opt::SpanOpt;
 use crate::signature;
 use input_attr::EntraitImplAttr;
 
@@ -19,7 +21,7 @@ pub enum ImplKind {
 }
 
 pub fn output_tokens(
-    attr: EntraitImplAttr,
+    mut attr: EntraitImplAttr,
     input_mod: InputMod,
     kind: ImplKind,
 ) -> syn::Result<proc_macro2::TokenStream> {
@@ -34,6 +36,11 @@ pub fn output_tokens(
             return missing_derive_impl(input_mod);
         }
     };
+
+    // Using a dyn implementation implies boxed futures.
+    if matches!(kind, ImplKind::Dyn) {
+        attr.opts.async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, input_mod.ident.span()));
+    }
 
     let impl_type_ident = &derive_impl.type_ident;
     let trait_span = derive_impl
