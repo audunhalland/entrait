@@ -845,7 +845,67 @@ pub use macros::entrait;
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
 
-/// TODO: Document
+/// Syntax sugar for implementing static-dispatch inverted dependencies.
+///
+/// This attribute must be applied to a module (`mod`) item.
+/// The macro scans all non-private function signatures appearing inside the module, and uses those as a basis to generate a trait `impl` block.
+///
+/// Which trait to implement and the type to implement it for must be specified with the following syntax:
+///
+/// ```no_compile
+/// #[derive_impl(path::to::Trait)]
+/// pub struct MyStruct;
+/// ```
+///
+/// The trait to implement is the _delegation target_ from a `#[entrait(TraitImpl, delegate_by = DelegationTrait]) trait Trait {}` invocation, i.e. `TraitImpl`.
+///
+/// The point of this is to make it easier to implement dependency inversion,
+///     because the trait,
+///     the implementation of the trait,
+///     and the delegation from the facade to the implementation can live in three different crates.
+///
+/// ## Example:
+///
+/// ```rust
+/// # mod demo {
+/// # use entrait::*;
+/// #[entrait(TraitImpl, delegate_by = DelegateTrait)]
+/// trait Trait {
+///     fn foo(&self) -> i32;
+///     fn bar(&self) -> u32;
+/// }
+///
+/// #[entrait_impl]
+/// mod some_impl {
+///     pub fn foo(deps: &impl super::GetI32) -> i32 {
+///         deps.get_i32()
+///     }
+///
+///     pub fn bar(_deps: &impl std::any::Any) -> u32 {
+///         1337
+///     }
+///
+///     #[derive_impl(super::TraitImpl)]
+///     pub struct SomeImpl;
+/// }
+///
+/// #[entrait(GetI32, no_deps)]
+/// fn get_i32() -> i32 {
+///     42
+/// }
+///
+/// struct App;
+///
+/// // Implement the delegation from facade to implementation:
+/// impl DelegateTrait<Self> for App {
+///     type Target = some_impl::SomeImpl;
+/// }
+///
+/// fn test() {
+///     assert_eq!(42, Impl::new(App).foo());
+/// }
+/// # } // demo
+/// ```
 pub use macros::entrait_impl;
 
 /// TODO: Document
