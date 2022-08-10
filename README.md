@@ -392,9 +392,9 @@ To use this together with some `App`, implement `Borrow<dyn ReadConfig>` for it.
 ### Case 4: Truly inverted _internal dependencies_ - static dispatch
 All cases up to this point have been _leaf dependencies_.
 Leaf dependencies are delegations that exit from the `Impl<T>` layer, using delegation targets involving concete `T`'s.
-This means that it's impossible to continue to use the entrait pattern and extend your application behind those abstractions.
+This means that it is impossible to continue to use the entrait pattern and extend your application behind those abstractions.
 
-To make your abstraction _extendable_ and your dependency _internal_, we have to keep the `T` generic.
+To make your abstraction _extendable_ and your dependency _internal_, we have to keep the `T` generic inside the [Impl] type.
 To make this work, we have to make use of two helper traits:
 
 ```rust
@@ -439,7 +439,7 @@ The method signatures in `RepositoryImpl<T>` are _static_, and receives the `&Im
 This allows us to continue using entrait patterns within those implementations!
 
 In _crate 2_, we have to provide an implementation of `RepositoryImpl<T>`.
-This can either be done manually, or by using the `#[entrait_impl]` macro:
+This can either be done manually, or by using the [entrait_impl] attribute:
 
 ```rust
 #[entrait_impl]
@@ -484,6 +484,14 @@ impl crate1::DelegateRepository<Self> for App {
 }
 fn main() { /* ... */ }
 ```
+
+
+### Case 5: Truly inverted internal dependencies - dynamic dispatch
+A small variation of case 4: Use `delegate_by = Borrow` instead of a custom trait.
+This makes the delegation happen using dynamic dispatch.
+
+The app must now implement `Borrow<dyn TraitImpl<Self>>`.
+For more details, see the [entrait_dyn_impl] attribute.
 
 
 # Options and features
