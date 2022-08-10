@@ -28,6 +28,15 @@ pub fn output_tokens(
     attr: EntraitTraitAttr,
     item_trait: syn::ItemTrait,
 ) -> syn::Result<TokenStream> {
+    if let (None, Some(SpanOpt(Delegate::ByTrait(_), span))) =
+        (&attr.impl_trait, &attr.delegation_kind)
+    {
+        return Err(syn::Error::new(
+            *span,
+            "Cannot use a custom delegating trait without a custom trait to delegate to. Use either `#[entrait(TraitImpl, delegate_by = DelegateTrait)]` or `#[entrait(delegate_by = Borrow)]`",
+        ));
+    }
+
     let trait_ident_span = item_trait.ident.span();
     let contains_async = item_trait.items.iter().any(|item| match item {
         syn::TraitItem::Method(method) => method.sig.asyncness.is_some(),
