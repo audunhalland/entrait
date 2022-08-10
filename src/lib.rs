@@ -734,7 +734,7 @@ mod macros {
     pub use entrait_auto_async::*;
 }
 
-/// The entrait attribute macro, used to generate traits and implementations of them.
+/// The entrait attribute macro, used to generate traits and _delegating implementations_ of them.
 ///
 /// ## For functions
 /// When used with a function, the macro must be given the name of a trait to generate.
@@ -758,44 +758,78 @@ mod macros {
 /// fn ...
 /// ```
 ///
+/// ## For modules
+/// Using the attribute on a module is used to group several non-private functions into one trait.
+/// Only non-private functions are considered by the macro.
+///
+/// #### Syntax
+/// ```no_compile
+/// #[entrait($visibility? $TraitIdent)]
+/// mod some_module {
+///     pub fn ...
+/// }
+/// ```
+///
 ///
 /// ## For traits
-/// When used with a trait, the macro will only supply an implementation for [Impl] plus optional mock implementations.
+/// When used with a trait, the macro will only provide a delegating implementation for [Impl] that delegates to another trait implementation.
+/// It can also optionally generate mock impls of the trait.
 ///
-/// As there is no implementation function to connect the trait to, the job of actual implementation is left to user code.
-/// The generated [Impl]-implementation works by delegating: The trait will only be implemented for `Impl<T>` when it is also implemented for `T`.
-/// User code has to supply a manual implementation of the trait for the `T` that is going to be used in the application.
-/// Inside this implementation, the application is no longer generic, therefore this will become a leaf dependency.
+/// There are mainly two delegation modes:
 ///
-/// Mock exporting is implicitly turned on.
-/// The reason is that the only reasonable use case of entraiting a trait is that the trait has to live in an upstream crate, without access to the downstream application type.
+/// 1. Specify a trait name to use as delegation target, resulting in an _internal dependency_.
+/// 2. Don't specify a trait name, resulting in a _leaf dependency_ which has to delegate using the same trait, but for a different type.
+///
+/// When mocking is enabled, exporting the mocks is implicitly turned on (i.e. not gated by `#[cfg(test)]`).
 ///
 /// #### Syntax
 ///
 /// ```no_compile
-/// #[entrait]
+/// #[entrait($visibility? $TraitIdent?)]
 /// trait ...
 /// ```
 ///
 /// with options:
 ///
 /// ```no_compile
-/// #[entrait($option, ...)]
+/// #[entrait($visibility? $TraitIdent?, $option, ...)]
 /// trait ...
+/// ```
+///
+/// ##### Example 1
+/// Internal dependency, static dispatch (delegation bound: `T: DelegateFoo<T>`):
+/// ```no_compile
+/// #[entrait(FooImpl, delegate_by = DelegateFoo)]
+/// trait Foo {}
+/// ```
+/// Note: The associated type `DelegateFoo<T>::Target` must implement `FooImpl<T>`.
+///
+/// ##### Example 2
+/// Leaf dependency, static dispatch (delegation bound: `T: Foo`):
+/// ```no_compile
+/// #[entrait]
+/// trait Foo {}
+/// ```
+///
+/// ##### Example 3
+/// Leaf dependency, dynamic dispatch (delegation bound: `T: Borrow<dyn Foo>`):
+/// ```no_compile
+/// #[entrait(delegate_by = Borrow)]
+/// trait Foo {}
 /// ```
 ///
 /// ## Options
 /// An option can be just `$option` or `$option = $value`. An option without value means `true`.
 ///
-/// | Option              | Type            | Target       | Default     | Description         |
-/// | ------------------- | --------------- | ----------   | ----------- | ------------------- |
-/// | `no_deps`           | `bool`          | `fn`         | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
-/// | `export`            | `bool`          | `fn`         | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
-/// | `unimock`           | `bool`          | `fn`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
-/// | `mockall`           | `bool`          | `fn`+`trait` | `false`     | Enable mockall mocks. |
-/// | `async_trait`       | `bool`          | `fn`         | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
-/// | `associated_future` | `bool`          | `fn`         | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(generic_associated_types)` and `feature(type_alias_impl_trait)`. |
-/// | `delegate_by`       | `Self`/`Borrow` | `trait`      | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `Borrow` generates a [`T: Borrow<dyn Trait>`](::core::borrow::Borrow) bound. |
+/// | Option              | Type                         | Target             | Default     | Description         |
+/// | ------------------- | ---------------------------- | ------------------ | ----------- | ------------------- |
+/// | `no_deps`           | `bool`                       | `fn`               | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
+/// | `export`            | `bool`                       | `fn`+`mod`         | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
+/// | `unimock`           | `bool`                       | `fn`+`mod`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
+/// | `mockall`           | `bool`                       | `fn`+`mod`+`trait` | `false`     | Enable mockall mocks. |
+/// | `async_trait`       | `bool`                       | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
+/// | `associated_future` | `bool`                       | `fn`+`mod`+`trait` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(generic_associated_types)` and `feature(type_alias_impl_trait)`. |
+/// | `delegate_by`       | `Self`/`Borrow`/custom ident | `trait`            | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `Borrow` generates a [`T: Borrow<dyn Trait>`](::core::borrow::Borrow) bound. Any other value generates a new trait with that name which controls the delegation. |
 ///
 /// [^1]: Enabled by default by turning on the `unimock` cargo feature.
 ///
