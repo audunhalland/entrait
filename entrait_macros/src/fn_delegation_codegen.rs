@@ -9,7 +9,9 @@ use crate::generics;
 use crate::generics::ImplIndirection;
 use crate::generics::TraitDependencyMode;
 use crate::idents::CrateIdents;
+use crate::opt::AsyncStrategy;
 use crate::opt::Opts;
+use crate::opt::SpanOpt;
 use crate::token_util::push_tokens;
 
 /// Generate impls that call standalone generic functions
@@ -57,13 +59,21 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
             self.trait_span,
         );
 
+        let opt_inline_attr = if !matches!(&self.impl_indirection, ImplIndirection::Dynamic { .. })
+        {
+            Some(quote! { #[inline] })
+        } else {
+            None
+        };
+
         let items = trait_fns.iter().map(|trait_fn| {
             let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl(
                 self.impl_indirection.to_trait_indirection(),
                 self.crate_idents,
             );
 
-            let fn_item = self.gen_delegating_fn_item(trait_fn, self.trait_span);
+            let fn_item =
+                self.gen_delegating_fn_item(trait_fn, self.trait_span, opt_inline_attr.as_ref());
 
             quote! {
                 #associated_fut_impl
@@ -83,7 +93,12 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
     }
 
     /// Generate the fn (in the impl block) that calls the entraited fn
-    fn gen_delegating_fn_item(&self, trait_fn: &TraitFn, span: Span) -> TokenStream {
+    fn gen_delegating_fn_item(
+        &self,
+        trait_fn: &TraitFn,
+        span: Span,
+        mut opt_inline_attr: Option<&TokenStream>,
+    ) -> TokenStream {
         let entrait_sig = &trait_fn.entrait_sig;
         let trait_fn_sig = &trait_fn.sig();
         let deps = &trait_fn.deps;
@@ -116,7 +131,17 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
             opt_dot_await = None;
         }
 
+        if trait_fn.originally_async
+            && matches!(
+                self.opts.async_strategy(),
+                SpanOpt(AsyncStrategy::AsyncTrait, _)
+            )
+        {
+            opt_inline_attr = None;
+        }
+
         quote_spanned! { span=>
+            #opt_inline_attr
             #trait_fn_sig {
                 #fn_ident(#opt_self_comma #(#arguments),*) #opt_dot_await
             }

@@ -287,6 +287,7 @@ fn gen_delegation_method<'s>(
     match (&attr.impl_trait, &attr.delegation_kind) {
         (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByTrait(_), _))) => {
             DelegatingMethod {
+                attr,
                 trait_fn,
                 needs_async_move: true,
                 call: quote! {
@@ -305,6 +306,7 @@ fn gen_delegation_method<'s>(
                 None
             };
             DelegatingMethod {
+                attr,
                 trait_fn,
                 needs_async_move: false,
                 call: quote! {
@@ -314,6 +316,7 @@ fn gen_delegation_method<'s>(
             }
         }
         (None, Some(SpanOpt(Delegate::ByBorrow, _))) => DelegatingMethod {
+            attr,
             trait_fn,
             needs_async_move: false,
             call: quote! {
@@ -321,6 +324,7 @@ fn gen_delegation_method<'s>(
             },
         },
         _ => DelegatingMethod {
+            attr,
             trait_fn,
             needs_async_move: false,
             call: quote! {
@@ -331,13 +335,39 @@ fn gen_delegation_method<'s>(
 }
 
 struct DelegatingMethod<'s> {
+    attr: &'s EntraitTraitAttr,
     trait_fn: &'s TraitFn,
     needs_async_move: bool,
     call: TokenStream,
 }
 
+impl<'s> DelegatingMethod<'s> {
+    fn should_inline(&self) -> bool {
+        if matches!(
+            &self.attr.delegation_kind,
+            Some(SpanOpt(Delegate::ByBorrow, _))
+        ) {
+            return false;
+        }
+
+        if self.trait_fn.originally_async
+            && matches!(
+                self.attr.opts.async_strategy(),
+                SpanOpt(AsyncStrategy::AsyncTrait, _)
+            )
+        {
+            return false;
+        }
+
+        true
+    }
+}
+
 impl<'s> ToTokens for DelegatingMethod<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
+        if self.should_inline() {
+            quote! { #[inline] }.to_tokens(stream);
+        }
         self.trait_fn.sig().to_tokens(stream);
         syn::token::Brace::default().surround(stream, |stream| {
             if self.needs_async_move && self.trait_fn.entrait_sig.associated_fut.is_some() {
