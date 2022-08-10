@@ -117,7 +117,7 @@ mod my_module {
     pub fn bar(deps: &impl super::OtherTrait) {}
 }
 ```
-This examples generates a `MyModule` trait containing the methods `foo` and `bar`.
+This example generates a `MyModule` trait containing the methods `foo` and `bar`.
 
 
 ### Concrete dependencies
@@ -260,181 +260,231 @@ fn main() {
 ```
 
 
-# Modular applications consisting of several crates
+# Multi-crate architecture
 
-A common technique for Rust application development is to divide them into multiple crates.
-Entrait does its best to provide great support for this kind of architecture.
-This would be very trivial to do and wouldn't even be worth mentioning here if it wasn't for _concrete deps_.
+A common technique for Rust application development is to choose a multi-crate architecture.
+There are usually two main ways to go about it:
 
-Further up, concrete dependency was mentioned as leaves of a depdendency tree. Let's imagine we have
-an app built from two crates: A `main` which depends on a `lib`:
+1. The call graph and crate dependency go in the same direction.
+2. The call graph and crate dependency go in _opposite_ directions.
+
+The first option is how libraries are normally used: Its functions are just called, without any indirection.
+
+The second option can be referred to as a variant of the
+    [dependency inversion principle](https://en.wikipedia.org/wiki/Dependency_inversion_principle).
+This is usually a desirable architectural property, and achieving this with entrait is what this section is about.
+
+The main goal is to be able to express business logic _centrally_, and avoid depending directly on infrastructure details (onion architecture).
+All of the examples in this section make some use of traits and trait delegation.
+
+
+### Case 1: Concrete leaf dependencies
+Earlier it was mentioned that when concrete-type dependencies are used, the `T` in `Impl<T>`, your application, and the type of the dependency have to match.
+But this is only partially true.
+It really comes down to which traits are implemented on what types:
 
 ```rust
-mod lib {
-    //! lib.rs - pretend this is a separate crate
-    pub struct LibConfig {
-        pub foo: String,
-    }
-
-    #[entrait_export(pub GetFoo)]
-    fn get_foo(config: &LibConfig) -> &str {
-        &config.foo
-    }
-
-    #[entrait_export(pub LibFunction)]
-    fn lib_function(deps: &impl GetFoo) {
-        let foo = deps.get_foo();
-    }
+pub struct Config {
+    foo: String,
 }
 
-// main.rs
-struct App {
-    lib_config: lib::LibConfig,
-}
-
-fn main() {
-    use entrait::*;
-
-    let app = Impl::new(App {
-        lib_config: lib::LibConfig {
-            foo: "value".to_string(),
-        }
-    });
-
-    use lib::LibFunction;
-    app.lib_function();
+#[entrait_export(pub GetFoo)]
+fn get_foo(config: &Config) -> &str {
+    &config.foo
 }
 ```
 
-How can this be made to work at all? Let's deconstruct what is happening:
-
-1. The library defines it's own configuration: `LibConfig`.
-2. It defines a leaf dependency to get access to some property: `GetFoo`.
-3. All things which implement `GetFoo` may call `lib_function`.
-4. The main crate defines an `App`, which contains `LibConfig`.
-5. The app has the type `Impl<App>`, which means it can call entraited functions.
-6. Calling `LibFunction` requires the caller to implement `GetFoo`.
-7. `GetFoo` is somehow only implemented for `Impl<LibConfig>`, not `Impl<App>`.
-
-The clue to get around this problem lies in _trait delegation_.
-Trait delegation is an implementation of a trait that contains no logic, but just forwards each method to another implementation of the same trait, through some kind of indirection.
-
-_A leaf dependency is a trait which gets delegated from `Impl<T>` to `T`, conditional on `where T: Trait`._
-
-In our example, `GetFoo` is automatically implemented for `Impl<T> where T: GetFoo` and for `LibConfig`.
-This means it is definitely implemented for `Impl<LibConfig>`.
-To make the trait implemented for `Impl<App>`, we only have to implement it for `App`. That impl will be _another_ delegation, to `LibConfig`:
+<details>
+<summary>🔬 <strong>Inspect the generated code</strong> 🔬</summary>
 
 ```rust
-impl GetFoo for App {
+trait GetFoo {
+    fn get_foo(&self) -> &str;
+}
+impl<T: GetFoo> GetFoo for Impl<T> {
     fn get_foo(&self) -> &str {
-        self.lib_config.get_foo()
+        self.as_ref().get_foo()
+    }
+}
+impl GetFoo for Config {
+    fn get_foo(&self) -> &str {
+        get_foo(self)
     }
 }
 ```
 
-### Using entrait with a trait
-An alternative way to achieve something similar to the above is to use the entrait macro _directly on a trait_.
+</details>
 
-A typical use case for this is to put core abstractions in some "core" crate, letting other libraries use those core abstractions as dependencies.
+Here we actually have a trait `GetFoo` that is implemented two times: for `Impl<T> where T: GetFoo` and for `Config`.
+The first implementation is delegating to the other one.
+
+For making this work with _any_ downstream application type, we just have to manually implement `GetFoo` for that application:
 
 ```rust
-// core_crate
+struct App {
+    config: some_upstream_crate::Config,
+}
+impl some_upstream_crate::GetFoo for App {
+    fn get_foo(&self) -> &str {
+        self.config.get_foo()
+    }
+}
+```
+
+
+### Case 2: Hand-written trait as a leaf dependency
+Using a concrete type like `Config` from the first case can be contrived in many situations.
+Sometimes a good old hand-written trait definition will do the job much better:
+
+```rust
 #[entrait]
-trait System {
+pub trait System {
     fn current_time(&self) -> u128;
 }
-
-// lib_crate
-#[entrait(ComputeSomething)]
-fn compute_something(deps: &impl System) {
-    let system_time = deps.current_time();
-    // do something with the time...
-}
-
-// main.rs
-struct App;
-impl System for App {
-    fn current_time(&self) -> u128 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-    }
-}
-
-Impl::new(App).compute_something();
 ```
 
-This is similar to defining a leaf dependency for a concrete type, only in this case, `core_crate` really has no type available to use.
-We know that `System` eventually has to be implemented for the application type, and that can happen in the main crate.
-
-The reason that the `#[entrait]` attribute has to be present in `core_crate`, is that it needs to define a blanket implementation for `Impl<T>` (as well as mocks),
-    and those need to live in the same crate that defined the trait.
-If not, this would have violated the orphan rule.
-
-(NB: This example's purpose is to demonstrate entrait, not to be a guide on how to deal with system time. It should contain some ideas for how to _mock_ time, though!)
-
-#### `dyn` leaf dependencies
-Most application configuration is data-based, but some applications also require dynamically changing _implementation_.
-Rust can express dynamically changing implementation using `dyn Trait`.
-
-Entrait supports this for leaf dependencies.
-As an example, imagine a trait for abstracting away how to read some config:
+<details>
+<summary>🔬 <strong>Inspect the generated code</strong> 🔬</summary>
 
 ```rust
-#[entrait]
-trait ReadConfig {
-    fn read_config(&self) -> String;
+impl<T: System> System for Impl<T> {
+    fn current_time(&self) -> u128 {
+        self.as_ref().current_time()
+    }
 }
 ```
 
-How to read this config could be different depending on which platform the application runs on, and the application would like to support several implementations of this trait.
+</details>
 
-The problem we face here, is that the generated delegation code for `Impl<T>` will require that `T: ReadConfig`.
-In other words, there can only be one implementation of this trait per `T`.
-This means that we would have to create a separate application type for each way of reading config.
-This doesn't scale well, and leads to combinatorial type explosion when we have several such traits to implement.
-Additionally, this approach would lead to several copies of our entire generic application written with the entrait pattern, because it would need to get monomorphized for each type.
+What the attribute does in this case, is just to generate the correct blanket implementations of the trait: _delegation_ and _mocks_.
 
-The solution is to borrow a `dyn` reference to this trait.
-Since `Impl<T>` delegations does not know anything about the concrete `T`, we need to describe in an abstracted way how to borrow it.
-For this, Rust has the Borrow trait.
+To use with some `App`, just implement the trait for it.
 
-Instead of generating a `T: ReadConfig` bound, we can generate a `T: Borrow<dyn ReadConfig>` bound, by using `delegate_by = Borrow`.
+
+### Case 3: Hand-written trait as a leaf dependency using _dynamic dispatch_
+Sometimes it might be desirable to have a delegation that involves dynamic dispatch.
+Entrait has a `delegate_by =` option, where you can pass an alternative trait to use as part of the delegation strategy.
+To enable dynamic dispatch, use Borrow:
 
 ```rust
 #[entrait(delegate_by = Borrow)]
 trait ReadConfig: 'static {
-    fn read_config(&self) -> String;
+    fn read_config(&self) -> &str;
 }
-
-#[entrait(DoSomething)]
-fn do_something(deps: &impl ReadConfig) {
-    let config = deps.read_config();
-}
-
-struct App {
-    read_config: Box<dyn ReadConfig + Sync>,
-};
-
-impl ReadConfig for String {
-    fn read_config(&self) -> String {
-        self.clone()
-    }
-}
-
-impl std::borrow::Borrow<dyn ReadConfig> for App {
-    fn borrow(&self) -> &dyn ReadConfig {
-        self.read_config.as_ref()
-    }
-}
-
-let app = Impl::new(App {
-    read_config: Box::new("hard-coded!".to_string()),
-});
-app.do_something();
 ```
+
+<details>
+<summary>🔬 <strong>Inspect the generated code</strong> 🔬</summary>
+
+```rust
+impl<T: ::core::borrow::Borrow<dyn ReadConfig> + 'static> ReadConfig for Impl<T> {
+    fn read_config(&self) -> &str {
+        self.as_ref().borrow().read_config()
+    }
+}
+```
+
+</details>
+
+To use this together with some `App`, implement `Borrow<dyn ReadConfig>` for it.
+
+
+### Case 4: Truly inverted _internal dependencies_ - static dispatch
+All cases up to this point have been _leaf dependencies_.
+Leaf dependencies are delegations that exit from the `Impl<T>` layer, using delegation targets involving concete `T`'s.
+This means that it's impossible to continue to use the entrait pattern and extend your application behind those abstractions.
+
+To make your abstraction _extendable_ and your dependency _internal_, we have to keep the `T` generic.
+To make this work, we have to make use of two helper traits:
+
+```rust
+#[entrait(RepositoryImpl, delegate_by = DelegateRepository)]
+pub trait Repository {
+    fn fetch(&self) -> i32;
+}
+```
+
+<details>
+<summary>🔬 <strong>Inspect the generated code</strong> 🔬</summary>
+
+```rust
+pub trait RepositoryImpl<T> {
+    fn fetch(_impl: &Impl<T>) -> i32;
+}
+pub trait DelegateRepository<T> {
+    type Target: RepositoryImpl<T>;
+}
+impl<T: DelegateRepository<T>> Repository for Impl<T> {
+    fn fetch(&self) -> i32 {
+        <T as DelegateRepository<T>>::Target::fetch(self)
+    }
+}
+```
+
+</details>
+
+This syntax introduces a total of _three_ traits:
+
+* `Repository`: The _dependency_, what the rest of the application directly calls.
+* `RepositoryImpl<T>`: The _delegation target_, a trait which needs to be implemented by some `Target` type.
+* `DelegateRepository<T>`: The _delegation selector_, that selects the specific `Target` type to be used for some specific `App`.
+
+This design makes it possible to separate concerns into three different crates, ordered from most-upstream to most-downstream:
+1. _Core logic:_ Depend on and call `Repository` methods.
+2. _External system integration:_ Provide some implementation of the repository, by implementing `RepositoryImpl<T>`.
+3. _Executable:_ Construct an `App` that selects a specific repository implementation from crate 2.
+
+All delegation from `Repository` to `RepositoryImpl<T>` goes via the `DelegateRepository<T>` trait.
+The method signatures in `RepositoryImpl<T>` are _static_, and receives the `&Impl<T>` via a normal parameter.
+This allows us to continue using entrait patterns within those implementations!
+
+In _crate 2_, we have to provide an implementation of `RepositoryImpl<T>`.
+This can either be done manually, or by using the `#[entrait_impl]` macro:
+
+```rust
+#[entrait_impl]
+mod my_repository {
+    #[derive_impl(crate1::RepositoryImpl)]
+    pub struct MyRepository;
+
+    // this function has the now-familiar entrait-compatible signature:
+    pub fn fetch<D>(deps: &D) -> i32 {
+        unimplemented!()
+    }
+}
+```
+
+<details>
+<summary>🔬 <strong>Inspect the generated code</strong> 🔬</summary>
+
+```rust
+mod my_repository {
+    // ...snip...
+
+    impl<T> crate1::RepositoryImpl<T> for MyRepository {
+        fn fetch(_impl: &Impl<T>) -> i32 {
+            fetch(_impl)
+        }
+    }
+}
+```
+
+</details>
+
+The set of non-private function signatures inside `my_repository` will be turned into a `impl` block of the trait `crate::RepositoryImpl<T>` for the type `MyRepository`.
+Obviously, because an `impl` block is being autogenerated, those functions have to match the signatures of `Repository` (with the exception of the `&self` paramater which becomes the `deps` parameter).
+
+In the end, we just have to implement our `DelegateRepository<T>`:
+
+```rust
+// in crate3:
+struct App;
+impl crate1::DelegateRepository<Self> for App {
+    type Target = crate2::MyRepository;
+}
+fn main() { /* ... */ }
+```
+
 
 # Options and features
 
