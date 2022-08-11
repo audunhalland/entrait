@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependency inversion support with the `#[entrait(TraitImpl, delegate_by = DelegationTrait)] trait Trait {}` syntax.
 - #[inline] attribute on small, delegating methods.
 ### Changed
-- Make zero-cost futures using a separate macro (`unimock::static_async::async_trait`), comparable to `async_trait`.
+- Make zero-cost futures using a separate macro (`entrait::static_async::async_trait`), comparable to `async_trait`.
 
 ## [0.4.3] - 2022-08-01
 ### Added
