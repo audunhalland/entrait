@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+## [0.4.5] - 2022-08-11
 ### Changed
 - Docs: move "Module support" to later in the Introduction section, because it interrupts the original flow of the documentation.
 
