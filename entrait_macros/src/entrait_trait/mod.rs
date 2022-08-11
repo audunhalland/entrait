@@ -297,7 +297,7 @@ fn gen_delegation_method<'s>(
             }
         }
         (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByBorrow, _))) => {
-            let plus_send = if contains_async.0 {
+            let plus_sync = if contains_async.0 {
                 Some(TokenPair(
                     syn::token::Add::default(),
                     syn::Ident::new("Sync", Span::call_site()),
@@ -310,7 +310,7 @@ fn gen_delegation_method<'s>(
                 trait_fn,
                 needs_async_move: false,
                 call: quote! {
-                    <#impl_t as ::#core::borrow::Borrow<dyn #impl_trait_ident<#impl_t> #plus_send>>::borrow(&*self)
+                    <#impl_t as ::#core::borrow::Borrow<dyn #impl_trait_ident<#impl_t> #plus_sync>>::borrow(&*self)
                         .#fn_ident(self, #(#arguments),*)
                 },
             }
