@@ -104,27 +104,6 @@
 //! But if dependencies can only be traits, and we always abstract away this type, how can this state ever be accessed?
 //!
 //!
-//! ### Module support
-//! To reduce the number of generated traits, entrait can be used as a `mod` attribute.
-//! When used in this mode, the macro will look for non-private functions directly within the module scope, to be represented as methods on the resulting trait.
-//! This mode works mostly identically to the standalone function mode.
-//!
-//! ```rust
-//! # mod example {
-//! # use entrait::*;
-//! # #[entrait(SomeTrait)]
-//! # fn some_trait<D>(_: &D) {}
-//! # #[entrait(OtherTrait)]
-//! # fn other_trait<D>(_: &D) {}
-//! #[entrait(pub MyModule)]
-//! mod my_module {
-//!     pub fn foo(deps: &impl super::SomeTrait) {}
-//!     pub fn bar(deps: &impl super::OtherTrait) {}
-//! }
-//! # }
-//! ```
-//! This example generates a `MyModule` trait containing the methods `foo` and `bar`.
-//!
 //!
 //! ### Concrete dependencies
 //! So far we have only seen generic trait-based dependencies, but the dependency can also be a _concrete type_:
@@ -156,6 +135,28 @@
 //!
 //! Typically, functions with a concrete dependency should be kept small and avoid extensive business logic.
 //! They ideally function as accessors, providing a loosely coupled abstraction layer over concrete application state.
+//!
+//!
+//! ### Module support
+//! To reduce the number of generated traits, entrait can be used as a `mod` attribute.
+//! When used in this mode, the macro will look for non-private functions directly within the module scope, to be represented as methods on the resulting trait.
+//! This mode works mostly identically to the standalone function mode.
+//!
+//! ```rust
+//! # mod example {
+//! # use entrait::*;
+//! # #[entrait(SomeTrait)]
+//! # fn some_trait<D>(_: &D) {}
+//! # #[entrait(OtherTrait)]
+//! # fn other_trait<D>(_: &D) {}
+//! #[entrait(pub MyModule)]
+//! mod my_module {
+//!     pub fn foo(deps: &impl super::SomeTrait) {}
+//!     pub fn bar(deps: &impl super::OtherTrait) {}
+//! }
+//! # }
+//! ```
+//! This example generates a `MyModule` trait containing the methods `foo` and `bar`.
 //!
 //!
 //! # Testing
