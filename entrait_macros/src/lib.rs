@@ -125,11 +125,13 @@ pub fn entrait_export_unimock_use_associated_future(
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Static, |_| {})
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_impl_use_async_trait(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Static, |opts| {
         opts.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
@@ -137,6 +139,7 @@ pub fn entrait_impl_use_async_trait(attr: TokenStream, input: TokenStream) -> To
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_impl_use_associated_future(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Static, |opts| {
         opts.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
@@ -144,6 +147,7 @@ pub fn entrait_impl_use_associated_future(attr: TokenStream, input: TokenStream)
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait(dyn)] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_dyn_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Dyn, |_| {})
 }

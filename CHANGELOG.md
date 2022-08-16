@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
 - Support for `#[entrait] impl TraitImpl for Type {}` for inverted dependencies. Modules will be deprecated in next release, since this is much cleaner.
+### Changed
+- Deprecated the recently added `#[entriat_impl]` and `#[entrait_dyn_impl]` in favor of the impl block syntax, because that idea didn't yet exist at the time of original implementation.
 
 ## [0.4.5] - 2022-08-11
 ### Changed
