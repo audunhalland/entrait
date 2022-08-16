@@ -543,7 +543,7 @@
 //! A small variation of case 4: Use `delegate_by = Borrow` instead of a custom trait.
 //! This makes the delegation happen using dynamic dispatch.
 //!
-//! Providing an implementation is done as in case 4, only that the entrait attribute must now be `#[entrait(dyn)]`:
+//! The implementation syntax is almost the same as in case 4, only that the entrait attribute must now be `#[entrait(dyn)]`:
 //!
 //! ```rust
 //! # mod demo {
