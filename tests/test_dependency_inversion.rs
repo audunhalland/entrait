@@ -29,15 +29,40 @@ mod simple_static {
         pub struct MyImpl;
     }
 
+    pub struct MyImpl2;
+
+    #[entrait]
+    impl FoobarImpl for MyImpl2 {
+        fn bar<D>(_: &D) -> u32 {
+            1337
+        }
+
+        fn foo(deps: &impl super::Baz) -> i32 {
+            deps.baz()
+        }
+    }
+
     impl DelegateFoobar<Self> for () {
         type Target = foobar_impl::MyImpl;
     }
 
     #[test]
-    fn test() {
+    fn test_mod() {
         let app = Impl::new(());
 
         assert_eq!(42, app.foo());
+    }
+
+    impl DelegateFoobar<Self> for bool {
+        type Target = MyImpl2;
+    }
+
+    #[test]
+    fn test_impl_block() {
+        let app = Impl::new(true);
+
+        assert_eq!(42, app.foo());
+        assert_eq!(1337, app.bar());
     }
 }
 
@@ -61,7 +86,20 @@ mod simple_dyn {
         }
 
         #[derive_impl(super::FoobarImpl)]
-        pub struct FoobarImpl;
+        pub struct Implementor1;
+    }
+
+    struct Implementor2;
+
+    #[entrait(dyn)]
+    impl FoobarImpl for Implementor2 {
+        pub fn bar<D>(_: &D) -> u32 {
+            1337
+        }
+
+        pub fn foo(deps: &impl super::Baz) -> i32 {
+            deps.baz()
+        }
     }
 
     struct App {
@@ -75,12 +113,22 @@ mod simple_dyn {
     }
 
     #[test]
-    fn test() {
+    fn test_mod() {
         let app = Impl::new(App {
-            foobar: Box::new(foobar_impl::FoobarImpl),
+            foobar: Box::new(foobar_impl::Implementor1),
         });
 
         assert_eq!(42, app.foo());
+    }
+
+    #[test]
+    fn test_impl_block() {
+        let app = Impl::new(App {
+            foobar: Box::new(Implementor2),
+        });
+
+        assert_eq!(42, app.foo());
+        assert_eq!(1337, app.bar());
     }
 }
 
@@ -105,18 +153,43 @@ mod async_static {
         }
 
         #[derive_impl(super::FoobarImpl)]
-        pub struct MyImpl;
+        pub struct Implementor1;
+    }
+
+    pub struct Implementor2;
+
+    #[entrait]
+    impl FoobarImpl for Implementor2 {
+        pub async fn bar<D>(_: &D) -> u32 {
+            1337
+        }
+
+        pub async fn foo(deps: &impl super::Baz) -> i32 {
+            deps.baz()
+        }
     }
 
     impl DelegateFoobar<Self> for () {
-        type Target = foobar_impl::MyImpl;
+        type Target = foobar_impl::Implementor1;
+    }
+
+    impl DelegateFoobar<Self> for bool {
+        type Target = Implementor2;
     }
 
     #[tokio::test]
-    async fn test() {
+    async fn test_mod() {
         let app = Impl::new(());
 
         assert_eq!(42, app.foo().await);
+    }
+
+    #[tokio::test]
+    async fn test_impl_block() {
+        let app = Impl::new(true);
+
+        assert_eq!(42, app.foo().await);
+        assert_eq!(1337, app.bar().await);
     }
 }
 
@@ -141,21 +214,50 @@ mod async_dyn {
         }
 
         #[derive_impl(super::FoobarImpl)]
-        pub struct MyImpl;
+        pub struct Implementor1;
     }
 
-    struct App(foobar_impl::MyImpl);
+    pub struct Implementor2;
 
-    impl std::borrow::Borrow<dyn FoobarImpl<Self> + Sync> for App {
+    #[entrait(dyn)]
+    impl FoobarImpl for Implementor2 {
+        pub async fn bar<D>(_: &D) -> u32 {
+            1337
+        }
+
+        pub async fn foo(deps: &impl super::Baz) -> i32 {
+            deps.baz()
+        }
+    }
+
+    struct App1(foobar_impl::Implementor1);
+
+    impl std::borrow::Borrow<dyn FoobarImpl<Self> + Sync> for App1 {
+        fn borrow(&self) -> &(dyn FoobarImpl<Self> + Sync) {
+            &self.0
+        }
+    }
+
+    struct App2(Implementor2);
+
+    impl std::borrow::Borrow<dyn FoobarImpl<Self> + Sync> for App2 {
         fn borrow(&self) -> &(dyn FoobarImpl<Self> + Sync) {
             &self.0
         }
     }
 
     #[tokio::test]
-    async fn test() {
-        let app = Impl::new(App(foobar_impl::MyImpl));
+    async fn test_mod() {
+        let app = Impl::new(App1(foobar_impl::Implementor1));
 
         assert_eq!(42, app.foo().await);
+    }
+
+    #[tokio::test]
+    async fn test_impl_block() {
+        let app = Impl::new(App2(Implementor2));
+
+        assert_eq!(42, app.foo().await);
+        assert_eq!(1337, app.bar().await);
     }
 }

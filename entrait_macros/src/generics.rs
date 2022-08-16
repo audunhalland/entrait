@@ -11,8 +11,8 @@ use crate::{
 #[derive(Clone)]
 pub enum ImplIndirection<'s> {
     None,
-    Static { type_ident: &'s syn::Ident },
-    Dynamic { type_ident: &'s syn::Ident },
+    Static { ty: &'s syn::Type },
+    Dynamic { ty: &'s syn::Type },
 }
 
 impl<'s> ImplIndirection<'s> {

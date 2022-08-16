@@ -130,7 +130,7 @@ struct TraitVisibility<'a> {
 impl<'a> ToTokens for TraitVisibility<'a> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         match &self.fn_input_mode {
-            FnInputMode::Module(_) => {
+            FnInputMode::Module(_) | FnInputMode::ImplBlock(_) => {
                 match &self.visibility {
                     syn::Visibility::Inherited => {
                         // When the trait is "private", it should only be accessible to the module outside,

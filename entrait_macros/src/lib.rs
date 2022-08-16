@@ -197,6 +197,17 @@ fn invoke(
 
             (entrait_trait::output_tokens(attr, item_trait), debug)
         }
+        Input::Impl(input_impl) => {
+            let mut attr =
+                syn::parse_macro_input!(attr as entrait_impl::input_attr::EntraitSimpleImplAttr);
+            opts_modifier(&mut attr.opts);
+            let debug = attr.opts.debug.map(|opt| *opt.value()).unwrap_or(false);
+
+            (
+                entrait_impl::output_tokens_for_impl(attr, input_impl),
+                debug,
+            )
+        }
     };
 
     let output = match result {
@@ -222,7 +233,7 @@ fn invoke_impl(
 
     opts_modifier(&mut attr.opts);
 
-    let output = match entrait_impl::output_tokens(attr, input_mod, kind) {
+    let output = match entrait_impl::output_tokens_for_mod(attr, input_mod, kind) {
         Ok(token_stream) => token_stream,
         Err(err) => err.into_compile_error(),
     };

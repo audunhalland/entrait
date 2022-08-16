@@ -8,11 +8,15 @@ use crate::{signature::InputSig, token_util::push_tokens};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::parse::{Parse, ParseStream};
+use syn::{
+    parse::{Parse, ParseStream},
+    spanned::Spanned,
+};
 
 pub enum FnInputMode<'a> {
     SingleFn(&'a syn::Ident),
     Module(&'a syn::Ident),
+    ImplBlock(&'a syn::Type),
     RawTrait(LiteralAttrs<'a>),
 }
 
@@ -30,6 +34,47 @@ pub enum Input {
     Fn(InputFn),
     Trait(syn::ItemTrait),
     Mod(InputMod),
+    Impl(InputImpl),
+}
+
+impl Parse for Input {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(syn::Attribute::parse_outer)?;
+        let vis = input.parse()?;
+
+        let unsafety: Option<syn::token::Unsafe> = input.parse()?;
+        let auto_token: Option<syn::token::Auto> = input.parse()?;
+
+        // BUG (In theory): missing and "auto" traits
+        if input.peek(syn::token::Trait) {
+            let item_trait: syn::ItemTrait = input.parse()?;
+
+            Ok(Input::Trait(syn::ItemTrait {
+                attrs,
+                vis,
+                unsafety,
+                auto_token,
+                ..item_trait
+            }))
+        } else if input.peek(syn::token::Impl) {
+            disallow_token(auto_token)?;
+            Ok(Input::Impl(parse_impl(attrs, unsafety, input)?))
+        } else if input.peek(syn::token::Mod) {
+            disallow_token(unsafety)?;
+            disallow_token(auto_token)?;
+            Ok(Input::Mod(parse_mod(attrs, vis, input)?))
+        } else {
+            let fn_sig: syn::Signature = input.parse()?;
+            let fn_body = input.parse()?;
+
+            Ok(Input::Fn(InputFn {
+                fn_attrs: attrs,
+                fn_vis: vis,
+                fn_sig,
+                fn_body,
+            }))
+        }
+    }
 }
 
 pub struct InputFn {
@@ -123,7 +168,7 @@ impl ToTokens for ModItem {
                     stream,
                     derive_impl.vis,
                     derive_impl.struct_token,
-                    derive_impl.type_ident,
+                    derive_impl.ty,
                     derive_impl.semi
                 );
             }
@@ -139,11 +184,61 @@ pub struct DeriveImpl {
     pub trait_path: DeriveImplTraitPath,
     pub vis: syn::Visibility,
     pub struct_token: syn::token::Struct,
-    pub type_ident: syn::Ident,
+    pub ty: syn::Type,
     pub semi: syn::token::Semi,
 }
 
 pub struct DeriveImplTraitPath(pub syn::Path);
+
+/// An impl block
+/// Note: No support for generics
+pub struct InputImpl {
+    pub attrs: Vec<syn::Attribute>,
+    pub unsafety: Option<syn::token::Unsafe>,
+    pub impl_token: syn::token::Impl,
+    pub trait_path: syn::Path,
+    pub for_token: syn::token::For,
+    pub self_ty: syn::Type,
+    pub brace_token: syn::token::Brace,
+    pub items: Vec<ImplItem>,
+}
+
+pub enum ImplItem {
+    Fn(Box<InputFn>),
+    Unknown(ItemUnknown),
+}
+
+impl ImplItem {
+    // We include all functions that have a visibility keyword into the trait
+    pub fn filter_fn(&self) -> Option<&InputFn> {
+        match self {
+            Self::Fn(input_fn) => Some(input_fn),
+            _ => None,
+        }
+    }
+}
+
+impl ToTokens for ImplItem {
+    fn to_tokens(&self, stream: &mut TokenStream) {
+        match self {
+            ImplItem::Fn(input_fn) => {
+                let InputFn {
+                    fn_attrs,
+                    fn_vis,
+                    fn_sig,
+                    fn_body,
+                } = input_fn.as_ref();
+                for attr in fn_attrs {
+                    push_tokens!(stream, attr);
+                }
+                push_tokens!(stream, fn_vis, fn_sig, fn_body);
+            }
+            ImplItem::Unknown(unknown) => {
+                unknown.to_tokens(stream);
+            }
+        }
+    }
+}
 
 pub struct ItemUnknown {
     attrs: Vec<syn::Attribute>,
@@ -157,36 +252,6 @@ impl ToTokens for ItemUnknown {
             attr.to_tokens(stream);
         }
         push_tokens!(stream, self.vis, self.tokens);
-    }
-}
-
-impl Parse for Input {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let attrs = input.call(syn::Attribute::parse_outer)?;
-        let vis = input.parse()?;
-
-        // BUG (In theory): missing "unsafe" and "auto" traits
-        if input.peek(syn::token::Trait) {
-            let item_trait: syn::ItemTrait = input.parse()?;
-
-            Ok(Input::Trait(syn::ItemTrait {
-                attrs,
-                vis,
-                ..item_trait
-            }))
-        } else if input.peek(syn::token::Mod) {
-            Ok(Input::Mod(parse_mod(attrs, vis, input)?))
-        } else {
-            let fn_sig: syn::Signature = input.parse()?;
-            let fn_body = input.parse()?;
-
-            Ok(Input::Fn(InputFn {
-                fn_attrs: attrs,
-                fn_vis: vis,
-                fn_sig,
-                fn_body,
-            }))
-        }
     }
 }
 
@@ -237,7 +302,16 @@ impl Parse for ModItem {
                 trait_path,
                 vis,
                 struct_token,
-                type_ident,
+                ty: syn::Type::Path(syn::TypePath {
+                    qself: None,
+                    path: syn::Path {
+                        leading_colon: None,
+                        segments: syn::punctuated::Punctuated::from_iter([syn::PathSegment {
+                            ident: type_ident,
+                            arguments: syn::PathArguments::None,
+                        }]),
+                    },
+                }),
                 semi,
             }));
         }
@@ -266,6 +340,74 @@ impl Parse for ModItem {
         } else {
             let tokens = parse_matched_braces_or_ending_semi(input)?;
             Ok(ModItem::Unknown(ItemUnknown { attrs, vis, tokens }))
+        }
+    }
+}
+
+fn parse_impl(
+    attrs: Vec<syn::Attribute>,
+    unsafety: Option<syn::token::Unsafe>,
+    input: ParseStream,
+) -> syn::Result<InputImpl> {
+    let impl_token = input.parse()?;
+    let trait_path = input.parse()?;
+    let for_token = input.parse()?;
+    let self_ty = input.parse()?;
+
+    let lookahead = input.lookahead1();
+    if lookahead.peek(syn::token::Brace) {
+        let content;
+        let brace_token = syn::braced!(content in input);
+
+        let mut items = vec![];
+
+        while !content.is_empty() {
+            items.push(content.parse()?);
+        }
+
+        Ok(InputImpl {
+            attrs,
+            unsafety,
+            impl_token,
+            trait_path,
+            for_token,
+            self_ty,
+            brace_token,
+            items,
+        })
+    } else {
+        Err(lookahead.error())
+    }
+}
+
+impl Parse for ImplItem {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(syn::Attribute::parse_outer)?;
+
+        let vis: syn::Visibility = input.parse()?;
+        let unknown = input.fork();
+
+        if peek_fn(input) {
+            let sig: syn::Signature = input.parse()?;
+            if input.peek(syn::token::Semi) {
+                let _ = input.parse::<syn::token::Semi>()?;
+                Ok(ImplItem::Unknown(ItemUnknown {
+                    attrs,
+                    vis,
+                    tokens: verbatim_between(unknown, input),
+                }))
+            } else {
+                let fn_body = parse_matched_braces_or_ending_semi(input)?;
+                Ok(ImplItem::Fn(Box::new(InputFn {
+                    fn_attrs: attrs,
+                    fn_vis: vis,
+                    fn_sig: sig,
+                    fn_body,
+                })))
+            }
+        } else {
+            let tokens = parse_matched_braces_or_ending_semi(input)?;
+            Ok(ImplItem::Unknown(ItemUnknown { attrs, vis, tokens }))
         }
     }
 }
@@ -303,7 +445,10 @@ fn peek_pub_fn(input: ParseStream, vis: &syn::Visibility) -> bool {
         // 'private' functions aren't interesting
         return false;
     }
+    peek_fn(input)
+}
 
+fn peek_fn(input: ParseStream) -> bool {
     if input.peek(syn::token::Fn) {
         return true;
     }
@@ -371,4 +516,12 @@ fn parse_matched_braces_or_ending_semi(input: ParseStream) -> syn::Result<TokenS
     }
 
     Ok(tokens)
+}
+
+fn disallow_token<T: Spanned>(token: Option<T>) -> syn::Result<()> {
+    if let Some(token) = token {
+        Err(syn::Error::new(token.span(), "Not allowed here"))
+    } else {
+        Ok(())
+    }
 }

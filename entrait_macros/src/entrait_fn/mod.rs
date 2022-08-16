@@ -65,6 +65,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         trait_span: attr.trait_ident.span(),
         impl_indirection: generics::ImplIndirection::None,
         trait_generics: &trait_generics,
+        fn_input_mode: &fn_input_mode,
         trait_dependency_mode: &trait_dependency_mode,
         use_associated_future,
     }
@@ -136,6 +137,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         trait_span: attr.trait_ident.span(),
         impl_indirection: generics::ImplIndirection::None,
         trait_generics: &trait_generics,
+        fn_input_mode: &fn_input_mode,
         trait_dependency_mode: &trait_dependency_mode,
         use_associated_future,
     }
