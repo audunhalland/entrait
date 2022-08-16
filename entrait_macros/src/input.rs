@@ -124,7 +124,7 @@ impl ToTokens for InputMod {
 
 pub enum ModItem {
     PubFn(Box<InputFn>),
-    DeriveImpl(DeriveImpl),
+    DeriveImpl(Box<DeriveImpl>),
     Unknown(ItemUnknown),
 }
 
@@ -297,7 +297,7 @@ impl Parse for ModItem {
             let type_ident = input.parse()?;
             let semi = input.parse()?;
 
-            return Ok(ModItem::DeriveImpl(DeriveImpl {
+            return Ok(ModItem::DeriveImpl(Box::new(DeriveImpl {
                 attrs,
                 trait_path,
                 vis,
@@ -313,7 +313,7 @@ impl Parse for ModItem {
                     },
                 }),
                 semi,
-            }));
+            })));
         }
 
         let vis: syn::Visibility = input.parse()?;
