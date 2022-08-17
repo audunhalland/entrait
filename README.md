@@ -447,6 +447,7 @@ pub struct MyRepository;
 
 #[entrait]
 impl crate1::RepositoryImpl for MyRepository {
+    // this function has the now-familiar entrait-compatible signature:
     fn fetch<D>(deps: &D) -> i32 {
         unimplemented!()
     }
@@ -502,7 +503,6 @@ pub struct MyRepository;
 
 #[entrait(dyn)]
 impl RepositoryImpl for MyRepository {
-    // this function has the now-familiar entrait-compatible signature:
     fn fetch<D>(deps: &D) -> i32 {
         unimplemented!()
     }
