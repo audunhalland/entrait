@@ -825,7 +825,8 @@ mod macros {
 ///
 /// ##### Example 1
 /// Internal dependency, static dispatch (delegation bound: `T: DelegateFoo<T>`):
-/// ```no_compile
+/// ```rust
+/// # use entrait::*;
 /// #[entrait(FooImpl, delegate_by = DelegateFoo)]
 /// trait Foo {}
 /// ```
@@ -833,19 +834,99 @@ mod macros {
 ///
 /// ##### Example 2
 /// Leaf dependency, static dispatch (delegation bound: `T: Foo`):
-/// ```no_compile
+/// ```rust
+/// # use entrait::*;
 /// #[entrait]
 /// trait Foo {}
 /// ```
 ///
 /// ##### Example 3
 /// Leaf dependency, dynamic dispatch (delegation bound: `T: Borrow<dyn Foo>`):
-/// ```no_compile
+/// ```rust
+/// # use entrait::*;
 /// #[entrait(delegate_by = Borrow)]
 /// trait Foo {}
 /// ```
 ///
-/// ## Options
+///
+/// ## For impl blocks
+/// When used on an impl block, the macro will generate a delegating implementation for a _delegation trait_ "`TraitImpl`" generated with `#[entrait(TraitImpl)] trait Trait {}`.
+///
+/// The impl block must be be a trait implementation, not an inherent implementation.
+/// Within this block, only static methods with a dependency receiver are supported.
+/// These methods must correspond with the method definitions from the trait that is implemented.
+/// I.e. the method signatures have to match, except for `self` receivers which must be replaced by dependency receivers.
+///
+/// The macro will convert the impl block from a trait implementation to an inherent implementation block, and additionally generate a proper trait implementation block based on the methods present.
+///
+/// Given the trait declaration:
+///
+/// ```rust
+/// # use entrait::*;
+/// #[entrait(TraitImpl, delegate_by = DelegateTrait)]
+/// trait Trait {
+///     fn foo(&self, arg: i32) -> i32;
+/// }
+/// ```
+///
+/// The delegation chain is fulfilled with a block like the following:
+///
+/// ```rust
+/// # use entrait::*;
+/// # #[entrait(TraitImpl, delegate_by = DelegateTrait)]
+/// # trait Trait {
+/// #     fn foo(&self, arg: i32) -> i32;
+/// # }
+/// pub struct MyType;
+///
+/// #[entrait]
+/// impl TraitImpl for MyType {
+///     fn foo(_deps: &impl std::any::Any, arg: i32) -> i32 {
+///         arg * 2
+///     }
+/// }
+///
+/// struct App;
+///
+/// // The type `MyType` may now be used as a delegation target:
+/// impl DelegateTrait<Self> for App {
+///     type Target = MyType;
+/// }
+///
+/// assert_eq!(42, Impl::new(App).foo(21));
+/// ```
+///
+/// ##### `Borrow` delegation and `dyn`:
+/// The only attribute parameter currently supported on impl blocks is adding the `dyn` keyword, to indicate that the delegation strategy uses dynamic dispatch:
+///
+/// ```rust
+/// # use entrait::*;
+/// #[entrait(TraitImpl, delegate_by = Borrow)]
+/// trait Trait {
+///     fn foo(&self, arg: i32) -> i32;
+/// }
+///
+/// struct MyType;
+///
+/// #[entrait(dyn)]
+/// impl TraitImpl for MyType {
+///     fn foo(_deps: &impl std::any::Any, arg: i32) -> i32 {
+///         arg * 2
+///     }
+/// }
+/// ```
+///
+/// #### Syntax
+/// ```no_compile
+/// #[entrait(dyn?)]
+/// impl TraitPath for Type {
+///     ...
+/// }
+/// ```
+///
+///
+///
+/// # Options
 /// An option can be just `$option` or `$option = $value`. An option without value means `true`.
 ///
 /// | Option              | Type                         | Target             | Default     | Description         |
