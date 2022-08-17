@@ -125,11 +125,13 @@ pub fn entrait_export_unimock_use_associated_future(
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Static, |_| {})
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_impl_use_async_trait(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Static, |opts| {
         opts.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
@@ -137,6 +139,7 @@ pub fn entrait_impl_use_async_trait(attr: TokenStream, input: TokenStream) -> To
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_impl_use_associated_future(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Static, |opts| {
         opts.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
@@ -144,6 +147,7 @@ pub fn entrait_impl_use_associated_future(attr: TokenStream, input: TokenStream)
 }
 
 #[proc_macro_attribute]
+#[deprecated = "Use `#[entrait(dyn)] impl TraitImpl for Type {}` syntax instead."]
 pub fn entrait_dyn_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
     invoke_impl(attr, input, entrait_impl::ImplKind::Dyn, |_| {})
 }
@@ -197,6 +201,17 @@ fn invoke(
 
             (entrait_trait::output_tokens(attr, item_trait), debug)
         }
+        Input::Impl(input_impl) => {
+            let mut attr =
+                syn::parse_macro_input!(attr as entrait_impl::input_attr::EntraitSimpleImplAttr);
+            opts_modifier(&mut attr.opts);
+            let debug = attr.opts.debug.map(|opt| *opt.value()).unwrap_or(false);
+
+            (
+                entrait_impl::output_tokens_for_impl(attr, input_impl),
+                debug,
+            )
+        }
     };
 
     let output = match result {
@@ -222,7 +237,7 @@ fn invoke_impl(
 
     opts_modifier(&mut attr.opts);
 
-    let output = match entrait_impl::output_tokens(attr, input_mod, kind) {
+    let output = match entrait_impl::output_tokens_for_mod(attr, input_mod, kind) {
         Ok(token_stream) => token_stream,
         Err(err) => err.into_compile_error(),
     };

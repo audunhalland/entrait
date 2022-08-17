@@ -2,6 +2,7 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
 
 use crate::analyze_generics::TraitFn;
 use crate::attributes;
@@ -9,10 +10,12 @@ use crate::generics;
 use crate::generics::ImplIndirection;
 use crate::generics::TraitDependencyMode;
 use crate::idents::CrateIdents;
+use crate::input::FnInputMode;
 use crate::opt::AsyncStrategy;
 use crate::opt::Opts;
 use crate::opt::SpanOpt;
 use crate::token_util::push_tokens;
+use crate::token_util::TokenPair;
 
 /// Generate impls that call standalone generic functions
 pub struct FnDelegationCodegen<'s, TR> {
@@ -22,6 +25,7 @@ pub struct FnDelegationCodegen<'s, TR> {
     pub trait_span: Span,
     pub impl_indirection: ImplIndirection<'s>,
     pub trait_generics: &'s generics::TraitGenerics,
+    pub fn_input_mode: &'s FnInputMode<'s>,
     pub trait_dependency_mode: &'s TraitDependencyMode<'s, 's>,
     pub use_associated_future: generics::UseAssociatedFuture,
 }
@@ -66,14 +70,27 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
             None
         };
 
+        let opt_self_scoping = if let FnInputMode::ImplBlock(ty) = self.fn_input_mode {
+            Some(TokenPair(
+                syn::token::SelfType(ty.span()),
+                syn::token::Colon2(ty.span()),
+            ))
+        } else {
+            None
+        };
+
         let items = trait_fns.iter().map(|trait_fn| {
             let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl(
                 self.impl_indirection.to_trait_indirection(),
                 self.crate_idents,
             );
 
-            let fn_item =
-                self.gen_delegating_fn_item(trait_fn, self.trait_span, opt_inline_attr.as_ref());
+            let fn_item = self.gen_delegating_fn_item(
+                trait_fn,
+                self.trait_span,
+                opt_inline_attr.as_ref(),
+                &opt_self_scoping,
+            );
 
             quote! {
                 #associated_fut_impl
@@ -98,6 +115,7 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
         trait_fn: &TraitFn,
         span: Span,
         mut opt_inline_attr: Option<&TokenStream>,
+        opt_self_scoping: &impl ToTokens,
     ) -> TokenStream {
         let entrait_sig = &trait_fn.entrait_sig;
         let trait_fn_sig = &trait_fn.sig();
@@ -143,7 +161,7 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
         quote_spanned! { span=>
             #opt_inline_attr
             #trait_fn_sig {
-                #fn_ident(#opt_self_comma #(#arguments),*) #opt_dot_await
+                #opt_self_scoping #fn_ident(#opt_self_comma #(#arguments),*) #opt_dot_await
             }
         }
     }
@@ -163,11 +181,11 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
                 ImplIndirection::None => {
                     push_tokens!(stream, idents.impl_path(span))
                 }
-                ImplIndirection::Static { type_ident } => {
-                    push_tokens!(stream, type_ident);
+                ImplIndirection::Static { ty } => {
+                    push_tokens!(stream, ty);
                 }
-                ImplIndirection::Dynamic { type_ident } => {
-                    push_tokens!(stream, type_ident);
+                ImplIndirection::Dynamic { ty } => {
+                    push_tokens!(stream, ty);
                 }
             },
             TraitDependencyMode::Concrete(ty) => {
