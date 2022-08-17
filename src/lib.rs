@@ -565,7 +565,7 @@
 //! # } // demo
 //! ```
 //!
-//! The app must now implement `Borrow<dyn TraitImpl<Self>>`.
+//! The app must now implement `Borrow<dyn RepositoryImpl<Self>>`.
 //!
 //!
 //!
