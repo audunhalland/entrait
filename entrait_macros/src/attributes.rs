@@ -6,7 +6,7 @@ use crate::opt::{AsyncStrategy, Opts, SpanOpt};
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
-use quote::ToTokens;
+use quote::{format_ident, ToTokens};
 
 pub struct Attr<P>(pub P);
 
@@ -89,16 +89,15 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
         use syn::Ident;
 
         let span = self.span;
-        let __unimock_ident = Ident::new("__unimock", span);
 
         push_tokens!(
             stream,
             Colon2(span),
             self.crate_idents.entrait,
             Colon2(span),
-            __unimock_ident,
+            self.crate_idents.__unimock,
             Colon2(span),
-            Ident::new("unimock", span)
+            self.crate_idents.unimock
         );
 
         Paren(span).surround(stream, |stream| {
@@ -113,12 +112,24 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
                     Colon2(span),
                     self.crate_idents.entrait,
                     Colon2(span),
-                    __unimock_ident
+                    self.crate_idents.__unimock
                 );
             });
 
             if !matches!(self.fn_input_mode, FnInputMode::RawTrait(_)) {
-                // mod=?
+                // mod=!
+                if matches!(self.fn_input_mode, FnInputMode::SingleFn(_)) {
+                    punctuator.push_fn(|stream| {
+                        push_tokens!(stream, Mod(span), Eq(span), Bang(span));
+                    });
+                }
+
+                /*
+                if let FnInputMode::SingleFn(fn_ident) = &self.fn_input_mode {
+                    push_tokens!(stream, Mod(span), Eq(span), fn_ident);
+                } else {
+                    push_tokens!(stream, Mod(span), Eq(span), Star(span));
+                }
                 punctuator.push_fn(|stream| {
                     if let FnInputMode::SingleFn(fn_ident) = &self.fn_input_mode {
                         push_tokens!(stream, Mod(span), Eq(span), fn_ident);
@@ -143,53 +154,91 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
                         self.unmocked(stream);
                     });
                 }
+                */
             }
         });
     }
 }
 
-impl<'s> UnimockAttrParams<'s> {
-    fn unmocked(&self, stream: &mut TokenStream) {
+pub struct UnimockMethodAttrParams<'s> {
+    pub crate_idents: &'s CrateIdents,
+    pub trait_ident: &'s syn::Ident,
+    pub trait_fn: &'s TraitFn,
+    pub(super) fn_input_mode: &'s FnInputMode<'s>,
+    pub span: Span,
+}
+
+impl<'s> ToTokens for UnimockMethodAttrParams<'s> {
+    fn to_tokens(&self, stream: &mut TokenStream) {
         use syn::token::*;
-        use syn::Ident;
 
         let span = self.span;
 
-        push_tokens!(stream, Ident::new("unmocked", span), Eq(span));
+        push_tokens!(stream, self.crate_idents.unimock);
 
-        Bracket(span).surround(stream, |stream| {
+        Paren(span).surround(stream, |stream| {
             let mut punctuator = comma_sep(stream, span);
 
-            for trait_fn in self.trait_fns {
-                let fn_ident = &trait_fn.sig().ident;
+            // struct = MockTrait
+            if matches!(self.fn_input_mode, FnInputMode::SingleFn(_)) {
+                punctuator.push_fn(|stream| {
+                    push_tokens!(
+                        stream,
+                        Struct(span),
+                        Eq(span),
+                        format_ident!("{}Mock", self.trait_ident)
+                    );
+                });
+            }
 
-                match &trait_fn.deps {
-                    generics::FnDeps::Generic { .. } => {
-                        punctuator.push(fn_ident);
-                    }
-                    generics::FnDeps::Concrete(_) => {
-                        punctuator.push(Underscore(span));
-                    }
-                    generics::FnDeps::NoDeps { .. } => {
-                        // fn_ident(a, b, c)
+            if !matches!(self.fn_input_mode, FnInputMode::RawTrait(_)) {
+                // unmock_with=..
+                match &self.trait_fn.deps {
+                    generics::FnDeps::Generic { .. } | generics::FnDeps::NoDeps => {
                         punctuator.push_fn(|stream| {
-                            push_tokens!(stream, fn_ident);
-
-                            Paren(span).surround(stream, |stream| {
-                                let mut punctuator = comma_sep(stream, span);
-                                for fn_arg in trait_fn.sig().inputs.iter() {
-                                    if let syn::FnArg::Typed(pat_type) = fn_arg {
-                                        if let syn::Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
-                                            punctuator.push(&pat_ident.ident);
-                                        }
-                                    }
-                                }
-                            });
+                            self.unmock_with(stream);
                         });
                     }
+                    generics::FnDeps::Concrete(_) => {}
                 }
             }
         });
+    }
+}
+
+impl<'s> UnimockMethodAttrParams<'s> {
+    fn unmock_with(&self, stream: &mut TokenStream) {
+        let span = self.span;
+
+        use syn::token::*;
+        use syn::Ident;
+
+        push_tokens!(stream, Ident::new("unmock_with", span), Eq(span));
+
+        let sig = self.trait_fn.sig();
+        let fn_ident = &sig.ident;
+
+        match &self.trait_fn.deps {
+            generics::FnDeps::Generic { .. } => {
+                push_tokens!(stream, fn_ident);
+            }
+            generics::FnDeps::Concrete(_) => {}
+            generics::FnDeps::NoDeps { .. } => {
+                // fn_ident(a, b, c)
+                push_tokens!(stream, fn_ident);
+
+                Paren(span).surround(stream, |stream| {
+                    let mut punctuator = comma_sep(stream, span);
+                    for fn_arg in sig.inputs.iter() {
+                        if let syn::FnArg::Typed(pat_type) = fn_arg {
+                            if let syn::Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
+                                punctuator.push(&pat_ident.ident);
+                            }
+                        }
+                    }
+                });
+            }
+        }
     }
 }
 

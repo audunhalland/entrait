@@ -48,7 +48,7 @@ mod rest {
         use unimock::*;
 
         let deps = mock(Some(
-            business::get_foo::Fn
+            business::GetFooMock
                 .each_call(matching!())
                 .returns(Foo {
                     value: "mocked".to_string(),

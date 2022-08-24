@@ -26,11 +26,13 @@ mod graphql {
 
     #[tokio::test]
     async fn unit_test_query() {
+        use crate::db::FetchSomeValueMock;
+
         use async_graphql::*;
         use unimock::*;
 
         let deps = mock(Some(
-            db::fetch_some_value::Fn
+            FetchSomeValueMock
                 .each_call(matching!())
                 .returns("mocked".to_string())
                 .in_any_order(),

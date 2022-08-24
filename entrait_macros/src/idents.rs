@@ -1,6 +1,8 @@
 pub struct CrateIdents {
     pub entrait: syn::Ident,
     pub core: syn::Ident,
+    pub __unimock: syn::Ident,
+    pub unimock: syn::Ident,
 }
 
 impl CrateIdents {
@@ -8,6 +10,8 @@ impl CrateIdents {
         Self {
             entrait: syn::Ident::new("entrait", span),
             core: syn::Ident::new("core", span),
+            __unimock: syn::Ident::new("__unimock", span),
+            unimock: syn::Ident::new("unimock", span),
         }
     }
 }

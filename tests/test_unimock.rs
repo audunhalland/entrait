@@ -7,7 +7,7 @@
 mod sync {
     use entrait::*;
 
-    #[entrait(Foo)]
+    #[entrait(Foo, debug)]
     fn foo(deps: &impl Bar) -> String {
         deps.bar()
     }
@@ -71,7 +71,7 @@ mod auth {
     #[tokio::test]
     async fn test_get_username() {
         let username = get_username(
-            &mock(Some(authenticate::Fn.stub(|each| {
+            &mock(Some(AuthenticateMock.stub(|each| {
                 each.call(matching!(_, _)).returns(Ok(User {
                     username: "foobar".into(),
                     hash: "h4sh".into(),
@@ -88,14 +88,14 @@ mod auth {
     #[tokio::test]
     async fn test_authenticate() {
         let mocks = mock([
-            fetch_user::Fn
+            FetchUserMock
                 .each_call(matching!(42))
                 .returns(Some(User {
                     username: "foobar".into(),
                     hash: "h4sh".into(),
                 }))
                 .in_any_order(),
-            verify_password::Fn
+            VerifyPasswordMock
                 .each_call(matching!("pw", "h4sh"))
                 .returns(true)
                 .once()
@@ -149,8 +149,8 @@ mod multi_mock {
         #[tokio::test]
         async fn test_mock() {
             let mock = mock([
-                bar::Fn.each_call(matching!()).returns(40).in_any_order(),
-                baz::Fn.each_call(matching!()).returns(2).in_any_order(),
+                BarMock.each_call(matching!()).returns(40).in_any_order(),
+                BazMock.each_call(matching!()).returns(2).in_any_order(),
             ]);
 
             let result = sum(&mock).await;
@@ -175,8 +175,8 @@ mod multi_mock {
             assert_eq!(
                 42,
                 sum(&mock([
-                    bar::Fn.each_call(matching!()).returns(40).in_any_order(),
-                    baz::Fn.each_call(matching!()).returns(2).in_any_order(),
+                    BarMock.each_call(matching!()).returns(40).in_any_order(),
+                    BazMock.each_call(matching!()).returns(2).in_any_order(),
                 ]))
                 .await
             );
@@ -196,8 +196,8 @@ mod multi_mock {
             assert_eq!(
                 42,
                 sum(&mock([
-                    bar::Fn.each_call(matching!()).returns(40).in_any_order(),
-                    baz::Fn.each_call(matching!()).returns(2).in_any_order(),
+                    BarMock.each_call(matching!()).returns(40).in_any_order(),
+                    BazMock.each_call(matching!()).returns(2).in_any_order(),
                 ]))
                 .await
             );
@@ -246,8 +246,8 @@ mod tokio_spawn {
     #[tokio::test]
     async fn test_spawning_override_bar() {
         let result = spawning(&unimock::spy([
-            bar::Fn.next_call(matching!()).returns(1).once().in_order(),
-            bar::Fn.next_call(matching!()).returns(2).once().in_order(),
+            BarMock.next_call(matching!()).returns(1).once().in_order(),
+            BarMock.next_call(matching!()).returns(2).once().in_order(),
         ]))
         .await;
         assert_eq!(3, result);
@@ -281,7 +281,7 @@ mod more_async {
     #[tokio::test]
     async fn test_mock() {
         let result = foo(&mock(Some(
-            bar::Fn
+            BarMock
                 .each_call(matching!())
                 .returns(84_u32)
                 .in_any_order(),
@@ -356,7 +356,7 @@ mod async_no_deps_etc {
 
     #[tokio::test]
     async fn mock_it() {
-        let unimock = spy([baz::Fn.each_call(matching!()).returns(42).in_any_order()]);
+        let unimock = spy([BazMock.each_call(matching!()).returns(42).in_any_order()]);
         let answer = unimock.foo().await;
 
         assert_eq!(42, answer);
@@ -390,19 +390,19 @@ mod generics {
 
     #[test]
     fn generic_mock_fns() {
-        let _ = generic_deps_generic_return::Fn
+        let _ = GenericDepsGenericReturnMock
             .with_types::<String>()
             .each_call(matching!())
             .returns("hey".to_string())
             .in_any_order();
 
-        let _ = generic_deps_generic_param::Fn
+        let _ = GenericDepsGenericParamMock
             .with_types::<String>()
             .each_call(matching!("hey"))
             .returns(42)
             .in_any_order();
 
-        let _ = generic_deps_generic_param::Fn
+        let _ = GenericDepsGenericParamMock
             .with_types::<i32>()
             .each_call(matching!(1337))
             .returns(42)
@@ -468,7 +468,7 @@ mod entrait_for_trait_unimock {
         assert_eq!(
             42,
             mock(Some(
-                Trait__method1
+                TraitMock::method1
                     .each_call(matching!())
                     .returns(42)
                     .in_any_order()
@@ -498,6 +498,8 @@ mod module {
     use std::any::Any;
     use unimock::*;
 
+    use crate::module::bar_baz::BarBazMock;
+
     #[entrait(pub Foo)]
     fn foo(_: &impl Any) -> i32 {
         7
@@ -517,7 +519,7 @@ mod module {
     #[test]
     fn test_it() {
         let deps = mock(Some(
-            bar_baz::bar::Fn
+            BarBazMock::bar
                 .each_call(matching!())
                 .returns(42)
                 .in_any_order(),
