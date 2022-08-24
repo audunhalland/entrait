@@ -162,7 +162,7 @@ Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimoc
 
 Unimock exports a single mock struct which can be passed as argument to every function that accept a generic `deps` parameter
   (given that entrait is used with unimock support everywhere).
-To enable mocking of entraited functions, they get reified and defined as a type called `Fn` inside a module with the same identifier as the function: `entraited_function::Fn`.
+To enable mocking of entraited functions, they get reified and defined as a type called `TraitMock` where `Trait` is the name of the trait.
 This works the same way for entraited modules, only that we already _have_ a module to export from.
 
 Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
@@ -184,8 +184,8 @@ fn my_func(deps: &(impl Foo + MyMod)) -> i32 {
 }
 
 let mocked_deps = unimock::mock([
-    foo::Fn.each_call(matching!()).returns(40).in_any_order(),
-    my_mod::bar::Fn.each_call(matching!()).returns(2).in_any_order(),
+    FooMock.each_call(matching!()).returns(40).in_any_order(),
+    my_mod::MyModMock::bar.each_call(matching!()).returns(2).in_any_order(),
 ]);
 
 assert_eq!(42, my_func(&mocked_deps));
@@ -217,7 +217,7 @@ fn fetch_planet(deps: &(), planet_id: u32) -> Result<Planet, ()> {
 
 let hello_string = say_hello(
     &unimock::spy([
-        fetch_planet::Fn
+        FetchPlanetMock
             .each_call(matching!(_))
             .answers(|_| Ok(Planet {
                 name: "World".to_string(),
