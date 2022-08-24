@@ -125,34 +125,6 @@ pub fn entrait_export_unimock_use_associated_future(
 }
 
 #[proc_macro_attribute]
-#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
-pub fn entrait_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
-    invoke_impl(attr, input, entrait_impl::ImplKind::Static, |_| {})
-}
-
-#[proc_macro_attribute]
-#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
-pub fn entrait_impl_use_async_trait(attr: TokenStream, input: TokenStream) -> TokenStream {
-    invoke_impl(attr, input, entrait_impl::ImplKind::Static, |opts| {
-        opts.set_fallback_async_strategy(AsyncStrategy::AsyncTrait);
-    })
-}
-
-#[proc_macro_attribute]
-#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
-pub fn entrait_impl_use_associated_future(attr: TokenStream, input: TokenStream) -> TokenStream {
-    invoke_impl(attr, input, entrait_impl::ImplKind::Static, |opts| {
-        opts.set_fallback_async_strategy(AsyncStrategy::AssociatedFuture);
-    })
-}
-
-#[proc_macro_attribute]
-#[deprecated = "Use `#[entrait(dyn)] impl TraitImpl for Type {}` syntax instead."]
-pub fn entrait_dyn_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
-    invoke_impl(attr, input, entrait_impl::ImplKind::Dyn, |_| {})
-}
-
-#[proc_macro_attribute]
 pub fn static_async_trait(_: TokenStream, input: TokenStream) -> TokenStream {
     let item = syn::parse_macro_input!(input as syn::Item);
     match static_async_trait::output_tokens(item) {
@@ -222,25 +194,6 @@ fn invoke(
     if debug {
         println!("{}", output);
     }
-
-    proc_macro::TokenStream::from(output)
-}
-
-fn invoke_impl(
-    attr: TokenStream,
-    input: TokenStream,
-    kind: entrait_impl::ImplKind,
-    opts_modifier: impl FnOnce(&mut Opts),
-) -> TokenStream {
-    let mut attr = syn::parse_macro_input!(attr as entrait_impl::input_attr::EntraitImplAttr);
-    let input_mod = syn::parse_macro_input!(input as input::InputMod);
-
-    opts_modifier(&mut attr.opts);
-
-    let output = match entrait_impl::output_tokens_for_mod(attr, input_mod, kind) {
-        Ok(token_stream) => token_stream,
-        Err(err) => err.into_compile_error(),
-    };
 
     proc_macro::TokenStream::from(output)
 }

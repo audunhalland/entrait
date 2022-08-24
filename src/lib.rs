@@ -714,21 +714,18 @@ mod macros {
     #[cfg(feature = "use-async-trait")]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock_use_async_trait as entrait_export;
-        pub use entrait_macros::entrait_impl_use_async_trait as entrait_impl;
         pub use entrait_macros::entrait_unimock_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock_use_associated_future as entrait_export;
-        pub use entrait_macros::entrait_impl_use_associated_future as entrait_impl;
         pub use entrait_macros::entrait_unimock_use_associated_future as entrait;
     }
 
     #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock as entrait_export;
-        pub use entrait_macros::entrait_impl;
         pub use entrait_macros::entrait_unimock as entrait;
     }
 
@@ -740,14 +737,12 @@ mod macros {
     #[cfg(feature = "use-async-trait")]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_use_async_trait as entrait_export;
-        pub use entrait_macros::entrait_impl_use_async_trait as entrait_impl;
         pub use entrait_macros::entrait_use_async_trait as entrait;
     }
 
     #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_use_associated_future as entrait_export;
-        pub use entrait_macros::entrait_impl_use_associated_future as entrait_impl;
         pub use entrait_macros::entrait_use_associated_future as entrait;
     }
 
@@ -755,7 +750,6 @@ mod macros {
     mod entrait_auto_async {
         pub use entrait_macros::entrait;
         pub use entrait_macros::entrait_export;
-        pub use entrait_macros::entrait_impl;
     }
 
     pub use entrait_auto_async::*;
@@ -952,114 +946,6 @@ pub use macros::entrait;
 ///
 /// A good way to reduce noise can to to import it as `use entrait::entrait_export as entrait;`.
 pub use macros::entrait_export;
-
-/// _(Deprecated)_ Syntax sugar for implementing static-dispatch inverted dependencies.
-///
-/// _Note: This macro is deprecated. Use `#[entrait] impl TraitImpl for Type {}` syntax instead._
-///
-/// This attribute must be applied to a module (`mod`) item.
-/// The macro scans all non-private function signatures appearing inside the module, and uses those as a basis to generate a trait `impl` block.
-///
-/// Which trait to implement and the type to implement it for must be specified with the following syntax:
-///
-/// ```no_compile
-/// #[derive_impl(path::to::Trait)]
-/// pub struct MyStruct;
-/// ```
-///
-/// The trait to implement is the _delegation target_ from a `#[entrait(TraitImpl, delegate_by = DelegationTrait]) trait Trait {}` invocation, i.e. `TraitImpl`.
-///
-/// The point of this is to make it easier to implement dependency inversion,
-///     because the trait,
-///     the implementation of the trait,
-///     and the delegation from the facade to the implementation can live in three different crates.
-///
-/// ## Example:
-///
-/// ```rust
-/// # mod demo {
-/// # use entrait::*;
-/// #[entrait(TraitImpl, delegate_by = DelegateTrait)]
-/// trait Trait {
-///     fn foo(&self) -> i32;
-///     fn bar(&self) -> u32;
-/// }
-///
-/// #[entrait_impl]
-/// mod some_impl {
-///     pub fn foo(deps: &impl super::GetI32) -> i32 {
-///         deps.get_i32()
-///     }
-///
-///     pub fn bar(_deps: &impl std::any::Any) -> u32 {
-///         1337
-///     }
-///
-///     #[derive_impl(super::TraitImpl)]
-///     pub struct SomeImpl;
-/// }
-///
-/// #[entrait(GetI32, no_deps)]
-/// fn get_i32() -> i32 {
-///     42
-/// }
-///
-/// struct App;
-///
-/// // Implement the delegation from facade to implementation:
-/// impl DelegateTrait<Self> for App {
-///     type Target = some_impl::SomeImpl;
-/// }
-///
-/// fn test() {
-///     assert_eq!(42, Impl::new(App).foo());
-/// }
-/// # } // demo
-/// ```
-#[deprecated = "Use `#[entrait] impl TraitImpl for Type {}` syntax instead."]
-pub use macros::entrait_impl;
-
-/// _(Deprecated)_ Syntax sugar for implementing dynamic-dispatch inverted dependencies.
-///
-/// _Note: This macro is deprecated. Use `#[entrait(dyn)] impl TraitImpl for Type {}` syntax instead._
-///
-/// The syntax is the same as for [entrait_impl].
-///
-/// The only difference is that this version of the macro must be used when the trait delegation happens via dynamic dispatch (`delegate_by = Borrow`):
-///
-/// ```rust
-/// # mod demo {
-/// # use entrait::*;
-/// #[entrait(TraitImpl, delegate_by = Borrow)]
-/// pub trait Trait {
-///     fn foo(&self) -> i32;
-/// }
-///
-/// #[entrait_dyn_impl]
-/// mod my_dynamic_impl {
-///     pub fn foo(_deps: &impl std::any::Any) -> i32 {
-///         42
-///     }
-///
-///     #[derive_impl(super::TraitImpl)]
-///     pub struct MyDynamicImpl;
-/// }
-///
-/// struct App(my_dynamic_impl::MyDynamicImpl);
-///
-/// impl std::borrow::Borrow<dyn TraitImpl<Self>> for App {
-///     fn borrow(&self) -> &dyn TraitImpl<Self> {
-///         &self.0
-///     }
-/// }
-///
-/// fn test() {
-///     assert_eq!(42, Impl::new(App(my_dynamic_impl::MyDynamicImpl)).foo());
-/// }
-/// } // demo
-/// ```
-#[deprecated = "Use `#[entrait(dyn)] impl TraitImpl for Type {}` syntax instead."]
-pub use entrait_macros::entrait_dyn_impl;
 
 /// Re-exported from the [implementation] crate.
 pub use ::implementation::Impl;

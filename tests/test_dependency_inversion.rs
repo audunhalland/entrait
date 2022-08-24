@@ -15,20 +15,6 @@ mod simple_static {
         fn bar(&self) -> u32;
     }
 
-    #[entrait_impl]
-    mod foobar_impl {
-        pub fn bar<D>(_: &D) -> u32 {
-            0
-        }
-
-        pub fn foo(deps: &impl super::super::Baz) -> i32 {
-            deps.baz()
-        }
-
-        #[derive_impl(super::FoobarImpl)]
-        pub struct MyImpl;
-    }
-
     pub struct MyImpl2;
 
     #[entrait]
@@ -43,7 +29,7 @@ mod simple_static {
     }
 
     impl DelegateFoobar<Self> for () {
-        type Target = foobar_impl::MyImpl;
+        type Target = MyImpl2;
     }
 
     #[test]
@@ -75,20 +61,6 @@ mod simple_dyn {
         fn bar(&self) -> u32;
     }
 
-    #[entrait_dyn_impl]
-    mod foobar_impl {
-        pub fn bar<D>(_: &D) -> u32 {
-            0
-        }
-
-        pub fn foo(deps: &impl super::super::Baz) -> i32 {
-            deps.baz()
-        }
-
-        #[derive_impl(super::FoobarImpl)]
-        pub struct Implementor1;
-    }
-
     struct Implementor2;
 
     #[entrait(dyn)]
@@ -113,15 +85,6 @@ mod simple_dyn {
     }
 
     #[test]
-    fn test_mod() {
-        let app = Impl::new(App {
-            foobar: Box::new(foobar_impl::Implementor1),
-        });
-
-        assert_eq!(42, app.foo());
-    }
-
-    #[test]
     fn test_impl_block() {
         let app = Impl::new(App {
             foobar: Box::new(Implementor2),
@@ -142,20 +105,6 @@ mod async_static {
         async fn bar(&self) -> u32;
     }
 
-    #[entrait_impl]
-    mod foobar_impl {
-        pub async fn bar<D>(_: &D) -> u32 {
-            0
-        }
-
-        pub async fn foo(deps: &impl super::super::Baz) -> i32 {
-            deps.baz()
-        }
-
-        #[derive_impl(super::FoobarImpl)]
-        pub struct Implementor1;
-    }
-
     pub struct Implementor2;
 
     #[entrait]
@@ -169,19 +118,8 @@ mod async_static {
         }
     }
 
-    impl DelegateFoobar<Self> for () {
-        type Target = foobar_impl::Implementor1;
-    }
-
     impl DelegateFoobar<Self> for bool {
         type Target = Implementor2;
-    }
-
-    #[tokio::test]
-    async fn test_mod() {
-        let app = Impl::new(());
-
-        assert_eq!(42, app.foo().await);
     }
 
     #[tokio::test]
@@ -203,20 +141,6 @@ mod async_dyn {
         async fn bar(&self) -> u32;
     }
 
-    #[entrait_dyn_impl]
-    mod foobar_impl {
-        pub async fn bar<D>(_: &D) -> u32 {
-            0
-        }
-
-        pub async fn foo(deps: &impl super::super::Baz) -> i32 {
-            deps.baz()
-        }
-
-        #[derive_impl(super::FoobarImpl)]
-        pub struct Implementor1;
-    }
-
     pub struct Implementor2;
 
     #[entrait(dyn)]
@@ -230,27 +154,12 @@ mod async_dyn {
         }
     }
 
-    struct App1(foobar_impl::Implementor1);
-
-    impl std::borrow::Borrow<dyn FoobarImpl<Self> + Sync> for App1 {
-        fn borrow(&self) -> &(dyn FoobarImpl<Self> + Sync) {
-            &self.0
-        }
-    }
-
     struct App2(Implementor2);
 
     impl std::borrow::Borrow<dyn FoobarImpl<Self> + Sync> for App2 {
         fn borrow(&self) -> &(dyn FoobarImpl<Self> + Sync) {
             &self.0
         }
-    }
-
-    #[tokio::test]
-    async fn test_mod() {
-        let app = Impl::new(App1(foobar_impl::Implementor1));
-
-        assert_eq!(42, app.foo().await);
     }
 
     #[tokio::test]

@@ -136,13 +136,6 @@ impl ModItem {
             _ => None,
         }
     }
-
-    pub fn filter_derive_impl(&self) -> Option<&DeriveImpl> {
-        match self {
-            Self::DeriveImpl(derive_impl) => Some(derive_impl),
-            _ => None,
-        }
-    }
 }
 
 impl ToTokens for ModItem {
