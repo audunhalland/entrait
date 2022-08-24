@@ -7,7 +7,7 @@
 mod sync {
     use entrait::*;
 
-    #[entrait(Foo, debug)]
+    #[entrait(Foo)]
     fn foo(deps: &impl Bar) -> String {
         deps.bar()
     }
