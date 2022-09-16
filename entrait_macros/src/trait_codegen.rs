@@ -33,6 +33,7 @@ impl<'s> TraitCodegen<'s> {
         let opt_unimock_attr = match self.opts.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
                 params: attributes::UnimockAttrParams {
+                    trait_ident,
                     crate_idents: self.crate_idents,
                     trait_fns,
                     fn_input_mode,
@@ -79,27 +80,9 @@ impl<'s> TraitCodegen<'s> {
                 .associated_fut_decl(self.trait_indirection, self.crate_idents);
             let trait_fn_sig = trait_fn.sig();
 
-            let opt_unimock_method_attr = match self.opts.default_option(self.opts.unimock, false) {
-                SpanOpt(true, span) => {
-                    // BUG(?) what about cfg_attr(test)?
-                    Some(attributes::ExportGatedAttr {
-                        params: attributes::UnimockMethodAttrParams {
-                            crate_idents: self.crate_idents,
-                            trait_ident,
-                            trait_fn,
-                            fn_input_mode,
-                            span,
-                        },
-                        opts: self.opts,
-                    })
-                }
-                _ => None,
-            };
-
             quote! {
                 #opt_associated_fut_decl
 
-                #opt_unimock_method_attr
                 #trait_fn_sig;
             }
         });
