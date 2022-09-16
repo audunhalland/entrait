@@ -601,12 +601,11 @@
 //! #### Zero-cost async inversion of control - preview mode
 //! Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
 //!
-//! The entrait option is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
+//! The entrait option is called `associated_future`, and uses GATs and `feature(type_alias_impl_trait)`.
 //! This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
 //! the resulting type of the future:
 //!
 //! ```ignore
-//! #![feature(generic_associated_types)]
 //! #![feature(type_alias_impl_trait)]
 //!
 //! use entrait::*;
@@ -930,7 +929,7 @@ mod macros {
 /// | `unimock`           | `bool`                       | `fn`+`mod`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
 /// | `mockall`           | `bool`                       | `fn`+`mod`+`trait` | `false`     | Enable mockall mocks. |
 /// | `async_trait`       | `bool`                       | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
-/// | `associated_future` | `bool`                       | `fn`+`mod`+`trait` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(generic_associated_types)` and `feature(type_alias_impl_trait)`. |
+/// | `associated_future` | `bool`                       | `fn`+`mod`+`trait` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(type_alias_impl_trait)`. |
 /// | `delegate_by`       | `Self`/`Borrow`/custom ident | `trait`            | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `Borrow` generates a [`T: Borrow<dyn Trait>`](::core::borrow::Borrow) bound. Any other value generates a new trait with that name which controls the delegation. |
 ///
 /// [^1]: Enabled by default by turning on the `unimock` cargo feature.

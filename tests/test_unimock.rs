@@ -1,5 +1,4 @@
 #![cfg(feature = "unimock")]
-#![cfg_attr(feature = "use-associated-future", feature(generic_associated_types))]
 #![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
 #![allow(dead_code)]
 #![allow(unused_variables)]
