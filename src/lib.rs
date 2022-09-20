@@ -192,10 +192,10 @@
 //!     deps.foo() + deps.bar()
 //! }
 //!
-//! let mocked_deps = unimock::mock([
-//!     FooMock.each_call(matching!()).returns(40).in_any_order(),
-//!     my_mod::MyModMock::bar.each_call(matching!()).returns(2).in_any_order(),
-//! ]);
+//! let mocked_deps = unimock::mock((
+//!     FooMock.each_call(matching!()).returns(40),
+//!     my_mod::MyModMock::bar.each_call(matching!()).returns(2),
+//! ));
 //!
 //! assert_eq!(42, my_func(&mocked_deps));
 //! ```
@@ -227,14 +227,13 @@
 //! }
 //!
 //! let hello_string = say_hello(
-//!     &unimock::spy([
+//!     &unimock::spy(
 //!         FetchPlanetMock
-//!             .each_call(matching!(_))
-//!             .answers(|_| Ok(Planet {
+//!             .some_call(matching!(123456))
+//!             .returns(Ok(Planet {
 //!                 name: "World".to_string(),
 //!             }))
-//!             .in_any_order(),
-//!     ]),
+//!     ),
 //!     123456,
 //! ).unwrap();
 //!

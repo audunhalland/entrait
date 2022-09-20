@@ -31,12 +31,11 @@ mod graphql {
         use async_graphql::*;
         use unimock::*;
 
-        let deps = mock(Some(
+        let deps = Unimock::new(
             FetchSomeValueMock
                 .each_call(matching!())
-                .returns("mocked".to_string())
-                .in_any_order(),
-        ));
+                .returns("mocked".to_string()),
+        );
 
         let response = async_graphql::Schema::build(
             Query::<Unimock>(PhantomData),

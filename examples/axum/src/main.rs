@@ -47,14 +47,9 @@ mod rest {
         use tower::ServiceExt;
         use unimock::*;
 
-        let deps = mock(Some(
-            business::GetFooMock
-                .each_call(matching!())
-                .returns(Foo {
-                    value: "mocked".to_string(),
-                })
-                .in_any_order(),
-        ));
+        let deps = Unimock::new(business::GetFooMock.each_call(matching!()).returns(Foo {
+            value: "mocked".to_string(),
+        }));
         let router = Routes::<Unimock>::router().layer(Extension(deps.clone()));
         let response = router
             .oneshot(

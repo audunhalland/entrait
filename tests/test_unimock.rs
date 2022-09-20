@@ -70,12 +70,12 @@ mod auth {
     #[tokio::test]
     async fn test_get_username() {
         let username = get_username(
-            &mock(Some(AuthenticateMock.stub(|each| {
+            &Unimock::new(AuthenticateMock.stub(|each| {
                 each.call(matching!(_, _)).returns(Ok(User {
                     username: "foobar".into(),
                     hash: "h4sh".into(),
                 }));
-            }))),
+            })),
             42,
             "pw",
         )
@@ -86,28 +86,26 @@ mod auth {
 
     #[tokio::test]
     async fn test_authenticate() {
-        let mocks = mock([
-            FetchUserMock
-                .each_call(matching!(42))
-                .returns(Some(User {
-                    username: "foobar".into(),
-                    hash: "h4sh".into(),
-                }))
-                .in_any_order(),
+        let mocks = Unimock::new((
+            FetchUserMock.each_call(matching!(42)).returns(Some(User {
+                username: "foobar".into(),
+                hash: "h4sh".into(),
+            })),
             VerifyPasswordMock
                 .each_call(matching!("pw", "h4sh"))
                 .returns(true)
-                .once()
-                .in_any_order(),
-        ]);
+                .once(),
+        ));
 
         let user = authenticate(&mocks, 42, "pw").await.unwrap();
         assert_eq!("foobar", user.username);
     }
 
     #[tokio::test]
-    async fn test_full_spy() {
-        let user = authenticate(&spy(None), 42, "pw").await.unwrap();
+    async fn test_partial_no_overrides() {
+        let user = authenticate(&Unimock::new_partial(()), 42, "pw")
+            .await
+            .unwrap();
 
         assert_eq!("name", user.username);
     }
@@ -147,10 +145,10 @@ mod multi_mock {
 
         #[tokio::test]
         async fn test_mock() {
-            let mock = mock([
-                BarMock.each_call(matching!()).returns(40).in_any_order(),
-                BazMock.each_call(matching!()).returns(2).in_any_order(),
-            ]);
+            let mock = Unimock::new((
+                BarMock.each_call(matching!()).returns(40),
+                BazMock.each_call(matching!()).returns(2),
+            ));
 
             let result = sum(&mock).await;
 
@@ -173,10 +171,10 @@ mod multi_mock {
         async fn test_mock() {
             assert_eq!(
                 42,
-                sum(&mock([
-                    BarMock.each_call(matching!()).returns(40).in_any_order(),
-                    BazMock.each_call(matching!()).returns(2).in_any_order(),
-                ]))
+                sum(&Unimock::new((
+                    BarMock.each_call(matching!()).returns(40),
+                    BazMock.each_call(matching!()).returns(2),
+                )))
                 .await
             );
         }
@@ -194,10 +192,10 @@ mod multi_mock {
         async fn test_mock() {
             assert_eq!(
                 42,
-                sum(&mock([
-                    BarMock.each_call(matching!()).returns(40).in_any_order(),
-                    BazMock.each_call(matching!()).returns(2).in_any_order(),
-                ]))
+                sum(&Unimock::new((
+                    BarMock.each_call(matching!()).returns(40),
+                    BazMock.each_call(matching!()).returns(2),
+                )))
                 .await
             );
         }
@@ -237,17 +235,17 @@ mod tokio_spawn {
     }
 
     #[tokio::test]
-    async fn test_spawning_spy() {
-        let result = spawning(&unimock::spy(None)).await;
+    async fn test_spawning_partial_unmocked() {
+        let result = spawning(&Unimock::new_partial(())).await;
         assert_eq!(2, result);
     }
 
     #[tokio::test]
     async fn test_spawning_override_bar() {
-        let result = spawning(&unimock::spy([
-            BarMock.next_call(matching!()).returns(1).once().in_order(),
-            BarMock.next_call(matching!()).returns(2).once().in_order(),
-        ]))
+        let result = spawning(&Unimock::new_partial((
+            BarMock.next_call(matching!()).returns(1).once(),
+            BarMock.next_call(matching!()).returns(2).once(),
+        )))
         .await;
         assert_eq!(3, result);
     }
@@ -279,12 +277,9 @@ mod more_async {
 
     #[tokio::test]
     async fn test_mock() {
-        let result = foo(&mock(Some(
-            BarMock
-                .each_call(matching!())
-                .returns(84_u32)
-                .in_any_order(),
-        )))
+        let result = foo(&Unimock::new(
+            BarMock.each_call(matching!()).returns(84_u32),
+        ))
         .await;
 
         assert_eq!(84, result);
@@ -355,7 +350,7 @@ mod async_no_deps_etc {
 
     #[tokio::test]
     async fn mock_it() {
-        let unimock = spy([BazMock.each_call(matching!()).returns(42).in_any_order()]);
+        let unimock = Unimock::new_partial(BazMock.each_call(matching!()).returns(42));
         let answer = unimock.foo().await;
 
         assert_eq!(42, answer);
@@ -389,23 +384,37 @@ mod generics {
 
     #[test]
     fn generic_mock_fns() {
-        let _ = GenericDepsGenericReturnMock
-            .with_types::<String>()
-            .each_call(matching!())
-            .returns("hey".to_string())
-            .in_any_order();
+        let s: String = Unimock::new(
+            GenericDepsGenericReturnMock
+                .with_types::<String>()
+                .some_call(matching!())
+                .returns("hey".to_string()),
+        )
+        .generic_deps_generic_return();
 
-        let _ = GenericDepsGenericParamMock
-            .with_types::<String>()
-            .each_call(matching!("hey"))
-            .returns(42)
-            .in_any_order();
+        assert_eq!("hey".to_string(), s);
 
-        let _ = GenericDepsGenericParamMock
-            .with_types::<i32>()
-            .each_call(matching!(1337))
-            .returns(42)
-            .in_any_order();
+        assert_eq!(
+            42,
+            Unimock::new(
+                GenericDepsGenericParamMock
+                    .with_types::<String>()
+                    .some_call(matching!("hey"))
+                    .returns(42),
+            )
+            .generic_deps_generic_param(format!("hey"))
+        );
+
+        assert_eq!(
+            42,
+            Unimock::new(
+                GenericDepsGenericParamMock
+                    .with_types::<i32>()
+                    .some_call(matching!(1337))
+                    .returns(42),
+            )
+            .generic_deps_generic_param(1337),
+        );
     }
 
     #[entrait(ConcreteDepsGenericReturnWhere)]
@@ -466,13 +475,7 @@ mod entrait_for_trait_unimock {
     fn entraited_trait_should_have_unimock_impl() {
         assert_eq!(
             42,
-            mock(Some(
-                TraitMock::method1
-                    .each_call(matching!())
-                    .returns(42)
-                    .in_any_order()
-            ))
-            .method1()
+            Unimock::new(TraitMock::method1.each_call(matching!()).returns(42)).method1()
         );
     }
 
@@ -480,8 +483,8 @@ mod entrait_for_trait_unimock {
     #[should_panic(
         expected = "Trait::method1 cannot be unmocked as there is no function available to call."
     )]
-    fn entraited_trait_should_not_be_spyable() {
-        spy(None).method1();
+    fn entraited_trait_should_not_be_unmockable() {
+        Unimock::new_partial(()).method1();
     }
 }
 
@@ -517,12 +520,7 @@ mod module {
 
     #[test]
     fn test_it() {
-        let deps = mock(Some(
-            BarBazMock::bar
-                .each_call(matching!())
-                .returns(42)
-                .in_any_order(),
-        ));
+        let deps = Unimock::new(BarBazMock::bar.each_call(matching!()).returns(42));
         assert_eq!(42, takes_barbaz(&deps));
     }
 }
