@@ -192,7 +192,7 @@
 //!     deps.foo() + deps.bar()
 //! }
 //!
-//! let mocked_deps = unimock::mock((
+//! let mocked_deps = Unimock::new((
 //!     FooMock.each_call(matching!()).returns(40),
 //!     my_mod::MyModMock::bar.each_call(matching!()).returns(2),
 //! ));
@@ -227,7 +227,7 @@
 //! }
 //!
 //! let hello_string = say_hello(
-//!     &unimock::spy(
+//!     &Unimock::new_partial(
 //!         FetchPlanetMock
 //!             .some_call(matching!(123456))
 //!             .returns(Ok(Planet {
@@ -240,7 +240,7 @@
 //! assert_eq!("Hello World!", hello_string);
 //! ```
 //!
-//! This example used [`unimock::spy`](unimock::spy) to create a mocker that works mostly like `Impl`, except that the call graph can be short-circuited at arbitrary, run-time configurable points.
+//! This example used [`Unimock::new_partial`](unimock::Unimock::new_partial) to create a mocker that works mostly like `Impl`, except that the call graph can be short-circuited at arbitrary, run-time configurable points.
 //! The example code goes through three layers (`say_hello => fetch_planet_name => fetch_planet`), and only the deepest one gets mocked out.
 //!
 //!
