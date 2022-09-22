@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Changed
+- Upgrade unimock to 0.4
 - Unimock mocks are now exported through a `TraitMock` ident, where `Trait` is the name of the trait.
 
 ## [0.4.6] - 2022-08-17
