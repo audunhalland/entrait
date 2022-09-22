@@ -210,7 +210,7 @@ pub fn opt_async_trait_attr<'s, 'o>(
         opts.async_strategy(),
         generics::has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
     ) {
-        (SpanOpt(AsyncStrategy::AsyncTrait, span), true) => Some(Attr(AsyncTraitParams {
+        (SpanOpt(AsyncStrategy::BoxFuture, span), true) => Some(Attr(AsyncTraitParams {
             crate_idents,
             use_static: false,
             span,

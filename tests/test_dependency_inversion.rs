@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
+#![cfg_attr(feature = "use-associated-futures", feature(type_alias_impl_trait))]
 
 #[entrait::entrait(pub Baz)]
 fn baz<D>(_: &D) -> i32 {
@@ -94,7 +94,7 @@ mod simple_dyn {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod async_static {
     use entrait::*;
 
@@ -130,11 +130,11 @@ mod async_static {
     }
 }
 
-#[cfg(any(feature = "async-trait"))]
+#[cfg(any(feature = "boxed-futures"))]
 mod async_dyn {
     use entrait::*;
 
-    #[entrait(FoobarImpl, delegate_by = Borrow, async_trait = true)]
+    #[entrait(FoobarImpl, delegate_by = Borrow, box_future = true)]
     pub trait Foobar {
         async fn foo(&self) -> i32;
         async fn bar(&self) -> u32;

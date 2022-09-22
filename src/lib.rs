@@ -584,18 +584,18 @@
 //!
 //! #### `async` support
 //! Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait.
-//! Enable the `async-trait` cargo feature and pass the `async_trait` option like this:
+//! Enable the `boxed-futures` cargo feature and pass the `box_future` option like this:
 //!
 //! ```rust
 //! # use entrait::entrait;
-//! #[entrait(Foo, async_trait)]
+//! #[entrait(Foo, box_future)]
 //! async fn foo<D>(deps: &D) {
 //! }
 //! ```
 //! This is designed to be forwards compatible with [static async fn in traits](https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html).
 //! When that day comes, you should be able to just remove that option and get a proper zero-cost future.
 //!
-//! There is a cargo feature to automatically apply `#[async_trait]` to every generated async trait: `use-async-trait`.
+//! There is a cargo feature to automatically apply `#[async_trait]` to every generated async trait: `use-boxed-futures`.
 //!
 //! #### Zero-cost async inversion of control - preview mode
 //! Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
@@ -614,7 +614,7 @@
 //! }
 //! ```
 //!
-//! There is a feature for turning this on everywhere: `use-associated-future`.
+//! There is a feature for turning this on everywhere: `use-associated-futures`.
 //!
 //! #### Integrating with other `fn`-targeting macros, and `no_deps`
 //! Some macros are used to transform the body of a function, or generate a body from scratch.
@@ -655,12 +655,12 @@
 //! It is also possible to reduce noise by doing `use entrait::entrait_export as entrait`.
 //!
 //! #### Feature overview
-//! | Feature                 | Implies       | Description         |
-//! | -------------------     | ------------- | ------------------- |
-//! | `unimock`               |               | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
-//! | `use-async-trait`       | `async_trait` | Automatically applies the [async_trait] macro to async trait methods. |
-//! | `use-associated-future` |               | Automatically transforms the return type of async trait methods into an associated future by using type-alias-impl-trait syntax. Requires a nightly compiler. |
-//! | `async-trait`           |               | Pulls in the [async_trait] optional dependency, enabling the `async_trait` entrait option (macro parameter). |
+//! | Feature                  | Implies         | Description         |
+//! | -------------------      | --------------- | ------------------- |
+//! | `unimock`                |                 | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
+//! | `use-boxed-futures`      | `boxed-futures` | Automatically applies the [async_trait] macro to async trait methods. |
+//! | `use-associated-futures` |                 | Automatically transforms the return type of async trait methods into an associated future by using type-alias-impl-trait syntax. Requires a nightly compiler. |
+//! | `boxed-futures`          |                 | Pulls in the [async_trait] optional dependency, enabling the `box_future` entrait option (macro parameter). |
 //!
 //!
 //!
@@ -709,19 +709,19 @@
 
 #[cfg(feature = "unimock")]
 mod macros {
-    #[cfg(feature = "use-async-trait")]
+    #[cfg(feature = "use-boxed-futures")]
     mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_unimock_use_async_trait as entrait_export;
-        pub use entrait_macros::entrait_unimock_use_async_trait as entrait;
+        pub use entrait_macros::entrait_export_unimock_use_box_futures as entrait_export;
+        pub use entrait_macros::entrait_unimock_use_box_futures as entrait;
     }
 
-    #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
+    #[cfg(all(feature = "use-associated-futures", not(feature = "use-boxed-futures")))]
     mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_unimock_use_associated_future as entrait_export;
-        pub use entrait_macros::entrait_unimock_use_associated_future as entrait;
+        pub use entrait_macros::entrait_export_unimock_use_associated_futures as entrait_export;
+        pub use entrait_macros::entrait_unimock_use_associated_futures as entrait;
     }
 
-    #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
+    #[cfg(not(any(feature = "use-boxed-futures", feature = "use-associated-futures")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait_export_unimock as entrait_export;
         pub use entrait_macros::entrait_unimock as entrait;
@@ -732,19 +732,19 @@ mod macros {
 
 #[cfg(not(feature = "unimock"))]
 mod macros {
-    #[cfg(feature = "use-async-trait")]
+    #[cfg(feature = "use-boxed-futures")]
     mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_use_async_trait as entrait_export;
-        pub use entrait_macros::entrait_use_async_trait as entrait;
+        pub use entrait_macros::entrait_export_use_box_futures as entrait_export;
+        pub use entrait_macros::entrait_use_box_futures as entrait;
     }
 
-    #[cfg(all(feature = "use-associated-future", not(feature = "use-async-trait")))]
+    #[cfg(all(feature = "use-associated-futures", not(feature = "use-boxed-futures")))]
     mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_use_associated_future as entrait_export;
-        pub use entrait_macros::entrait_use_associated_future as entrait;
+        pub use entrait_macros::entrait_export_use_associated_futures as entrait_export;
+        pub use entrait_macros::entrait_use_associated_futures as entrait;
     }
 
-    #[cfg(not(any(feature = "use-async-trait", feature = "use-associated-future")))]
+    #[cfg(not(any(feature = "use-boxed-futures", feature = "use-associated-futures")))]
     mod entrait_auto_async {
         pub use entrait_macros::entrait;
         pub use entrait_macros::entrait_export;
@@ -927,15 +927,15 @@ mod macros {
 /// | `export`            | `bool`                       | `fn`+`mod`         | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
 /// | `unimock`           | `bool`                       | `fn`+`mod`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
 /// | `mockall`           | `bool`                       | `fn`+`mod`+`trait` | `false`     | Enable mockall mocks. |
-/// | `async_trait`       | `bool`                       | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `async_trait` entrait feature. |
+/// | `box_future`        | `bool`                       | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `boxed-futures` entrait feature. |
 /// | `associated_future` | `bool`                       | `fn`+`mod`+`trait` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(type_alias_impl_trait)`. |
 /// | `delegate_by`       | `Self`/`Borrow`/custom ident | `trait`            | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `Borrow` generates a [`T: Borrow<dyn Trait>`](::core::borrow::Borrow) bound. Any other value generates a new trait with that name which controls the delegation. |
 ///
 /// [^1]: Enabled by default by turning on the `unimock` cargo feature.
 ///
-/// [^2]: Enabled by default by turning on the `use-async-trait` cargo feature.
+/// [^2]: Enabled by default by turning on the `use-boxed-futures` cargo feature.
 ///
-/// [^3]: Enabled by default by turning on the `use-associated-future` cargo feature.
+/// [^3]: Enabled by default by turning on the `use-associated-futures` cargo feature.
 pub use macros::entrait;
 
 /// Same as the [`entrait`](entrait) macro, only that the `export` option is set to true.
@@ -953,7 +953,7 @@ pub use ::implementation::Impl;
 #[doc(hidden)]
 pub use ::unimock as __unimock;
 
-#[cfg(feature = "async-trait")]
+#[cfg(feature = "boxed-futures")]
 #[doc(hidden)]
 pub mod __async_trait {
     pub use ::async_trait::async_trait;

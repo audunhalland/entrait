@@ -1,7 +1,7 @@
 mod db {
     use entrait::*;
 
-    #[entrait(pub FetchSomeValue, no_deps, async_trait)]
+    #[entrait(pub FetchSomeValue, no_deps, box_future)]
     async fn fetch_some_value() -> String {
         "real".to_string()
     }

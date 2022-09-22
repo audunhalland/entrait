@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused)]
-#![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
+#![cfg_attr(feature = "use-associated-futures", feature(type_alias_impl_trait))]
 
 mod bounds {
     use entrait::*;
@@ -86,7 +86,7 @@ mod bounds {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod no_deps_and_feign {
     use entrait::entrait;
 

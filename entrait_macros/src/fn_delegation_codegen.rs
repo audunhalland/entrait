@@ -152,7 +152,7 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
         if trait_fn.originally_async
             && matches!(
                 self.opts.async_strategy(),
-                SpanOpt(AsyncStrategy::AsyncTrait, _)
+                SpanOpt(AsyncStrategy::BoxFuture, _)
             )
         {
             opt_inline_attr = None;

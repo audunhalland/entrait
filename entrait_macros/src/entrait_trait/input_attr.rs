@@ -39,8 +39,8 @@ impl Parse for EntraitTraitAttr {
             loop {
                 match input.parse::<EntraitOpt>()? {
                     EntraitOpt::Debug(opt) => debug = Some(opt),
-                    EntraitOpt::AsyncTrait(opt) => {
-                        async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, opt.1))
+                    EntraitOpt::BoxFuture(opt) => {
+                        async_strategy = Some(SpanOpt(AsyncStrategy::BoxFuture, opt.1))
                     }
                     EntraitOpt::AssociatedFuture(opt) => {
                         async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))

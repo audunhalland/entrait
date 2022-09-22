@@ -50,7 +50,7 @@ impl Opts {
 #[derive(Clone, Copy)]
 pub enum AsyncStrategy {
     NoHack,
-    AsyncTrait,
+    BoxFuture,
     AssociatedFuture,
 }
 
@@ -81,7 +81,7 @@ impl<T> SpanOpt<T> {
 pub enum EntraitOpt {
     NoDeps(SpanOpt<bool>),
     Debug(SpanOpt<bool>),
-    AsyncTrait(SpanOpt<bool>),
+    BoxFuture(SpanOpt<bool>),
     AssociatedFuture(SpanOpt<bool>),
     DelegateBy(SpanOpt<Delegate>),
     /// Whether to export mocks
@@ -97,7 +97,7 @@ impl EntraitOpt {
         match self {
             Self::NoDeps(opt) => opt.1,
             Self::Debug(opt) => opt.1,
-            Self::AsyncTrait(opt) => opt.1,
+            Self::BoxFuture(opt) => opt.1,
             Self::AssociatedFuture(opt) => opt.1,
             Self::DelegateBy(opt) => opt.1,
             Self::Export(opt) => opt.1,
@@ -118,7 +118,7 @@ impl Parse for EntraitOpt {
         match ident_string.as_str() {
             "no_deps" => Ok(NoDeps(parse_eq_bool(input, true, span)?)),
             "debug" => Ok(Debug(parse_eq_bool(input, true, span)?)),
-            "async_trait" => Ok(AsyncTrait(parse_eq_bool(input, true, span)?)),
+            "box_future" => Ok(BoxFuture(parse_eq_bool(input, true, span)?)),
             "associated_future" => Ok(AssociatedFuture(parse_eq_bool(input, true, span)?)),
             "delegate_by" => Ok(DelegateBy(parse_eq_delegate_by(
                 input,

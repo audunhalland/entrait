@@ -11,7 +11,7 @@ pub struct Foo {
 mod business {
     use super::*;
 
-    #[entrait(pub GetFoo, no_deps, async_trait)]
+    #[entrait(pub GetFoo, no_deps, box_future)]
     async fn get_foo() -> Foo {
         Foo {
             value: "real".to_string(),

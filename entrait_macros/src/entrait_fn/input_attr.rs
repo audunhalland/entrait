@@ -32,8 +32,8 @@ impl Parse for EntraitFnAttr {
             match input.parse::<EntraitOpt>()? {
                 EntraitOpt::NoDeps(opt) => no_deps = Some(opt),
                 EntraitOpt::Debug(opt) => debug = Some(opt),
-                EntraitOpt::AsyncTrait(opt) => {
-                    async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, opt.1))
+                EntraitOpt::BoxFuture(opt) => {
+                    async_strategy = Some(SpanOpt(AsyncStrategy::BoxFuture, opt.1))
                 }
                 EntraitOpt::AssociatedFuture(opt) => {
                     async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))

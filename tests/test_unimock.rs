@@ -1,5 +1,5 @@
 #![cfg(feature = "unimock")]
-#![cfg_attr(feature = "use-associated-future", feature(type_alias_impl_trait))]
+#![cfg_attr(feature = "use-associated-futures", feature(type_alias_impl_trait))]
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
@@ -17,7 +17,7 @@ mod sync {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-future", feature = "use-associated-futures"))]
 mod auth {
     use entrait::*;
     use unimock::*;
@@ -119,7 +119,7 @@ mod auth {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod multi_mock {
     use entrait::*;
     use unimock::*;
@@ -202,7 +202,7 @@ mod multi_mock {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod tokio_spawn {
     use entrait::*;
     use unimock::*;
@@ -251,7 +251,7 @@ mod tokio_spawn {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod more_async {
     use entrait::*;
     use unimock::*;
@@ -292,7 +292,7 @@ mod more_async {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod async_no_deps_etc {
     use entrait::*;
     use unimock::*;
@@ -525,7 +525,7 @@ mod module {
     }
 }
 
-#[cfg(any(feature = "use-async-trait", feature = "use-associated-future"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod module_async {
     use entrait::*;
 

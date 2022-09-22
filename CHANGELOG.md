@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Changed
+- Feature `async-trait` renamed to `boxed-futures`
+- Feature `use-async-trait` renamed to `use-boxed-futures`
+- Feature `use-associated-future` renamed to `use-associated-futures`
 - Upgrade unimock to 0.4
 - Unimock mocks are now exported through a `TraitMock` ident, where `Trait` is the name of the trait.
 

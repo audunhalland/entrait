@@ -353,7 +353,7 @@ impl<'s> DelegatingMethod<'s> {
         if self.trait_fn.originally_async
             && matches!(
                 self.attr.opts.async_strategy(),
-                SpanOpt(AsyncStrategy::AsyncTrait, _)
+                SpanOpt(AsyncStrategy::BoxFuture, _)
             )
         {
             return false;

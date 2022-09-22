@@ -43,7 +43,7 @@ pub fn output_tokens_for_impl(
 
     // Using a dyn implementation implies boxed futures.
     if matches!(impl_kind, ImplKind::Dyn) {
-        attr.opts.async_strategy = Some(SpanOpt(AsyncStrategy::AsyncTrait, self_ty.span()));
+        attr.opts.async_strategy = Some(SpanOpt(AsyncStrategy::BoxFuture, self_ty.span()));
     }
 
     let trait_span = trait_path
