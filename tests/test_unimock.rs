@@ -500,8 +500,6 @@ mod module {
     use std::any::Any;
     use unimock::*;
 
-    use crate::module::bar_baz::BarBazMock;
-
     #[entrait(pub Foo)]
     fn foo(_: &impl Any) -> i32 {
         7
@@ -520,7 +518,7 @@ mod module {
 
     #[test]
     fn test_it() {
-        let deps = Unimock::new(BarBazMock::bar.each_call(matching!()).returns(42));
+        let deps = Unimock::new(bar_baz::BarBazMock::bar.each_call(matching!()).returns(42));
         assert_eq!(42, takes_barbaz(&deps));
     }
 }

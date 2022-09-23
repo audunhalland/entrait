@@ -42,7 +42,7 @@ mod borrow_dyn_sync {
 }
 
 #[cfg(feature = "boxed-futures")]
-mod borrow_dyn_use_box_futures {
+mod borrow_dyn_use_boxed_futures {
     use super::*;
     use async_trait::*;
     use entrait::*;
@@ -59,7 +59,7 @@ mod borrow_dyn_use_box_futures {
         deps.bar().await;
     }
 
-    #[entrait(delegate_by = Borrow, debug)]
+    #[entrait(delegate_by = Borrow)]
     #[async_trait]
     trait Bar: Sync + 'static {
         async fn bar(&self);
