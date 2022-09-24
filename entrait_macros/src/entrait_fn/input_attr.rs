@@ -23,6 +23,7 @@ impl Parse for EntraitFnAttr {
         let mut debug = None;
         let mut async_strategy = None;
         let mut export = None;
+        let mut mock_api = None;
         let mut unimock = None;
         let mut mockall = None;
 
@@ -39,6 +40,7 @@ impl Parse for EntraitFnAttr {
                     async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))
                 }
                 EntraitOpt::Export(opt) => export = Some(opt),
+                EntraitOpt::MockApi(ident) => mock_api = Some(ident),
                 EntraitOpt::Unimock(opt) => unimock = Some(opt),
                 EntraitOpt::Mockall(opt) => mockall = Some(opt),
                 opt => return Err(syn::Error::new(opt.span(), "Unsupported option")),
@@ -56,6 +58,7 @@ impl Parse for EntraitFnAttr {
                 debug,
                 async_strategy,
                 export,
+                mock_api,
                 unimock,
                 mockall,
             },

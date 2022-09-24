@@ -34,6 +34,7 @@ impl<'s> TraitCodegen<'s> {
             SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
                 params: attributes::UnimockAttrParams {
                     trait_ident,
+                    mock_api: self.opts.mock_api.as_ref(),
                     crate_idents: self.crate_idents,
                     trait_fns,
                     fn_input_mode,

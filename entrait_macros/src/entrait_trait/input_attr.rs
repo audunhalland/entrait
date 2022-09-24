@@ -31,6 +31,7 @@ impl Parse for EntraitTraitAttr {
 
         let mut debug = None;
         let mut async_strategy = None;
+        let mut mock_api = None;
         let mut unimock = None;
         let mut mockall = None;
         let mut delegation_kind = None;
@@ -45,6 +46,7 @@ impl Parse for EntraitTraitAttr {
                     EntraitOpt::AssociatedFuture(opt) => {
                         async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))
                     }
+                    EntraitOpt::MockApi(ident) => mock_api = Some(ident),
                     EntraitOpt::Unimock(opt) => unimock = Some(opt),
                     EntraitOpt::Mockall(opt) => mockall = Some(opt),
                     EntraitOpt::DelegateBy(kind) => delegation_kind = Some(kind),
@@ -69,6 +71,7 @@ impl Parse for EntraitTraitAttr {
                 debug,
                 async_strategy,
                 export: None,
+                mock_api,
                 unimock,
                 mockall,
             },

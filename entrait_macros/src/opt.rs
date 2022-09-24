@@ -11,6 +11,8 @@ pub struct Opts {
     /// Whether to export mocks (i.e. not gated with cfg(test))
     pub export: Option<SpanOpt<bool>>,
 
+    pub mock_api: Option<syn::Ident>,
+
     /// Mocking with unimock
     pub unimock: Option<SpanOpt<bool>>,
 
@@ -86,6 +88,8 @@ pub enum EntraitOpt {
     DelegateBy(SpanOpt<Delegate>),
     /// Whether to export mocks
     Export(SpanOpt<bool>),
+    /// How to name the mock API
+    MockApi(syn::Ident),
     /// Whether to generate unimock impl
     Unimock(SpanOpt<bool>),
     /// Whether to generate mockall impl
@@ -101,6 +105,7 @@ impl EntraitOpt {
             Self::AssociatedFuture(opt) => opt.1,
             Self::DelegateBy(opt) => opt.1,
             Self::Export(opt) => opt.1,
+            Self::MockApi(ident) => ident.span(),
             Self::Unimock(opt) => opt.1,
             Self::Mockall(opt) => opt.1,
         }
@@ -126,6 +131,10 @@ impl Parse for EntraitOpt {
                 span,
             )?)),
             "export" => Ok(Export(parse_eq_bool(input, true, span)?)),
+            "mock_api" => {
+                let _: syn::token::Eq = input.parse()?;
+                Ok(MockApi(input.parse()?))
+            }
             "unimock" => Ok(Unimock(parse_eq_bool(input, true, span)?)),
             "mockall" => Ok(Mockall(parse_eq_bool(input, true, span)?)),
             _ => Err(syn::Error::new(

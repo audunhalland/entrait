@@ -1,7 +1,7 @@
 mod db {
     use entrait::*;
 
-    #[entrait(pub FetchSomeValue, no_deps, box_future)]
+    #[entrait(pub FetchSomeValue, no_deps, box_future, mock_api=FetchSomeValueMock)]
     async fn fetch_some_value() -> String {
         "real".to_string()
     }

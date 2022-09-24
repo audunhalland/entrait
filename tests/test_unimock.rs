@@ -124,12 +124,12 @@ mod multi_mock {
     use entrait::*;
     use unimock::*;
 
-    #[entrait(Bar)]
+    #[entrait(Bar, mock_api = BarMock)]
     async fn bar<A>(_: &A) -> i32 {
         unimplemented!()
     }
 
-    #[entrait(Baz)]
+    #[entrait(Baz, mock_api = BazMock)]
     async fn baz<A>(_: &A) -> i32 {
         unimplemented!()
     }
@@ -223,7 +223,7 @@ mod tokio_spawn {
     }
 
     // important: takes T _by value_
-    #[entrait(Bar)]
+    #[entrait(Bar, mock_api = BarMock)]
     async fn bar<T>(_: T) -> i32 {
         1
     }
@@ -262,7 +262,7 @@ mod more_async {
         a.bar().await
     }
 
-    #[entrait(Bar)]
+    #[entrait(Bar, mock_api = BarMock)]
     async fn bar(state: &State) -> u32 {
         state.0
     }
@@ -299,17 +299,17 @@ mod async_no_deps_etc {
 
     struct App;
 
-    #[entrait(Foo)]
+    #[entrait(Foo, mock_api = FooMock)]
     async fn foo(deps: &impl Bar) -> i32 {
         deps.bar().await
     }
 
-    #[entrait(Bar)]
+    #[entrait(Bar, mock_api = BarMock)]
     async fn bar(deps: &impl Baz) -> i32 {
         deps.baz().await
     }
 
-    #[entrait(Baz)]
+    #[entrait(Baz, mock_api = BazMock)]
     async fn baz(_: &App) -> i32 {
         42
     }
@@ -362,22 +362,22 @@ mod generics {
     use std::any::Any;
     use unimock::*;
 
-    #[entrait(GenericDepsGenericReturn)]
+    #[entrait(GenericDepsGenericReturn, mock_api = Mock1)]
     fn generic_deps_generic_return<T: Default>(_: &impl Any) -> T {
         Default::default()
     }
 
-    #[entrait(ConcreteDepsGenericReturn)]
+    #[entrait(ConcreteDepsGenericReturn, mock_api = Mock2)]
     fn concrete_deps_generic_return<T: Default>(_: &()) -> T {
         Default::default()
     }
 
-    #[entrait(GenericDepsGenericParam)]
+    #[entrait(GenericDepsGenericParam, mock_api = Mock3)]
     fn generic_deps_generic_param<T>(_: &impl Any, _arg: T) -> i32 {
         42
     }
 
-    #[entrait(ConcreteDepsGenericParam)]
+    #[entrait(ConcreteDepsGenericParam, mock_api = Mock4)]
     fn concrete_deps_generic_param<T>(_: &(), _arg: T) -> i32 {
         42
     }
@@ -385,7 +385,7 @@ mod generics {
     #[test]
     fn generic_mock_fns() {
         let s: String = Unimock::new(
-            GenericDepsGenericReturnMock
+            Mock1
                 .with_types::<String>()
                 .some_call(matching!())
                 .returns("hey".to_string()),
@@ -397,7 +397,7 @@ mod generics {
         assert_eq!(
             42,
             Unimock::new(
-                GenericDepsGenericParamMock
+                Mock3
                     .with_types::<String>()
                     .some_call(matching!("hey"))
                     .returns(42),
@@ -408,7 +408,7 @@ mod generics {
         assert_eq!(
             42,
             Unimock::new(
-                GenericDepsGenericParamMock
+                Mock3
                     .with_types::<i32>()
                     .some_call(matching!(1337))
                     .returns(42),
@@ -466,7 +466,7 @@ mod entrait_for_trait_unimock {
     use entrait::*;
     use unimock::*;
 
-    #[entrait]
+    #[entrait(mock_api=TraitMock)]
     trait Trait {
         fn method1(&self) -> i32;
     }
@@ -500,12 +500,12 @@ mod module {
     use std::any::Any;
     use unimock::*;
 
-    #[entrait(pub Foo)]
+    #[entrait(pub Foo, mock_api=FooMock)]
     fn foo(_: &impl Any) -> i32 {
         7
     }
 
-    #[entrait(pub BarBaz)]
+    #[entrait(pub BarBaz, mock_api=BarBazMock)]
     mod bar_baz {
         pub fn bar(deps: &impl super::Foo) -> i32 {
             deps.foo()

@@ -169,19 +169,19 @@
 //!
 //! Unimock exports a single mock struct which can be passed as argument to every function that accept a generic `deps` parameter
 //!   (given that entrait is used with unimock support everywhere).
-//! To enable mocking of entraited functions, they get reified and defined as a type called `TraitMock` where `Trait` is the name of the trait.
-//! This works the same way for entraited modules, only that we already _have_ a module to export from.
+//! To enable mock configuration of entraited functions, supply the `mock_api` option, e.g. `mock_api=TraitMock` if the name of the trait is `Trait`.
+//! This works the same way for entraited modules, only that those already _have_ a module to export from.
 //!
 //! Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
 //!
 //! ```rust
 //! # use entrait::entrait_export as entrait;
 //! # use unimock::*;
-//! #[entrait(Foo)]
+//! #[entrait(Foo, mock_api=FooMock)]
 //! fn foo<D>(_: &D) -> i32 {
 //!     unimplemented!()
 //! }
-//! #[entrait(MyMod)]
+//! #[entrait(MyMod, mock_api=mock)]
 //! mod my_mod {
 //!     pub fn bar<D>(_: &D) -> i32 {
 //!         unimplemented!()
@@ -194,7 +194,7 @@
 //!
 //! let mocked_deps = Unimock::new((
 //!     FooMock.each_call(matching!()).returns(40),
-//!     my_mod::MyModMock::bar.each_call(matching!()).returns(2),
+//!     my_mod::mock::bar.each_call(matching!()).returns(2),
 //! ));
 //!
 //! assert_eq!(42, my_func(&mocked_deps));
@@ -221,7 +221,7 @@
 //!     name: String
 //! }
 //!
-//! #[entrait(FetchPlanet)]
+//! #[entrait(FetchPlanet, mock_api=FetchPlanetMock)]
 //! fn fetch_planet(deps: &(), planet_id: u32) -> Result<Planet, ()> {
 //!     unimplemented!("This doc test has no access to a database :(")
 //! }

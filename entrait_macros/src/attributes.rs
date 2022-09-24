@@ -78,6 +78,7 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
 
 pub struct UnimockAttrParams<'s> {
     pub trait_ident: &'s syn::Ident,
+    pub mock_api: Option<&'s syn::Ident>,
     pub crate_idents: &'s CrateIdents,
     pub trait_fns: &'s [TraitFn],
     pub(super) fn_input_mode: &'s FnInputMode<'s>,
@@ -117,17 +118,20 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
                 );
             });
 
+            if let Some(mock_api) = &self.mock_api {
+                punctuator.push_fn(|stream| {
+                    push_tokens!(stream, Ident::new("api", span), Eq(span));
+
+                    // flatten=[TraitMock] for single-fn entraits
+                    if matches!(self.fn_input_mode, FnInputMode::SingleFn(_)) {
+                        Bracket(span).surround(stream, |stream| push_tokens!(stream, mock_api));
+                    } else {
+                        push_tokens!(stream, mock_api);
+                    }
+                });
+            }
+
             if !matches!(self.fn_input_mode, FnInputMode::RawTrait(_)) {
-                // flatten=[TraitMock] for single-fn entraits
-                if matches!(self.fn_input_mode, FnInputMode::SingleFn(_)) {
-                    punctuator.push_fn(|stream| {
-                        let mock_ident = quote::format_ident!("{}Mock", self.trait_ident);
-
-                        push_tokens!(stream, Ident::new("flatten", span), Eq(span));
-                        Bracket(span).surround(stream, |stream| push_tokens!(stream, mock_ident));
-                    });
-                }
-
                 // unmock_with=[...]
                 if !self.trait_fns.is_empty() {
                     punctuator.push_fn(|stream| {

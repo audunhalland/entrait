@@ -153,6 +153,7 @@ fn gen_impl_delegation_trait_defs(
     trait_copy.ident = impl_trait_ident.clone();
 
     let no_mock_opts = Opts {
+        mock_api: None,
         unimock: None,
         mockall: None,
         ..attr.opts
@@ -233,6 +234,7 @@ fn gen_impl_delegation_trait_defs(
             }
 
             let no_mock_opts = Opts {
+                mock_api: None,
                 unimock: None,
                 mockall: None,
                 ..attr.opts
