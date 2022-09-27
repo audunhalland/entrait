@@ -1,7 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused)]
-#![cfg_attr(feature = "use-associated-futures", feature(type_alias_impl_trait))]
-
 mod bounds {
     use entrait::*;
 

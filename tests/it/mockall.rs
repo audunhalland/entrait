@@ -1,5 +1,3 @@
-#![allow(clippy::blacklisted_name)]
-
 mod basic {
     use entrait::*;
 

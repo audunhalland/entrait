@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 fn assert_is_send<T: Send>(_: &T) {}
 fn assert_is_sync<T: Sync>(_: &T) {}
 

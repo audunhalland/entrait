@@ -1,5 +1,3 @@
-#![cfg_attr(feature = "use-associated-futures", feature(type_alias_impl_trait))]
-
 #[entrait::entrait(pub Baz)]
 fn baz<D>(_: &D) -> i32 {
     42
