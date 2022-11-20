@@ -15,7 +15,7 @@ mod sync {
     }
 }
 
-#[cfg(any(feature = "use-boxed-future", feature = "use-associated-futures"))]
+#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod auth {
     use entrait::*;
     use unimock::*;
@@ -38,7 +38,7 @@ mod auth {
         Ok(user.username)
     }
 
-    #[entrait(Authenticate)]
+    #[entrait(Authenticate, mock_api=AuthenticateMock)]
     async fn authenticate(
         deps: &(impl FetchUser + VerifyPassword),
         id: u32,
@@ -52,7 +52,7 @@ mod auth {
         }
     }
 
-    #[entrait(FetchUser)]
+    #[entrait(FetchUser, mock_api=FetchUserMock)]
     fn fetch_user<T>(_: &T, _id: u32) -> Option<User> {
         Some(User {
             username: "name".into(),
@@ -60,7 +60,7 @@ mod auth {
         })
     }
 
-    #[entrait(VerifyPassword)]
+    #[entrait(VerifyPassword, mock_api=VerifyPasswordMock)]
     fn verify_password<T>(_: &T, _password: &str, _hash: &str) -> bool {
         true
     }
