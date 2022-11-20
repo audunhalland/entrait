@@ -17,7 +17,7 @@ The emergent pattern that results from its use enable the following things:
 
 The resulting pattern is referred to as [the entrait pattern](https://audunhalland.github.io/blog/entrait-pattern/) (see also: [philosophy](#philosophy)).
 
-# Introduction
+## Introduction
 
 The macro looks like this:
 
@@ -50,7 +50,7 @@ fn bar<D>(deps: &D, n: i32) -> String {
 ```
 
 
-### Multiple dependencies
+#### Multiple dependencies
 Other frameworks might represent multiple dependencies by having one value for each one, but entrait represents all dependencies _within the same value_.
 When the dependency parameter is generic, its trait bounds specifiy what methods we expect to be callable inside the function.
 
@@ -62,7 +62,7 @@ This is what we have managed to abstract away, which is the [whole point](#testi
 
 
 
-### Runtime and implementation
+#### Runtime and implementation
 When we want to compile a working application, we need an actual type to inject into the various entrait entrypoints.
 Two things will be important:
 
@@ -106,7 +106,7 @@ But if dependencies can only be traits, and we always abstract away this type, h
 
 
 
-### Concrete dependencies
+#### Concrete dependencies
 So far we have only seen generic trait-based dependencies, but the dependency can also be a _concrete type_:
 
 ```rust
@@ -137,7 +137,7 @@ Typically, functions with a concrete dependency should be kept small and avoid e
 They ideally function as accessors, providing a loosely coupled abstraction layer over concrete application state.
 
 
-### Module support
+#### Module support
 To reduce the number of generated traits, entrait can be used as a `mod` attribute.
 When used in this mode, the macro will look for non-private functions directly within the module scope, to be represented as methods on the resulting trait.
 This mode works mostly identically to the standalone function mode.
@@ -152,8 +152,8 @@ mod my_module {
 This example generates a `MyModule` trait containing the methods `foo` and `bar`.
 
 
-# Testing
-## Trait mocking with `Unimock`
+## Testing
+### Trait mocking with `Unimock`
 
 The whole point of entrait is to provide inversion of control, so that alternative dependency implementations can be used when unit testing function bodies.
 While test code can contain manual trait implementations, the most ergonomic way to test is to use a mocking library, which provides more features with less code.
@@ -162,17 +162,17 @@ Entrait works best together with [unimock](https://docs.rs/unimock/latest/unimoc
 
 Unimock exports a single mock struct which can be passed as argument to every function that accept a generic `deps` parameter
   (given that entrait is used with unimock support everywhere).
-To enable mocking of entraited functions, they get reified and defined as a type called `TraitMock` where `Trait` is the name of the trait.
-This works the same way for entraited modules, only that we already _have_ a module to export from.
+To enable mock configuration of entraited functions, supply the `mock_api` option, e.g. `mock_api=TraitMock` if the name of the trait is `Trait`.
+This works the same way for entraited modules, only that those already _have_ a module to export from.
 
 Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
 
 ```rust
-#[entrait(Foo)]
+#[entrait(Foo, mock_api=FooMock)]
 fn foo<D>(_: &D) -> i32 {
     unimplemented!()
 }
-#[entrait(MyMod)]
+#[entrait(MyMod, mock_api=mock)]
 mod my_mod {
     pub fn bar<D>(_: &D) -> i32 {
         unimplemented!()
@@ -183,15 +183,15 @@ fn my_func(deps: &(impl Foo + MyMod)) -> i32 {
     deps.foo() + deps.bar()
 }
 
-let mocked_deps = unimock::mock([
-    FooMock.each_call(matching!()).returns(40).in_any_order(),
-    my_mod::MyModMock::bar.each_call(matching!()).returns(2).in_any_order(),
-]);
+let mocked_deps = Unimock::new((
+    FooMock.each_call(matching!()).returns(40),
+    my_mod::mock::bar.each_call(matching!()).returns(2),
+));
 
 assert_eq!(42, my_func(&mocked_deps));
 ```
 
-#### Deep integration testing with unimock
+##### Deep integration testing with unimock
 Entrait with unimock supports _un-mocking_. This means that the test environment can be _partially mocked!_
 
 ```rust
@@ -210,31 +210,30 @@ pub struct Planet {
     name: String
 }
 
-#[entrait(FetchPlanet)]
+#[entrait(FetchPlanet, mock_api=FetchPlanetMock)]
 fn fetch_planet(deps: &(), planet_id: u32) -> Result<Planet, ()> {
     unimplemented!("This doc test has no access to a database :(")
 }
 
 let hello_string = say_hello(
-    &unimock::spy([
+    &Unimock::new_partial(
         FetchPlanetMock
-            .each_call(matching!(_))
-            .answers(|_| Ok(Planet {
+            .some_call(matching!(123456))
+            .returns(Ok(Planet {
                 name: "World".to_string(),
             }))
-            .in_any_order(),
-    ]),
+    ),
     123456,
 ).unwrap();
 
 assert_eq!("Hello World!", hello_string);
 ```
 
-This example used [`unimock::spy`](unimock::spy) to create a mocker that works mostly like `Impl`, except that the call graph can be short-circuited at arbitrary, run-time configurable points.
+This example used [`Unimock::new_partial`](unimock::Unimock::new_partial) to create a mocker that works mostly like `Impl`, except that the call graph can be short-circuited at arbitrary, run-time configurable points.
 The example code goes through three layers (`say_hello => fetch_planet_name => fetch_planet`), and only the deepest one gets mocked out.
 
 
-### Alternative mocking: Mockall
+#### Alternative mocking: Mockall
 If you instead wish to use a more established mocking crate, there is also support for [mockall](https://docs.rs/mockall/latest/mockall/).
 Note that mockall has some limitations.
 Multiple trait bounds are not supported, and deep tests will not work.
@@ -261,7 +260,7 @@ fn main() {
 ```
 
 
-# Multi-crate architecture
+## Multi-crate architecture
 
 A common technique for Rust application development is to choose a multi-crate architecture.
 There are usually two main ways to go about it:
@@ -279,7 +278,7 @@ The main goal is to be able to express business logic _centrally_, and avoid dep
 All of the examples in this section make some use of traits and trait delegation.
 
 
-### Case 1: Concrete leaf dependencies
+#### Case 1: Concrete leaf dependencies
 Earlier it was mentioned that when concrete-type dependencies are used, the `T` in `Impl<T>`, your application, and the type of the dependency have to match.
 But this is only partially true.
 It really comes down to which traits are implemented on what types:
@@ -333,7 +332,7 @@ impl some_upstream_crate::GetFoo for App {
 ```
 
 
-### Case 2: Hand-written trait as a leaf dependency
+#### Case 2: Hand-written trait as a leaf dependency
 Using a concrete type like `Config` from the first case can be contrived in many situations.
 Sometimes a good old hand-written trait definition will do the job much better:
 
@@ -362,7 +361,7 @@ What the attribute does in this case, is just to generate the correct blanket im
 To use with some `App`, just implement the trait for it.
 
 
-### Case 3: Hand-written trait as a leaf dependency using _dynamic dispatch_
+#### Case 3: Hand-written trait as a leaf dependency using _dynamic dispatch_
 Sometimes it might be desirable to have a delegation that involves dynamic dispatch.
 Entrait has a `delegate_by =` option, where you can pass an alternative trait to use as part of the delegation strategy.
 To enable dynamic dispatch, use Borrow:
@@ -390,7 +389,7 @@ impl<T: ::core::borrow::Borrow<dyn ReadConfig> + 'static> ReadConfig for Impl<T>
 To use this together with some `App`, implement `Borrow<dyn ReadConfig>` for it.
 
 
-### Case 4: Truly inverted _internal dependencies_ - static dispatch
+#### Case 4: Truly inverted _internal dependencies_ - static dispatch
 All cases up to this point have been _leaf dependencies_.
 Leaf dependencies are delegations that exit from the `Impl<T>` layer, using delegation targets involving concete `T`'s.
 This means that it is impossible to continue to use the entrait pattern and extend your application behind those abstractions.
@@ -487,7 +486,7 @@ fn main() { /* ... */ }
 ```
 
 
-### Case 5: Truly inverted internal dependencies - dynamic dispatch
+#### Case 5: Truly inverted internal dependencies - dynamic dispatch
 A small variation of case 4: Use `delegate_by = Borrow` instead of a custom trait.
 This makes the delegation happen using dynamic dispatch.
 
@@ -514,9 +513,9 @@ The app must now implement `Borrow<dyn RepositoryImpl<Self>>`.
 
 
 
-# Options and features
+## Options and features
 
-#### Trait visibility
+##### Trait visibility
 by default, entrait generates a trait that is module-private (no visibility keyword).
 To change this, just put a visibility specifier before the trait name:
 
@@ -527,29 +526,28 @@ fn foo<D>(deps: &D) { // <-- private function
 }
 ```
 
-#### `async` support
+##### `async` support
 Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait.
-Enable the `async-trait` cargo feature and pass the `async_trait` option like this:
+Enable the `boxed-futures` cargo feature and pass the `box_future` option like this:
 
 ```rust
-#[entrait(Foo, async_trait)]
+#[entrait(Foo, box_future)]
 async fn foo<D>(deps: &D) {
 }
 ```
 This is designed to be forwards compatible with [static async fn in traits](https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html).
 When that day comes, you should be able to just remove that option and get a proper zero-cost future.
 
-There is a cargo feature to automatically apply `#[async_trait]` to every generated async trait: `use-async-trait`.
+There is a cargo feature to automatically apply `#[async_trait]` to every generated async trait: `use-boxed-futures`.
 
-#### Zero-cost async inversion of control - preview mode
+##### Zero-cost async inversion of control - preview mode
 Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
 
-The entrait option is called `associated_future`, and depends on `generic_associated_types` and `type_alias_impl_trait`.
+The entrait option is called `associated_future`, and uses GATs and `feature(type_alias_impl_trait)`.
 This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
 the resulting type of the future:
 
 ```rust
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 
 use entrait::*;
@@ -559,9 +557,9 @@ async fn foo<D>(deps: &D) {
 }
 ```
 
-There is a feature for turning this on everywhere: `use-associated-future`.
+There is a feature for turning this on everywhere: `use-associated-futures`.
 
-#### Integrating with other `fn`-targeting macros, and `no_deps`
+##### Integrating with other `fn`-targeting macros, and `no_deps`
 Some macros are used to transform the body of a function, or generate a body from scratch.
 For example, we can use [`feignhttp`](https://docs.rs/feignhttp/latest/feignhttp/) to generate an HTTP client. Entrait will try as best as it
 can to co-exist with macros like these. Since `entrait` is a higher-level macro that does not touch fn bodies (it does not even try to parse them),
@@ -577,7 +575,7 @@ Here we had to use the `no_deps` entrait option.
 This is used to tell entrait that the function does not have a `deps` parameter as its first input.
 Instead, all the function's inputs get promoted to the generated trait method.
 
-#### Conditional compilation of mocks
+##### Conditional compilation of mocks
 Most often, you will only need to generate mock implementations for test code, and skip this for production code.
 A notable exception to this is when building libraries.
 When an application consists of several crates, downstream crates would likely want to mock out functionality from libraries.
@@ -596,17 +594,17 @@ fn foo(deps: &()) {}
 
 It is also possible to reduce noise by doing `use entrait::entrait_export as entrait`.
 
-#### Feature overview
-| Feature                 | Implies       | Description         |
-| -------------------     | ------------- | ------------------- |
-| `unimock`               |               | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
-| `use-async-trait`       | `async_trait` | Automatically applies the [async_trait] macro to async trait methods. |
-| `use-associated-future` |               | Automatically transforms the return type of async trait methods into an associated future by using type-alias-impl-trait syntax. Requires a nightly compiler. |
-| `async-trait`           |               | Pulls in the [async_trait] optional dependency, enabling the `async_trait` entrait option (macro parameter). |
+##### Feature overview
+| Feature                  | Implies         | Description         |
+| -------------------      | --------------- | ------------------- |
+| `unimock`                |                 | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
+| `use-boxed-futures`      | `boxed-futures` | Automatically applies the [async_trait] macro to async trait methods. |
+| `use-associated-futures` |                 | Automatically transforms the return type of async trait methods into an associated future by using type-alias-impl-trait syntax. Requires a nightly compiler. |
+| `boxed-futures`          |                 | Pulls in the [async_trait] optional dependency, enabling the `box_future` entrait option (macro parameter). |
 
 
 
-# "Philosophy"
+## "Philosophy"
 The `entrait` crate is central to the _entrait pattern_, an opinionated yet flexible and _Rusty_ way to build testable applications/business logic.
 
 To understand the entrait model and how to achieve Dependency Injection (DI) with it, we can compare it with a more widely used and classical alternative pattern:
@@ -634,10 +632,10 @@ Entrait was built to address two drawbacks inherent to this design:
 * Always declaring dependencies at the function signature level, close to call sites, instead of at module level.
 
 
-# Limitations
+## Limitations
 This section lists known limitations of entrait:
 
-### Cyclic dependency graphs
+#### Cyclic dependency graphs
 Cyclic dependency graphs are impossible with entrait.
 In fact, this is not a limit of entrait itself, but with Rust's trait solver.
 It is not able to prove that a type implements a trait if it needs to prove that it does in order to prove it.
