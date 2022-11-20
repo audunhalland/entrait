@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgrade unimock to 0.4
 - New entrait option `mock_api` to optionally generate a mock setup interface.
 - Unimock mocks are now exported through a `TraitMock` ident, where `Trait` is the name of the trait.
+### Removed
+- `entrait_impl`. Replaced by `#[entrait] impl TraitImpl for MyType {}`.
+- `entrait_dyn_impl`. Replaced by `#[entrait(dyn)] impl TraitImpl for MyType {}`.
 
 ## [0.4.6] - 2022-08-17
 ### Added
