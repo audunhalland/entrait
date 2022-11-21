@@ -1,14 +1,18 @@
 use crate::analyze_generics::TraitFn;
-use crate::generics;
+use crate::generics::{self, TraitIndirection};
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
-use crate::opt::{AsyncStrategy, Opts, SpanOpt};
+use crate::opt::{AsyncStrategy, MockApiIdent, Opts, SpanOpt};
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 
 pub struct Attr<P>(pub P);
+
+pub trait IsEmpty {
+    fn is_empty(&self) -> bool;
+}
 
 impl<P: ToTokens> ToTokens for Attr<P> {
     fn to_tokens(&self, stream: &mut TokenStream) {
@@ -19,13 +23,16 @@ impl<P: ToTokens> ToTokens for Attr<P> {
     }
 }
 
-pub struct ExportGatedAttr<'a, P: ToTokens> {
+pub struct ExportGatedAttr<'a, P: ToTokens + IsEmpty> {
     pub params: P,
     pub opts: &'a Opts,
 }
 
-impl<'a, P: ToTokens> ToTokens for ExportGatedAttr<'a, P> {
+impl<'a, P: ToTokens + IsEmpty> ToTokens for ExportGatedAttr<'a, P> {
     fn to_tokens(&self, stream: &mut TokenStream) {
+        if self.params.is_empty() {
+            return;
+        }
         push_tokens!(stream, syn::token::Pound::default());
         syn::token::Bracket::default().surround(stream, |stream| {
             if self.opts.export_value() {
@@ -78,15 +85,26 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
 
 pub struct UnimockAttrParams<'s> {
     pub trait_ident: &'s syn::Ident,
-    pub mock_api: Option<&'s syn::Ident>,
+    pub mock_api: Option<&'s MockApiIdent>,
+    pub trait_indirection: TraitIndirection,
     pub crate_idents: &'s CrateIdents,
     pub trait_fns: &'s [TraitFn],
     pub(super) fn_input_mode: &'s FnInputMode<'s>,
     pub span: Span,
 }
 
+impl<'s> IsEmpty for UnimockAttrParams<'s> {
+    fn is_empty(&self) -> bool {
+        matches!(self.trait_indirection, TraitIndirection::Plain) && self.mock_api.is_none()
+    }
+}
+
 impl<'s> ToTokens for UnimockAttrParams<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
+        if self.is_empty() {
+            return;
+        }
+
         use syn::token::*;
         use syn::Ident;
 
@@ -124,9 +142,9 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
 
                     // flatten=[TraitMock] for single-fn entraits
                     if matches!(self.fn_input_mode, FnInputMode::SingleFn(_)) {
-                        Bracket(span).surround(stream, |stream| push_tokens!(stream, mock_api));
+                        Bracket(span).surround(stream, |stream| push_tokens!(stream, mock_api.0));
                     } else {
-                        push_tokens!(stream, mock_api);
+                        push_tokens!(stream, mock_api.0);
                     }
                 });
             }
@@ -190,6 +208,12 @@ impl<'s> UnimockAttrParams<'s> {
 
 pub struct MockallAutomockParams {
     pub span: Span,
+}
+
+impl IsEmpty for MockallAutomockParams {
+    fn is_empty(&self) -> bool {
+        false
+    }
 }
 
 impl ToTokens for MockallAutomockParams {

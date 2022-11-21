@@ -12,6 +12,7 @@ use crate::generics::TraitDependencyMode;
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
 use crate::opt::AsyncStrategy;
+use crate::opt::Mockable;
 use crate::opt::Opts;
 use crate::opt::SpanOpt;
 use crate::token_util::push_tokens;
@@ -51,11 +52,12 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
             generics::has_any_self_by_value(trait_fns.iter().map(|trait_fn| trait_fn.sig())),
         );
         let args = self.trait_generics.arguments(&self.impl_indirection);
-        let self_ty = SelfTy(
-            self.trait_dependency_mode,
-            &self.impl_indirection,
-            self.trait_span,
-        );
+        let self_ty = SelfTy {
+            trait_dependency_mode: self.trait_dependency_mode,
+            impl_indirection: &self.impl_indirection,
+            mockable: self.opts.mockable(),
+            span: self.trait_span,
+        };
         let where_clause = self.trait_generics.impl_where_clause(
             trait_fns,
             self.trait_dependency_mode,
@@ -167,19 +169,23 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
     }
 }
 
-struct SelfTy<'g, 'c>(
-    &'g TraitDependencyMode<'g, 'c>,
-    &'g ImplIndirection<'g>,
-    Span,
-);
+struct SelfTy<'g, 'c> {
+    trait_dependency_mode: &'g TraitDependencyMode<'g, 'c>,
+    impl_indirection: &'g ImplIndirection<'g>,
+    mockable: Mockable,
+    span: Span,
+}
 
 impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
     fn to_tokens(&self, stream: &mut TokenStream) {
-        let span = self.2;
-        match &self.0 {
-            TraitDependencyMode::Generic(idents) => match self.1 {
+        match &self.trait_dependency_mode {
+            TraitDependencyMode::Generic(idents) => match self.impl_indirection {
                 ImplIndirection::None => {
-                    push_tokens!(stream, idents.impl_path(span))
+                    if self.mockable.yes() {
+                        push_tokens!(stream, idents.impl_path(self.span))
+                    } else {
+                        push_tokens!(stream, idents.impl_t)
+                    }
                 }
                 ImplIndirection::Static { ty } => {
                     push_tokens!(stream, ty);

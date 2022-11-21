@@ -11,7 +11,7 @@ pub struct Opts {
     /// Whether to export mocks (i.e. not gated with cfg(test))
     pub export: Option<SpanOpt<bool>>,
 
-    pub mock_api: Option<syn::Ident>,
+    pub mock_api: Option<MockApiIdent>,
 
     /// Mocking with unimock
     pub unimock: Option<SpanOpt<bool>>,
@@ -41,11 +41,33 @@ impl Opts {
         self.default_option(self.export, false).0
     }
 
+    pub fn mockable(&self) -> Mockable {
+        if self.unimock.is_some() && self.mock_api.is_some() {
+            Mockable::Yes
+        } else if self.mockall.is_some() {
+            Mockable::Yes
+        } else {
+            Mockable::No
+        }
+    }
+
     pub fn default_option<T>(&self, option: Option<SpanOpt<T>>, default: T) -> SpanOpt<T> {
         match option {
             Some(option) => option,
             None => SpanOpt(default, self.default_span),
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Mockable {
+    Yes,
+    No
+}
+
+impl Mockable {
+    pub fn yes(self) -> bool {
+        matches!(self, Self::Yes)
     }
 }
 
@@ -89,7 +111,7 @@ pub enum EntraitOpt {
     /// Whether to export mocks
     Export(SpanOpt<bool>),
     /// How to name the mock API
-    MockApi(syn::Ident),
+    MockApi(MockApiIdent),
     /// Whether to generate unimock impl
     Unimock(SpanOpt<bool>),
     /// Whether to generate mockall impl
@@ -105,7 +127,7 @@ impl EntraitOpt {
             Self::AssociatedFuture(opt) => opt.1,
             Self::DelegateBy(opt) => opt.1,
             Self::Export(opt) => opt.1,
-            Self::MockApi(ident) => ident.span(),
+            Self::MockApi(ident) => ident.0.span(),
             Self::Unimock(opt) => opt.1,
             Self::Mockall(opt) => opt.1,
         }
@@ -133,7 +155,7 @@ impl Parse for EntraitOpt {
             "export" => Ok(Export(parse_eq_bool(input, true, span)?)),
             "mock_api" => {
                 let _: syn::token::Eq = input.parse()?;
-                Ok(MockApi(input.parse()?))
+                Ok(Self::MockApi(MockApiIdent(input.parse()?)))
             }
             "unimock" => Ok(Unimock(parse_eq_bool(input, true, span)?)),
             "mockall" => Ok(Mockall(parse_eq_bool(input, true, span)?)),
@@ -144,6 +166,8 @@ impl Parse for EntraitOpt {
         }
     }
 }
+
+pub struct MockApiIdent(pub syn::Ident);
 
 fn parse_eq_bool(input: ParseStream, default: bool, span: Span) -> syn::Result<SpanOpt<bool>> {
     parse_eq_value_or_default(input, default, |b: syn::LitBool| Ok(b.value()), span)

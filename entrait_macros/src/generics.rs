@@ -18,18 +18,23 @@ pub enum ImplIndirection<'s> {
 impl<'s> ImplIndirection<'s> {
     pub fn to_trait_indirection(&'s self) -> TraitIndirection {
         match self {
-            Self::None => TraitIndirection::None,
-            Self::Static { .. } => TraitIndirection::Static,
-            Self::Dynamic { .. } => TraitIndirection::Dynamic,
+            Self::None => TraitIndirection::Plain,
+            Self::Static { .. } => TraitIndirection::StaticImpl,
+            Self::Dynamic { .. } => TraitIndirection::DynamicImpl,
         }
     }
 }
 
 #[derive(Clone, Copy)]
 pub enum TraitIndirection {
-    None,
-    Static,
-    Dynamic,
+    /// Normal entrait/fn, entrait/mod etc
+    Plain,
+    /// Trait indirection is the original entraited trait
+    Trait,
+    /// The static "impl" trait of an entraited trait
+    StaticImpl,
+    /// The dynamic/borrow "impl" trait of an entraited trait
+    DynamicImpl,
 }
 
 #[derive(Clone, Copy)]

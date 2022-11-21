@@ -35,6 +35,7 @@ impl<'s> TraitCodegen<'s> {
                 params: attributes::UnimockAttrParams {
                     trait_ident,
                     mock_api: self.opts.mock_api.as_ref(),
+                    trait_indirection: self.trait_indirection,
                     crate_idents: self.crate_idents,
                     trait_fns,
                     fn_input_mode,

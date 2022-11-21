@@ -129,9 +129,9 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
 
 fn convert_sig(sig: syn::Signature, span: Span) -> (EntraitSignature, TraitIndirection) {
     let trait_indirection = if matches!(sig.inputs.first(), Some(syn::FnArg::Receiver(_))) {
-        TraitIndirection::None
+        TraitIndirection::Plain
     } else {
-        TraitIndirection::Static
+        TraitIndirection::StaticImpl
     };
 
     let mut entrait_sig = EntraitSignature::new(sig);

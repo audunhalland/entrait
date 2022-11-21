@@ -551,3 +551,34 @@ mod module_async {
         deps.bar().await;
     }
 }
+
+#[test]
+fn level_without_mock_support() {
+    use entrait::*;
+    use unimock::*;
+
+    #[entrait(A)]
+    fn a(deps: &(impl B + C)) {
+        deps.b();
+        deps.c();
+    }
+
+    #[entrait(B, mock_api=BMock)]
+    fn b(deps: &impl std::any::Any) {}
+
+    #[entrait(CImpl, delegate_by = DelegateC)]
+    pub trait C {
+        fn c(&self);
+    }
+
+    #[entrait(pub D)]
+    mod d {}
+
+    fn takes_a(a: &impl A) {}
+    fn takes_b(b: &impl B) {}
+    fn takes_c(b: &impl C) {}
+
+    takes_a(&Unimock::new(()));
+    takes_b(&Unimock::new(()));
+    takes_c(&Unimock::new(()));
+}

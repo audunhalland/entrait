@@ -155,8 +155,8 @@ struct WhereClause<'s> {
 impl<'s> ToTokens for WhereClause<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let bound_target = match self.trait_indirection {
-            TraitIndirection::Static | TraitIndirection::Dynamic => quote! { EntraitT },
-            TraitIndirection::None => quote! { Self },
+            TraitIndirection::StaticImpl | TraitIndirection::DynamicImpl => quote! { EntraitT },
+            TraitIndirection::Plain | TraitIndirection::Trait => quote! { Self },
         };
 
         let mut punctuator = Punctuator::new(

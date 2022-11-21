@@ -80,7 +80,7 @@ pub fn output_tokens(
     let trait_def = TraitCodegen {
         crate_idents: &attr.crate_idents,
         opts: &attr.opts,
-        trait_indirection: generics::TraitIndirection::None,
+        trait_indirection: generics::TraitIndirection::Trait,
         trait_dependency_mode: &trait_dependency_mode,
     }
     .gen_trait_def(
@@ -114,7 +114,7 @@ pub fn output_tokens(
     let impl_assoc_types = out_trait.fns.iter().filter_map(|trait_fn| {
         trait_fn
             .entrait_sig
-            .associated_fut_impl(generics::TraitIndirection::None, &attr.crate_idents)
+            .associated_fut_impl(generics::TraitIndirection::Plain, &attr.crate_idents)
     });
 
     let method_items = out_trait
@@ -190,7 +190,7 @@ fn gen_impl_delegation_trait_defs(
             let trait_def = TraitCodegen {
                 crate_idents: &attr.crate_idents,
                 opts: &no_mock_opts,
-                trait_indirection: generics::TraitIndirection::Static,
+                trait_indirection: generics::TraitIndirection::StaticImpl,
                 trait_dependency_mode,
             }
             .gen_trait_def(
@@ -243,7 +243,7 @@ fn gen_impl_delegation_trait_defs(
             let trait_def = TraitCodegen {
                 crate_idents: &attr.crate_idents,
                 opts: &no_mock_opts,
-                trait_indirection: generics::TraitIndirection::Dynamic,
+                trait_indirection: generics::TraitIndirection::DynamicImpl,
                 trait_dependency_mode,
             }
             .gen_trait_def(
