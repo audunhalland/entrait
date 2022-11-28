@@ -43,7 +43,7 @@ impl<'s> TraitFnAnalyzer<'s> {
         input_sig: InputSig<'_>,
         analyzer: &mut GenericsAnalyzer,
     ) -> syn::Result<TraitFn> {
-        let deps = analyzer.analyze_fn_deps(input_sig, self.trait_span, self.opts)?;
+        let deps = analyzer.analyze_fn_deps(input_sig, self.opts)?;
         let entrait_sig = SignatureConverter {
             crate_idents: self.crate_idents,
             trait_span: self.trait_span,
@@ -108,12 +108,7 @@ impl GenericsAnalyzer {
         self.trait_generics
     }
 
-    pub fn analyze_fn_deps(
-        &mut self,
-        input_sig: InputSig<'_>,
-        trait_span: proc_macro2::Span,
-        opts: &Opts,
-    ) -> syn::Result<FnDeps> {
+    pub fn analyze_fn_deps(&mut self, input_sig: InputSig<'_>, opts: &Opts) -> syn::Result<FnDeps> {
         if opts.no_deps_value() {
             return self.deps_with_generics(FnDeps::NoDeps, &input_sig.generics);
         }
@@ -137,14 +132,12 @@ impl GenericsAnalyzer {
             }
         };
 
-        self.extract_deps_from_type(trait_span, input_sig, pat_type, pat_type.ty.as_ref())
+        self.extract_deps_from_type(input_sig, pat_type.ty.as_ref())
     }
 
     fn extract_deps_from_type(
         &mut self,
-        trait_span: proc_macro2::Span,
         input_sig: InputSig<'_>,
-        arg_pat: &syn::PatType,
         ty: &syn::Type,
     ) -> syn::Result<FnDeps> {
         match ty {
@@ -186,15 +179,10 @@ impl GenericsAnalyzer {
                     ),
                 }
             }
-            syn::Type::Reference(type_reference) => self.extract_deps_from_type(
-                trait_span,
-                input_sig,
-                arg_pat,
-                type_reference.elem.as_ref(),
-            ),
-            syn::Type::Paren(paren) => {
-                self.extract_deps_from_type(trait_span, input_sig, arg_pat, paren.elem.as_ref())
+            syn::Type::Reference(type_reference) => {
+                self.extract_deps_from_type(input_sig, type_reference.elem.as_ref())
             }
+            syn::Type::Paren(paren) => self.extract_deps_from_type(input_sig, paren.elem.as_ref()),
             ty => {
                 self.deps_with_generics(FnDeps::Concrete(Box::new(ty.clone())), &input_sig.generics)
             }

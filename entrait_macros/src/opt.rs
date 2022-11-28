@@ -42,9 +42,7 @@ impl Opts {
     }
 
     pub fn mockable(&self) -> Mockable {
-        if self.unimock.is_some() && self.mock_api.is_some() {
-            Mockable::Yes
-        } else if self.mockall.is_some() {
+        if (self.unimock.is_some() && self.mock_api.is_some()) || self.mockall.is_some() {
             Mockable::Yes
         } else {
             Mockable::No
@@ -62,7 +60,7 @@ impl Opts {
 #[derive(Clone, Copy)]
 pub enum Mockable {
     Yes,
-    No
+    No,
 }
 
 impl Mockable {
