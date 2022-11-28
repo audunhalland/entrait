@@ -1,6 +1,6 @@
 [package]
 name = "entrait"
-version = "0.5.0-alpha.0"
+version = "0.5.0-alpha.1"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
@@ -17,10 +17,10 @@ use-associated-futures = []
 boxed-futures = ["dep:async-trait"]
 
 [dependencies]
-entrait_macros = { path = "entrait_macros", version = "0.5.0-alpha.0" }
+entrait_macros = { path = "entrait_macros", version = "0.5.0-alpha.1" }
 implementation = "0.1"
 async-trait = { version = "0.1", optional = true }
-unimock = { version = "0.4.0", optional = true }
+unimock = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
