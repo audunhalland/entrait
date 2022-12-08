@@ -42,7 +42,7 @@ pub enum ImplReceiverKind {
 pub struct EntraitSignature {
     pub sig: syn::Signature,
     pub associated_fut: Option<AssociatedFut>,
-    pub lifetimes: Vec<EntraitLifetime>,
+    pub et_lifetimes: Vec<EntraitLifetime>,
 }
 
 impl EntraitSignature {
@@ -50,7 +50,7 @@ impl EntraitSignature {
         Self {
             sig,
             associated_fut: None,
-            lifetimes: vec![],
+            et_lifetimes: vec![],
         }
     }
 
@@ -83,12 +83,25 @@ impl EntraitSignature {
                 crate_idents,
             })
     }
+
+    fn et_lifetimes_in_assoc_future(&self) -> impl Iterator<Item = &'_ EntraitLifetime> {
+        self.et_lifetimes
+            .iter()
+            .filter(|et| et.used_in_output.0 || matches!(et.source, SigComponent::Base))
+    }
+
+    fn et_lifetimes_in_assoc_future_except_base(
+        &self,
+    ) -> impl Iterator<Item = &'_ EntraitLifetime> {
+        self.et_lifetimes.iter().filter(|et| et.used_in_output.0)
+    }
 }
 
 #[derive(Clone)]
 pub struct AssociatedFut {
     pub ident: syn::Ident,
     pub output: syn::Type,
+    pub base_lifetime: syn::Lifetime,
 }
 
 /// Only used for associated future:
@@ -97,6 +110,7 @@ pub struct EntraitLifetime {
     pub lifetime: syn::Lifetime,
     pub source: SigComponent,
     pub user_provided: UserProvidedLifetime,
+    pub used_in_output: UsedInOutput,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -104,10 +118,14 @@ pub enum SigComponent {
     Receiver,
     Param(usize),
     Output,
+    Base,
 }
 
 #[derive(Clone, Copy)]
 pub struct UserProvidedLifetime(bool);
+
+#[derive(Clone, Copy)]
+pub struct UsedInOutput(bool);
 
 #[derive(Clone, Copy)]
 pub enum ReceiverGeneration {

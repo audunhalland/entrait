@@ -1,5 +1,6 @@
 use super::{
-    EntraitLifetime, EntraitSignature, ReceiverGeneration, SigComponent, UserProvidedLifetime,
+    EntraitLifetime, EntraitSignature, ReceiverGeneration, SigComponent, UsedInOutput,
+    UserProvidedLifetime,
 };
 
 use std::collections::HashSet;
@@ -12,7 +13,7 @@ pub fn de_elide_lifetimes(
     let mut elision_detector = ElisionDetector::new(receiver_generation);
     elision_detector.detect(&mut entrait_sig.sig);
 
-    let mut visitor = LifetimeMutVisitor::new(true, elision_detector.elided_params);
+    let mut visitor = LifetimeMutVisitor::new(elision_detector.elided_params);
 
     match receiver_generation {
         ReceiverGeneration::None => {
@@ -31,25 +32,25 @@ pub fn de_elide_lifetimes(
 
     visitor.de_elide_output(&mut entrait_sig.sig.output);
 
-    entrait_sig.lifetimes.append(&mut visitor.lifetimes);
+    entrait_sig.et_lifetimes.append(&mut visitor.et_lifetimes);
 }
 
 /// Looks at elided lifetimes and makes them explicit.
-/// Also collects all lifetimes into `lifetimes`.
+/// Also collects all lifetimes into `et_lifetimes`.
 struct LifetimeMutVisitor {
-    de_elide: bool,
     current_component: SigComponent,
     elided_params: HashSet<usize>,
-    lifetimes: Vec<EntraitLifetime>,
+    registered_user_lifetimes: HashSet<String>,
+    et_lifetimes: Vec<EntraitLifetime>,
 }
 
 impl LifetimeMutVisitor {
-    fn new(de_elide: bool, elided_params: HashSet<usize>) -> Self {
+    fn new(elided_params: HashSet<usize>) -> Self {
         Self {
-            de_elide,
             current_component: SigComponent::Receiver,
             elided_params,
-            lifetimes: vec![],
+            registered_user_lifetimes: HashSet::new(),
+            et_lifetimes: vec![],
         }
     }
 
@@ -68,14 +69,6 @@ impl LifetimeMutVisitor {
         self.visit_return_type_mut(output);
     }
 
-    fn process_opt_lifetime(&mut self, lifetime: Option<syn::Lifetime>) -> Option<syn::Lifetime> {
-        if self.de_elide {
-            Some(self.make_lifetime_explicit(lifetime))
-        } else {
-            lifetime.map(|lifetime| self.register_user_lifetime(lifetime))
-        }
-    }
-
     fn make_lifetime_explicit(&mut self, lifetime: Option<syn::Lifetime>) -> syn::Lifetime {
         match self.current_component {
             SigComponent::Receiver | SigComponent::Param(_) => match lifetime {
@@ -83,15 +76,33 @@ impl LifetimeMutVisitor {
                 None => self.register_new_entrait_lifetime(),
             },
             // Do not register user-provided output lifetimes, should already be registered from inputs:
-            SigComponent::Output => lifetime
-                // If lifetime was elided, try to find it:
-                .or_else(|| self.find_output_lifetime())
-                // If not, there must be some kind of compile error somewhere else
-                .unwrap_or_else(|| self.broken_lifetime()),
+            SigComponent::Output => {
+                if let Some(lifetime) = &lifetime {
+                    self.tag_used_in_output(lifetime);
+                }
+
+                lifetime
+                    // If lifetime was elided, try to find it:
+                    .or_else(|| self.locate_output_lifetime())
+                    // If not, there must be some kind of compile error somewhere else
+                    .unwrap_or_else(|| self.broken_lifetime())
+            }
+            SigComponent::Base => panic!("The base lifetime is always explicit"),
         }
     }
 
-    fn find_output_lifetime(&self) -> Option<syn::Lifetime> {
+    fn tag_used_in_output(&mut self, lifetime: &syn::Lifetime) {
+        let mut et_lifetime = self
+            .et_lifetimes
+            .iter_mut()
+            .find(|et| et.lifetime == *lifetime);
+
+        if let Some(et_lifetime) = et_lifetime.as_mut() {
+            et_lifetime.used_in_output.0 = true;
+        }
+    }
+
+    fn locate_output_lifetime(&mut self) -> Option<syn::Lifetime> {
         let from_component = match self.only_elided_input() {
             // If only one input was elided, use that input:
             Some(elided_input) => SigComponent::Param(elided_input),
@@ -99,10 +110,16 @@ impl LifetimeMutVisitor {
             None => SigComponent::Receiver,
         };
 
-        self.lifetimes
-            .iter()
-            .find(|lt| lt.source == from_component)
-            .map(|lt| lt.lifetime.clone())
+        let mut et_lifetime = self
+            .et_lifetimes
+            .iter_mut()
+            .find(|lt| lt.source == from_component);
+
+        if let Some(et_lifetime) = et_lifetime.as_mut() {
+            et_lifetime.used_in_output.0 = true;
+        }
+
+        et_lifetime.map(|et| et.lifetime.clone())
     }
 
     fn only_elided_input(&self) -> Option<usize> {
@@ -114,15 +131,22 @@ impl LifetimeMutVisitor {
     }
 
     fn register_user_lifetime(&mut self, lifetime: syn::Lifetime) -> syn::Lifetime {
-        self.register_lifetime(EntraitLifetime {
-            lifetime,
-            source: self.current_component,
-            user_provided: UserProvidedLifetime(true),
-        })
+        let lifetime_string = lifetime.to_string();
+        if self.registered_user_lifetimes.contains(&lifetime_string) {
+            lifetime
+        } else {
+            self.registered_user_lifetimes.insert(lifetime_string);
+            self.register_lifetime(EntraitLifetime {
+                lifetime,
+                source: self.current_component,
+                user_provided: UserProvidedLifetime(true),
+                used_in_output: UsedInOutput(false),
+            })
+        }
     }
 
     fn register_new_entrait_lifetime(&mut self) -> syn::Lifetime {
-        let index = self.lifetimes.len();
+        let index = self.et_lifetimes.len();
         self.register_lifetime(EntraitLifetime {
             lifetime: syn::Lifetime::new(
                 &format!("'entrait{}", index),
@@ -130,12 +154,13 @@ impl LifetimeMutVisitor {
             ),
             source: self.current_component,
             user_provided: UserProvidedLifetime(false),
+            used_in_output: UsedInOutput(false),
         })
     }
 
     fn register_lifetime(&mut self, entrait_lifetime: EntraitLifetime) -> syn::Lifetime {
         let lifetime = entrait_lifetime.lifetime.clone();
-        self.lifetimes.push(entrait_lifetime);
+        self.et_lifetimes.push(entrait_lifetime);
         lifetime
     }
 
@@ -147,20 +172,18 @@ impl LifetimeMutVisitor {
 impl syn::visit_mut::VisitMut for LifetimeMutVisitor {
     fn visit_receiver_mut(&mut self, receiver: &mut syn::Receiver) {
         if let Some((_, lifetime)) = &mut receiver.reference {
-            *lifetime = self.process_opt_lifetime(lifetime.clone());
+            *lifetime = Some(self.make_lifetime_explicit(lifetime.clone()));
         }
         syn::visit_mut::visit_receiver_mut(self, receiver);
     }
 
     fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
-        reference.lifetime = self.process_opt_lifetime(reference.lifetime.clone());
-        syn::visit_mut::visit_type_reference_mut(self, reference);
+        reference.lifetime = Some(self.make_lifetime_explicit(reference.lifetime.clone()));
+        syn::visit_mut::visit_type_mut(self, reference.elem.as_mut());
     }
 
     fn visit_lifetime_mut(&mut self, lifetime: &mut syn::Lifetime) {
-        if lifetime.ident == "_" {
-            *lifetime = self.make_lifetime_explicit(Some(lifetime.clone()));
-        }
+        *lifetime = self.make_lifetime_explicit(Some(lifetime.clone()))
     }
 }
 
