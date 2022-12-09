@@ -15,6 +15,7 @@ unimock = ["dep:unimock"]
 use-boxed-futures = ["boxed-futures"]
 use-associated-futures = []
 boxed-futures = ["dep:async-trait"]
+nightly-tests = []
 
 [dependencies]
 entrait_macros = { path = "entrait_macros", version = "0.5.0-alpha.1" }

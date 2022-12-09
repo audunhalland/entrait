@@ -92,7 +92,7 @@ mod simple_dyn {
     }
 }
 
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
+#[cfg(feature = "nightly-tests")]
 mod async_static {
     use entrait::*;
 

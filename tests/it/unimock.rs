@@ -15,7 +15,11 @@ mod sync {
     }
 }
 
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
+#[cfg(any(
+    feature = "use-boxed-futures",
+    feature = "use-associated-futures",
+    feature = "nightly-tests"
+))]
 mod auth {
     use entrait::*;
     use unimock::*;
@@ -117,7 +121,11 @@ mod auth {
     }
 }
 
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
+#[cfg(any(
+    feature = "use-boxed-futures",
+    feature = "use-associated-futures",
+    feature = "nightly-tests"
+))]
 mod multi_mock {
     use entrait::*;
     use unimock::*;
@@ -200,6 +208,9 @@ mod multi_mock {
     }
 }
 
+/// Note: This test does not run under "nightly-tests",
+/// because it uses tokio::spawn, and there is currently
+/// no way to Send-bound futures from plain async fns in traits.
 #[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
 mod tokio_spawn {
     use entrait::*;
@@ -249,7 +260,11 @@ mod tokio_spawn {
     }
 }
 
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
+#[cfg(any(
+    feature = "use-boxed-futures",
+    feature = "use-associated-futures",
+    feature = "nightly-tests"
+))]
 mod more_async {
     use entrait::*;
     use unimock::*;
@@ -290,7 +305,11 @@ mod more_async {
     }
 }
 
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
+#[cfg(any(
+    feature = "use-boxed-futures",
+    feature = "use-associated-futures",
+    feature = "nightly-tests"
+))]
 mod async_no_deps_etc {
     use entrait::*;
     use unimock::*;
@@ -521,7 +540,11 @@ mod module {
     }
 }
 
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
+#[cfg(any(
+    feature = "use-boxed-futures",
+    feature = "use-associated-futures",
+    feature = "nightly-tests"
+))]
 mod module_async {
     use entrait::*;
 

@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: taiki-e/install-action@cargo-hack
       - name: Test feature powerset
-        run: cargo hack --feature-powerset --optional-deps "unimock" --exclude-features "default use-associated-futures" --exclude-no-default-features test
+        run: cargo hack --feature-powerset --exclude-features "default use-associated-futures nightly-tests" --exclude-no-default-features test
       - name: Test workspace
         run: cargo test --workspace --features "boxed-futures"
       - name: Doctest
@@ -31,4 +31,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - uses: taiki-e/install-action@cargo-hack
       - name: Test nightly features
-        run: cargo hack --feature-powerset --optional-deps "unimock" --exclude-features "default boxed-futures use-boxed-futures" --exclude-no-default-features test
+        run: cargo hack --feature-powerset --exclude-features "default boxed-futures use-boxed-futures" --exclude-no-default-features test

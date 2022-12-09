@@ -82,7 +82,11 @@ mod bounds {
     }
 }
 
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
+#[cfg(any(
+    feature = "use-boxed-futures",
+    feature = "use-associated-futures",
+    feature = "nightly-tests"
+))]
 mod no_deps_and_feign {
     use entrait::entrait;
 
