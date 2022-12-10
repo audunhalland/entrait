@@ -1,6 +1,6 @@
 [package]
 name = "entrait"
-version = "0.5.0-alpha.1"
+version = "0.5.0"
 authors = ["Audun Halland <audun.halldand@pm.me>"]
 edition = "2021"
 license = "MIT"
@@ -18,7 +18,7 @@ boxed-futures = ["dep:async-trait"]
 nightly-tests = []
 
 [dependencies]
-entrait_macros = { path = "entrait_macros", version = "0.5.0-alpha.1" }
+entrait_macros = { path = "entrait_macros", version = "0.5.0" }
 implementation = "0.1"
 async-trait = { version = "0.1", optional = true }
 unimock = { version = "0.4", optional = true }

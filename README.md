@@ -165,7 +165,7 @@ Unimock exports a single mock struct which can be passed as argument to every fu
 To enable mock configuration of entraited functions, supply the `mock_api` option, e.g. `mock_api=TraitMock` if the name of the trait is `Trait`.
 This works the same way for entraited modules, only that those already _have_ a module to export from.
 
-Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
+Unimock support for entrait is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates (as long as `mock_api` is provided.).
 
 ```rust
 #[entrait(Foo, mock_api=FooMock)]

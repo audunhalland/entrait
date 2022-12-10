@@ -5,11 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+## [0.5.0] - 2022-12-10
 ### Changed
 - Feature `async-trait` renamed to `boxed-futures`.
 - Feature `use-async-trait` renamed to `use-boxed-futures`.
 - Feature `use-associated-future` renamed to `use-associated-futures`.
-- Upgrade unimock to 0.4.
+- `unimock` optional dependency upgraded to `0.4`.
 - New entrait option `mock_api` to optionally generate a mock setup interface.
 ### Removed
 - `entrait_impl`. Replaced by `#[entrait] impl TraitImpl for MyType {}`.
