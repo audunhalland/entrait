@@ -172,7 +172,7 @@
 //! To enable mock configuration of entraited functions, supply the `mock_api` option, e.g. `mock_api=TraitMock` if the name of the trait is `Trait`.
 //! This works the same way for entraited modules, only that those already _have_ a module to export from.
 //!
-//! Unimock support is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates.
+//! Unimock support for entrait is enabled by passing the `unimock` option to entrait (`#[entrait(Foo, unimock)]`), or turning on the `unimock` _feature_, which makes all entraited functions mockable, even in upstream crates (as long as `mock_api` is provided.).
 //!
 //! ```rust
 //! # use entrait::entrait_export as entrait;
@@ -925,6 +925,7 @@ mod macros {
 /// | ------------------- | ---------------------------- | ------------------ | ----------- | ------------------- |
 /// | `no_deps`           | `bool`                       | `fn`               | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
 /// | `export`            | `bool`                       | `fn`+`mod`         | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
+/// | `mock_api`          | `ident`                      | `fn`+`mod`+`trait` |             | The identifier to use for mock APIs (for libraries that support custom identifiers. The `unimock` library requires this to be explicitly specified. |
 /// | `unimock`           | `bool`                       | `fn`+`mod`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
 /// | `mockall`           | `bool`                       | `fn`+`mod`+`trait` | `false`     | Enable mockall mocks. |
 /// | `box_future`        | `bool`                       | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `boxed-futures` entrait feature. |
