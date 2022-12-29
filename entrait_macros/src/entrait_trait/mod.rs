@@ -367,6 +367,14 @@ impl<'s> DelegatingMethod<'s> {
 
 impl<'s> ToTokens for DelegatingMethod<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
+        // Just "mirroring" all the attributes from
+        // the trait definition to the implementation
+        // is maybe a bit naive..
+        // There's a risk this will not always work in all cases.
+        for attr in &self.trait_fn.attrs {
+            push_tokens!(stream, attr);
+        }
+
         if self.should_inline() {
             quote! { #[inline] }.to_tokens(stream);
         }

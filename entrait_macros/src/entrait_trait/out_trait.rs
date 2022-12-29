@@ -31,6 +31,7 @@ pub fn analyze_trait(item_trait: syn::ItemTrait) -> syn::Result<OutTrait> {
 
                 fns.push(TraitFn {
                     deps: FnDeps::NoDeps,
+                    attrs: method.attrs,
                     entrait_sig,
                     originally_async,
                 });

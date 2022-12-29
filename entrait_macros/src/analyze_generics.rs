@@ -12,6 +12,7 @@ use syn::spanned::Spanned;
 #[derive(Clone)]
 pub struct TraitFn {
     pub deps: FnDeps,
+    pub attrs: Vec<syn::Attribute>,
     pub entrait_sig: EntraitSignature,
     pub originally_async: bool,
 }
@@ -55,6 +56,7 @@ impl<'s> TraitFnAnalyzer<'s> {
         .convert_fn_to_trait_fn();
         Ok(TraitFn {
             deps,
+            attrs: vec![],
             entrait_sig,
             originally_async: input_sig.asyncness.is_some(),
         })

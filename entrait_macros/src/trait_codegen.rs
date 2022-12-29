@@ -80,11 +80,12 @@ impl<'s> TraitCodegen<'s> {
             let opt_associated_fut_decl = &trait_fn
                 .entrait_sig
                 .associated_fut_decl(self.trait_indirection, self.crate_idents);
+            let attrs = &trait_fn.attrs;
             let trait_fn_sig = trait_fn.sig();
 
             quote! {
                 #opt_associated_fut_decl
-
+                #(#attrs)*
                 #trait_fn_sig;
             }
         });

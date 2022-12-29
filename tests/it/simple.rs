@@ -227,3 +227,25 @@ mod module {
     // Note: pub(super) things will never work well, probably.
     // The macro cannot just append a another `::super`, because `pub(super::super)` is invalid syntax.
 }
+
+mod cfg_attributes {
+    use entrait::*;
+
+    #[entrait(mock_api = TraitMock)]
+    trait Trait {
+        fn compiled(&self);
+
+        #[cfg(feature = "always-disabled")]
+        fn not_compiled(&self) -> NonExistentType;
+    }
+
+    impl Trait for () {
+        fn compiled(&self) {}
+    }
+
+    #[test]
+    fn call_compiled() {
+        let app = Impl::new(());
+        app.compiled();
+    }
+}
