@@ -15,12 +15,7 @@ use quote::quote;
 use syn::spanned::Spanned;
 
 use self::input_attr::EntraitSimpleImplAttr;
-
-#[derive(Clone, Copy)]
-pub enum ImplKind {
-    Static,
-    Dyn,
-}
+use self::input_attr::ImplKind;
 
 pub fn output_tokens_for_impl(
     mut attr: EntraitSimpleImplAttr,
@@ -35,14 +30,8 @@ pub fn output_tokens_for_impl(
         items,
     }: InputImpl,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let impl_kind = if attr.dyn_token.is_some() {
-        ImplKind::Dyn
-    } else {
-        ImplKind::Static
-    };
-
     // Using a dyn implementation implies boxed futures.
-    if matches!(impl_kind, ImplKind::Dyn) {
+    if matches!(attr.impl_kind, ImplKind::DynRef) {
         attr.opts.async_strategy = Some(SpanOpt(AsyncStrategy::BoxFuture, self_ty.span()));
     }
 
@@ -58,9 +47,9 @@ pub fn output_tokens_for_impl(
         .filter_map(ImplItem::filter_fn)
         .map(|input_fn| {
             TraitFnAnalyzer {
-                impl_receiver_kind: match impl_kind {
+                impl_receiver_kind: match attr.impl_kind {
                     ImplKind::Static => signature::ImplReceiverKind::StaticImpl,
-                    ImplKind::Dyn => signature::ImplReceiverKind::DynamicImpl,
+                    ImplKind::DynRef => signature::ImplReceiverKind::DynamicImpl,
                 },
                 trait_span,
                 crate_idents: &attr.crate_idents,
@@ -80,9 +69,9 @@ pub fn output_tokens_for_impl(
         items.iter().filter_map(ImplItem::filter_fn),
     );
 
-    let impl_indirection = match impl_kind {
+    let impl_indirection = match attr.impl_kind {
         ImplKind::Static => generics::ImplIndirection::Static { ty: &self_ty },
-        ImplKind::Dyn => generics::ImplIndirection::Dynamic { ty: &self_ty },
+        ImplKind::DynRef => generics::ImplIndirection::Dynamic { ty: &self_ty },
     };
 
     let impl_block = fn_delegation_codegen::FnDelegationCodegen {

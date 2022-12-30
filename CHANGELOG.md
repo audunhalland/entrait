@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
 - `delegate_by=ref` in favor of `delegate_by = Borrow` (deprecation of the latter). This encourages using `AsRef` instead of `Borrow`.
+- `#[entrait(ref)]` on deep delegation impl blocks.
 
 ## [0.5.1] - 2022-12-30
 ### Fixed

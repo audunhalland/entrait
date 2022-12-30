@@ -543,7 +543,7 @@
 //! A small variation of case 4: Use `delegate_by=ref` instead of a custom trait.
 //! This makes the delegation happen using dynamic dispatch.
 //!
-//! The implementation syntax is almost the same as in case 4, only that the entrait attribute must now be `#[entrait(dyn)]`:
+//! The implementation syntax is almost the same as in case 4, only that the entrait attribute must now be `#[entrait(ref)]`:
 //!
 //! ```rust
 //! # mod demo {
@@ -555,7 +555,7 @@
 //!
 //! pub struct MyRepository;
 //!
-//! #[entrait(dyn)]
+//! #[entrait(ref)]
 //! impl RepositoryImpl for MyRepository {
 //!     fn fetch<D>(deps: &D) -> i32 {
 //!         unimplemented!()
@@ -888,8 +888,8 @@ mod macros {
 /// assert_eq!(42, Impl::new(App).foo(21));
 /// ```
 ///
-/// ##### `AsRef` delegation and `dyn`:
-/// The only attribute parameter currently supported on impl blocks is adding the `dyn` keyword, to indicate that the delegation strategy uses dynamic dispatch:
+/// ##### `dyn trait` delegation with `AsRef`:
+/// The only attribute parameter currently supported on impl blocks is adding the `ref` keyword, to indicate that the delegation strategy uses dynamic dispatch through `AsRef`:
 ///
 /// ```rust
 /// # use entrait::*;
@@ -900,7 +900,7 @@ mod macros {
 ///
 /// struct MyType;
 ///
-/// #[entrait(dyn)]
+/// #[entrait(ref)]
 /// impl TraitImpl for MyType {
 ///     fn foo(_deps: &impl std::any::Any, arg: i32) -> i32 {
 ///         arg * 2
@@ -910,7 +910,7 @@ mod macros {
 ///
 /// #### Syntax
 /// ```no_compile
-/// #[entrait(dyn?)]
+/// #[entrait(ref?)]
 /// impl TraitPath for Type {
 ///     ...
 /// }

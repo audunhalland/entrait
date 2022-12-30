@@ -490,7 +490,7 @@ fn main() { /* ... */ }
 A small variation of case 4: Use `delegate_by=ref` instead of a custom trait.
 This makes the delegation happen using dynamic dispatch.
 
-The implementation syntax is almost the same as in case 4, only that the entrait attribute must now be `#[entrait(dyn)]`:
+The implementation syntax is almost the same as in case 4, only that the entrait attribute must now be `#[entrait(ref)]`:
 
 ```rust
 #[entrait(RepositoryImpl, delegate_by=ref)]
@@ -500,7 +500,7 @@ pub trait Repository {
 
 pub struct MyRepository;
 
-#[entrait(dyn)]
+#[entrait(ref)]
 impl RepositoryImpl for MyRepository {
     fn fetch<D>(deps: &D) -> i32 {
         unimplemented!()

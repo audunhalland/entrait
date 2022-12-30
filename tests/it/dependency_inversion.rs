@@ -60,7 +60,7 @@ mod simple_dyn {
 
     struct Implementor2;
 
-    #[entrait(dyn)]
+    #[entrait(ref)]
     impl FoobarImpl for Implementor2 {
         pub fn bar<D>(_: &D) -> u32 {
             1337
@@ -140,7 +140,7 @@ mod async_dyn {
 
     pub struct Implementor2;
 
-    #[entrait(dyn)]
+    #[entrait(ref)]
     impl FoobarImpl for Implementor2 {
         pub async fn bar<D>(_: &D) -> u32 {
             1337

@@ -3,18 +3,25 @@ use crate::opt::*;
 
 use syn::parse::{Parse, ParseStream};
 
-// Input of #[entrait(dyn?)] impl A for B {}
+// Input of #[entrait(ref|dyn?)] impl A for B {}
 pub struct EntraitSimpleImplAttr {
-    pub dyn_token: Option<syn::token::Dyn>,
+    pub impl_kind: ImplKind,
     pub opts: Opts,
     pub crate_idents: CrateIdents,
+}
+
+#[derive(Clone, Copy)]
+pub enum ImplKind {
+    Static,
+    DynRef,
 }
 
 impl Parse for EntraitSimpleImplAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let span = input.span();
 
-        let dyn_token = input.parse()?;
+        let ref_token: Option<syn::token::Ref> = input.parse()?;
+        let dyn_token: Option<syn::token::Dyn> = input.parse()?;
 
         let mut debug = None;
 
@@ -36,7 +43,11 @@ impl Parse for EntraitSimpleImplAttr {
         }
 
         Ok(Self {
-            dyn_token,
+            impl_kind: if dyn_token.is_some() || ref_token.is_some() {
+                ImplKind::DynRef
+            } else {
+                ImplKind::Static
+            },
             opts: Opts {
                 default_span: span,
                 no_deps: None,
