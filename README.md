@@ -128,7 +128,7 @@ assert_eq!(42, Impl::new(Config(21)).double_it());
 The parameter of `use_the_config` is in the first position, so it represents the dependency.
 
 We will notice two interesting things:
-* Functions that depend on `UseTheConfig`, either directly or indirectly, now have only one valid dependency type: `Impl<Config>`<sup>[1](#desugaring-of-concrete-deps)</sup>.
+* Functions that depend on `UseTheConfig`, either directly or indirectly, now have only one valid dependency type: `Impl<Config>`<sup>[1](#case-1-concrete-leaf-dependencies)</sup>.
 * Inside `use_the_config`, we have a `&Config` reference instead of `&Impl<Config>`. This means we cannot call other entraited functions, because they are not implemented for `Config`.
 
 The last point means that a concrete dependency is the end of the line, a leaf in the dependency graph.
