@@ -22,6 +22,8 @@ jobs:
         run: cargo test --doc --features "unimock use-boxed-futures"
       - name: Clippy
         run: cargo clippy --features "unimock use-boxed-futures" -- -D warnings
+      - name: Build examples
+        run: cargo build --all
 
   test-nightly:
     runs-on: ubuntu-latest
