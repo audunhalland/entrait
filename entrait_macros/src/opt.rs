@@ -80,8 +80,14 @@ pub enum AsyncStrategy {
 #[allow(clippy::enum_variant_names)]
 pub enum Delegate {
     BySelf,
-    ByBorrow,
+    ByRef(RefDelegate),
     ByTrait(syn::Ident),
+}
+
+#[derive(Clone)]
+pub enum RefDelegate {
+    AsRef,
+    Borrow,
 }
 
 #[derive(Copy, Clone)]
@@ -182,12 +188,18 @@ fn parse_eq_delegate_by(
 
     input.parse::<syn::token::Eq>()?;
 
+    if input.peek(syn::token::Ref) {
+        let _: syn::token::Ref = input.parse()?;
+
+        return Ok(SpanOpt(Delegate::ByRef(RefDelegate::AsRef), span));
+    }
+
     let ident = input.parse::<syn::Ident>()?;
 
     Ok(SpanOpt(
         match ident.to_string().as_str() {
             "Self" => Delegate::BySelf,
-            "Borrow" => Delegate::ByBorrow,
+            "Borrow" => Delegate::ByRef(RefDelegate::Borrow),
             _ => Delegate::ByTrait(ident),
         },
         span,

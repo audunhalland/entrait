@@ -37,7 +37,7 @@ pub fn output_tokens(
     {
         return Err(syn::Error::new(
             *span,
-            "Cannot use a custom delegating trait without a custom trait to delegate to. Use either `#[entrait(TraitImpl, delegate_by = DelegateTrait)]` or `#[entrait(delegate_by = Borrow)]`",
+            "Cannot use a custom delegating trait without a custom trait to delegate to. Use either `#[entrait(TraitImpl, delegate_by = DelegateTrait)]` or `#[entrait(delegate_by = ref)]`",
         ));
     }
 
@@ -213,7 +213,7 @@ fn gen_impl_delegation_trait_defs(
                 }
             }))
         }
-        Some(SpanOpt(Delegate::ByBorrow, _)) => {
+        Some(SpanOpt(Delegate::ByRef(_), _)) => {
             trait_copy.generics.params.insert(
                 0,
                 syn::parse_quote! {
@@ -298,7 +298,7 @@ fn gen_delegation_method<'s>(
                 },
             }
         }
-        (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByBorrow, _))) => {
+        (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByRef(ref_delegate), _))) => {
             let plus_sync = if contains_async.0 {
                 Some(TokenPair(
                     syn::token::Add::default(),
@@ -307,17 +307,37 @@ fn gen_delegation_method<'s>(
             } else {
                 None
             };
+            let call = match ref_delegate {
+                RefDelegate::AsRef => {
+                    quote! {
+                        <#impl_t as ::#core::convert::AsRef<dyn #impl_trait_ident<#impl_t> #plus_sync>>::as_ref(&*self)
+                            .#fn_ident(self, #(#arguments),*)
+                    }
+                }
+                RefDelegate::Borrow => {
+                    quote! {
+                        <#impl_t as ::#core::borrow::Borrow<dyn #impl_trait_ident<#impl_t> #plus_sync>>::borrow(&*self)
+                            .#fn_ident(self, #(#arguments),*)
+                    }
+                }
+            };
+
             DelegatingMethod {
                 attr,
                 trait_fn,
                 needs_async_move: false,
-                call: quote! {
-                    <#impl_t as ::#core::borrow::Borrow<dyn #impl_trait_ident<#impl_t> #plus_sync>>::borrow(&*self)
-                        .#fn_ident(self, #(#arguments),*)
-                },
+                call,
             }
         }
-        (None, Some(SpanOpt(Delegate::ByBorrow, _))) => DelegatingMethod {
+        (None, Some(SpanOpt(Delegate::ByRef(RefDelegate::AsRef), _))) => DelegatingMethod {
+            attr,
+            trait_fn,
+            needs_async_move: false,
+            call: quote! {
+                self.as_ref().as_ref().#fn_ident(#(#arguments),*)
+            },
+        },
+        (None, Some(SpanOpt(Delegate::ByRef(RefDelegate::Borrow), _))) => DelegatingMethod {
             attr,
             trait_fn,
             needs_async_move: false,
@@ -347,7 +367,7 @@ impl<'s> DelegatingMethod<'s> {
     fn should_inline(&self) -> bool {
         if matches!(
             &self.attr.delegation_kind,
-            Some(SpanOpt(Delegate::ByBorrow, _))
+            Some(SpanOpt(Delegate::ByRef(_), _))
         ) {
             return false;
         }
@@ -435,8 +455,11 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                     self.plus_static()
                 );
             }
-            (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByBorrow, _))) => {
-                self.push_core_borrow_borrow(stream);
+            (
+                Some(ImplTrait(_, impl_trait_ident)),
+                Some(SpanOpt(Delegate::ByRef(ref_delegate), _)),
+            ) => {
+                self.push_core_delegation_trait(stream, ref_delegate);
                 push_tokens!(
                     stream,
                     // Generic arguments:
@@ -459,8 +482,8 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
                 }
                 push_tokens!(stream, self.plus_static());
             }
-            (None, Some(SpanOpt(Delegate::ByBorrow, _))) => {
-                self.push_core_borrow_borrow(stream);
+            (None, Some(SpanOpt(Delegate::ByRef(ref_delegate), _))) => {
+                self.push_core_delegation_trait(stream, ref_delegate);
                 push_tokens!(
                     stream,
                     Lt(self.span),
@@ -485,17 +508,32 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
         }
     }
 
-    fn push_core_borrow_borrow(&self, stream: &mut TokenStream) {
+    fn push_core_delegation_trait(&self, stream: &mut TokenStream, ref_delegate: &RefDelegate) {
         use syn::token::*;
-        push_tokens!(
-            stream,
-            Colon2(self.span),
-            self.generic_idents.crate_idents.core,
-            Colon2(self.span),
-            syn::Ident::new("borrow", self.span),
-            Colon2(self.span),
-            syn::Ident::new("Borrow", self.span)
-        );
+        match ref_delegate {
+            RefDelegate::AsRef => {
+                push_tokens!(
+                    stream,
+                    Colon2(self.span),
+                    self.generic_idents.crate_idents.core,
+                    Colon2(self.span),
+                    syn::Ident::new("convert", self.span),
+                    Colon2(self.span),
+                    syn::Ident::new("AsRef", self.span)
+                );
+            }
+            RefDelegate::Borrow => {
+                push_tokens!(
+                    stream,
+                    Colon2(self.span),
+                    self.generic_idents.crate_idents.core,
+                    Colon2(self.span),
+                    syn::Ident::new("borrow", self.span),
+                    Colon2(self.span),
+                    syn::Ident::new("Borrow", self.span)
+                );
+            }
+        }
     }
 
     fn trait_with_arguments(&self) -> TokenPair<impl ToTokens + '_, impl ToTokens + '_> {

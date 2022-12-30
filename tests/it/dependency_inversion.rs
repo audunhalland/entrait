@@ -52,7 +52,7 @@ mod simple_static {
 mod simple_dyn {
     use entrait::*;
 
-    #[entrait(FoobarImpl, delegate_by = Borrow)]
+    #[entrait(FoobarImpl, delegate_by=ref)]
     trait Foobar {
         fn foo(&self) -> i32;
         fn bar(&self) -> u32;
@@ -75,8 +75,8 @@ mod simple_dyn {
         foobar: Box<dyn FoobarImpl<Self> + Sync>,
     }
 
-    impl std::borrow::Borrow<dyn FoobarImpl<Self>> for App {
-        fn borrow(&self) -> &dyn FoobarImpl<Self> {
+    impl AsRef<dyn FoobarImpl<Self>> for App {
+        fn as_ref(&self) -> &dyn FoobarImpl<Self> {
             self.foobar.as_ref()
         }
     }
@@ -132,7 +132,7 @@ mod async_static {
 mod async_dyn {
     use entrait::*;
 
-    #[entrait(FoobarImpl, delegate_by = Borrow, box_future = true)]
+    #[entrait(FoobarImpl, delegate_by=ref, box_future)]
     pub trait Foobar {
         async fn foo(&self) -> i32;
         async fn bar(&self) -> u32;
@@ -153,8 +153,8 @@ mod async_dyn {
 
     struct App2(Implementor2);
 
-    impl std::borrow::Borrow<dyn FoobarImpl<Self> + Sync> for App2 {
-        fn borrow(&self) -> &(dyn FoobarImpl<Self> + Sync) {
+    impl AsRef<dyn FoobarImpl<Self> + Sync> for App2 {
+        fn as_ref(&self) -> &(dyn FoobarImpl<Self> + Sync) {
             &self.0
         }
     }

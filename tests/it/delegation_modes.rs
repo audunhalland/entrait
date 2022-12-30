@@ -10,15 +10,15 @@ mod borrow_dyn_sync {
         deps.bar();
     }
 
-    #[entrait(delegate_by = Borrow)]
+    #[entrait(delegate_by=ref)]
     trait Bar: 'static {
         fn bar(&self);
     }
 
     struct App(Box<dyn Bar + Sync>);
 
-    impl std::borrow::Borrow<dyn Bar> for App {
-        fn borrow(&self) -> &dyn Bar {
+    impl AsRef<dyn Bar> for App {
+        fn as_ref(&self) -> &dyn Bar {
             self.0.as_ref()
         }
     }
@@ -50,7 +50,7 @@ mod borrow_dyn_use_boxed_futures {
         deps.bar().await;
     }
 
-    #[entrait(delegate_by = Borrow, box_future)]
+    #[entrait(delegate_by=ref, box_future)]
     #[async_trait]
     trait Bar: Sync + 'static {
         async fn bar(&self);
@@ -60,8 +60,8 @@ mod borrow_dyn_use_boxed_futures {
 
     struct App(Baz);
 
-    impl std::borrow::Borrow<dyn Bar> for App {
-        fn borrow(&self) -> &dyn Bar {
+    impl AsRef<dyn Bar> for App {
+        fn as_ref(&self) -> &dyn Bar {
             &self.0
         }
     }

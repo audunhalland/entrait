@@ -385,17 +385,17 @@
 //!
 //! What the attribute does in this case, is just to generate the correct blanket implementations of the trait: _delegation_ and _mocks_.
 //!
-//! To use with some `App`, just implement the trait for it.
+//! To use with some `App`, the app type itself should implement the trait.
 //!
 //!
 //! ### Case 3: Hand-written trait as a leaf dependency using _dynamic dispatch_
 //! Sometimes it might be desirable to have a delegation that involves dynamic dispatch.
 //! Entrait has a `delegate_by =` option, where you can pass an alternative trait to use as part of the delegation strategy.
-//! To enable dynamic dispatch, use [Borrow](::core::borrow::Borrow):
+//! To enable dynamic dispatch, use [`ref`](::core::convert::AsRef):
 //!
 //! ```rust
 //! # use entrait::*;
-//! #[entrait(delegate_by = Borrow)]
+//! #[entrait(delegate_by=ref)]
 //! trait ReadConfig: 'static {
 //!     fn read_config(&self) -> &str;
 //! }
@@ -407,16 +407,16 @@
 //! ```rust
 //! # use ::entrait::Impl;
 //! # trait ReadConfig: 'static { fn read_config(&self) -> &str; }
-//! impl<T: ::core::borrow::Borrow<dyn ReadConfig> + 'static> ReadConfig for Impl<T> {
+//! impl<T: ::core::convert::AsRef<dyn ReadConfig> + 'static> ReadConfig for Impl<T> {
 //!     fn read_config(&self) -> &str {
-//!         self.as_ref().borrow().read_config()
+//!         self.as_ref().as_ref().read_config()
 //!     }
 //! }
 //! ```
 //!
 //! </details>
 //!
-//! To use this together with some `App`, implement `Borrow<dyn ReadConfig>` for it.
+//! To use this together with some `App`, it should implement the [`AsRef<dyn ReadConfig>`](::core::convert::AsRef) trait.
 //!
 //!
 //! ### Case 4: Truly inverted _internal dependencies_ - static dispatch
@@ -540,7 +540,7 @@
 //!
 //!
 //! ### Case 5: Truly inverted internal dependencies - dynamic dispatch
-//! A small variation of case 4: Use `delegate_by = Borrow` instead of a custom trait.
+//! A small variation of case 4: Use `delegate_by=ref` instead of a custom trait.
 //! This makes the delegation happen using dynamic dispatch.
 //!
 //! The implementation syntax is almost the same as in case 4, only that the entrait attribute must now be `#[entrait(dyn)]`:
@@ -548,7 +548,7 @@
 //! ```rust
 //! # mod demo {
 //! # use entrait::*;
-//! #[entrait(RepositoryImpl, delegate_by = Borrow)]
+//! #[entrait(RepositoryImpl, delegate_by=ref)]
 //! pub trait Repository {
 //!     fn fetch(&self) -> i32;
 //! }
@@ -564,7 +564,7 @@
 //! # } // demo
 //! ```
 //!
-//! The app must now implement `Borrow<dyn RepositoryImpl<Self>>`.
+//! The app must now implement [`AsRef<dyn RepositoryImpl<Self>>`](::core::convert::AsRef).
 //!
 //!
 //!
@@ -833,10 +833,10 @@ mod macros {
 /// ```
 ///
 /// ##### Example 3
-/// Leaf dependency, dynamic dispatch (delegation bound: `T: Borrow<dyn Foo>`):
+/// Leaf dependency, dynamic dispatch (delegation bound: `T: AsRef<dyn Foo>`):
 /// ```rust
 /// # use entrait::*;
-/// #[entrait(delegate_by = Borrow)]
+/// #[entrait(delegate_by=ref)]
 /// trait Foo {}
 /// ```
 ///
@@ -888,12 +888,12 @@ mod macros {
 /// assert_eq!(42, Impl::new(App).foo(21));
 /// ```
 ///
-/// ##### `Borrow` delegation and `dyn`:
+/// ##### `AsRef` delegation and `dyn`:
 /// The only attribute parameter currently supported on impl blocks is adding the `dyn` keyword, to indicate that the delegation strategy uses dynamic dispatch:
 ///
 /// ```rust
 /// # use entrait::*;
-/// #[entrait(TraitImpl, delegate_by = Borrow)]
+/// #[entrait(TraitImpl, delegate_by=ref)]
 /// trait Trait {
 ///     fn foo(&self, arg: i32) -> i32;
 /// }
@@ -921,16 +921,16 @@ mod macros {
 /// # Options
 /// An option can be just `$option` or `$option = $value`. An option without value means `true`.
 ///
-/// | Option              | Type                         | Target             | Default     | Description         |
-/// | ------------------- | ---------------------------- | ------------------ | ----------- | ------------------- |
-/// | `no_deps`           | `bool`                       | `fn`               | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
-/// | `export`            | `bool`                       | `fn`+`mod`         | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
-/// | `mock_api`          | `ident`                      | `fn`+`mod`+`trait` |             | The identifier to use for mock APIs (for libraries that support custom identifiers. The `unimock` library requires this to be explicitly specified. |
-/// | `unimock`           | `bool`                       | `fn`+`mod`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
-/// | `mockall`           | `bool`                       | `fn`+`mod`+`trait` | `false`     | Enable mockall mocks. |
-/// | `box_future`        | `bool`                       | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `boxed-futures` entrait feature. |
-/// | `associated_future` | `bool`                       | `fn`+`mod`+`trait` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(type_alias_impl_trait)`. |
-/// | `delegate_by`       | `Self`/`Borrow`/custom ident | `trait`            | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `Borrow` generates a [`T: Borrow<dyn Trait>`](::core::borrow::Borrow) bound. Any other value generates a new trait with that name which controls the delegation. |
+/// | Option              | Type                      | Target             | Default     | Description         |
+/// | ------------------- | ------------------------- | ------------------ | ----------- | ------------------- |
+/// | `no_deps`           | `bool`                    | `fn`               | `false`     | Disables the dependency parameter, so that the first parameter is just interpreted as a normal function parameter. Useful for reducing noise in some situations. |
+/// | `export`            | `bool`                    | `fn`+`mod`         | `false`     | If mocks are generated, exports these mocks even in release builds. Only relevant for libraries. |
+/// | `mock_api`          | `ident`                   | `fn`+`mod`+`trait` |             | The identifier to use for mock APIs (for libraries that support custom identifiers. The `unimock` library requires this to be explicitly specified. |
+/// | `unimock`           | `bool`                    | `fn`+`mod`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
+/// | `mockall`           | `bool`                    | `fn`+`mod`+`trait` | `false`     | Enable mockall mocks. |
+/// | `box_future`        | `bool`                    | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `boxed-futures` entrait feature. |
+/// | `associated_future` | `bool`                    | `fn`+`mod`+`trait` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(type_alias_impl_trait)`. |
+/// | `delegate_by`       | `Self`/`ref`/custom ident | `trait`            | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `ref` generates a [`T: AsRef<dyn Trait>`](::core::convert::AsRef) bound. `Borrow` is deprecated and uses the [core::borrow::Borrow] trait. Any other value generates a new trait with that name which controls the delegation. |
 ///
 /// [^1]: Enabled by default by turning on the `unimock` cargo feature.
 ///

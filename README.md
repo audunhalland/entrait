@@ -358,16 +358,16 @@ impl<T: System> System for Impl<T> {
 
 What the attribute does in this case, is just to generate the correct blanket implementations of the trait: _delegation_ and _mocks_.
 
-To use with some `App`, just implement the trait for it.
+To use with some `App`, the app type itself should implement the trait.
 
 
 #### Case 3: Hand-written trait as a leaf dependency using _dynamic dispatch_
 Sometimes it might be desirable to have a delegation that involves dynamic dispatch.
 Entrait has a `delegate_by =` option, where you can pass an alternative trait to use as part of the delegation strategy.
-To enable dynamic dispatch, use Borrow:
+To enable dynamic dispatch, use `ref`:
 
 ```rust
-#[entrait(delegate_by = Borrow)]
+#[entrait(delegate_by=ref)]
 trait ReadConfig: 'static {
     fn read_config(&self) -> &str;
 }
@@ -377,16 +377,16 @@ trait ReadConfig: 'static {
 <summary>🔬 <strong>Inspect the generated code</strong> 🔬</summary>
 
 ```rust
-impl<T: ::core::borrow::Borrow<dyn ReadConfig> + 'static> ReadConfig for Impl<T> {
+impl<T: ::core::convert::AsRef<dyn ReadConfig> + 'static> ReadConfig for Impl<T> {
     fn read_config(&self) -> &str {
-        self.as_ref().borrow().read_config()
+        self.as_ref().as_ref().read_config()
     }
 }
 ```
 
 </details>
 
-To use this together with some `App`, implement `Borrow<dyn ReadConfig>` for it.
+To use this together with some `App`, it should implement the `AsRef<dyn ReadConfig>` trait.
 
 
 #### Case 4: Truly inverted _internal dependencies_ - static dispatch
@@ -487,13 +487,13 @@ fn main() { /* ... */ }
 
 
 #### Case 5: Truly inverted internal dependencies - dynamic dispatch
-A small variation of case 4: Use `delegate_by = Borrow` instead of a custom trait.
+A small variation of case 4: Use `delegate_by=ref` instead of a custom trait.
 This makes the delegation happen using dynamic dispatch.
 
 The implementation syntax is almost the same as in case 4, only that the entrait attribute must now be `#[entrait(dyn)]`:
 
 ```rust
-#[entrait(RepositoryImpl, delegate_by = Borrow)]
+#[entrait(RepositoryImpl, delegate_by=ref)]
 pub trait Repository {
     fn fetch(&self) -> i32;
 }
@@ -508,7 +508,7 @@ impl RepositoryImpl for MyRepository {
 }
 ```
 
-The app must now implement `Borrow<dyn RepositoryImpl<Self>>`.
+The app must now implement `AsRef<dyn RepositoryImpl<Self>>`.
 
 
 
