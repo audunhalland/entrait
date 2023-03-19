@@ -75,7 +75,7 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
         let opt_self_scoping = if let FnInputMode::ImplBlock(ty) = self.fn_input_mode {
             Some(TokenPair(
                 syn::token::SelfType(ty.span()),
-                syn::token::Colon2(ty.span()),
+                syn::token::PathSep(ty.span()),
             ))
         } else {
             None

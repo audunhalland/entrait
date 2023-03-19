@@ -24,7 +24,7 @@ pub fn analyze_trait(item_trait: syn::ItemTrait) -> syn::Result<OutTrait> {
 
     for item in item_trait.items.into_iter() {
         match item {
-            syn::TraitItem::Method(method) => {
+            syn::TraitItem::Fn(method) => {
                 let originally_async = method.sig.asyncness.is_some();
 
                 let entrait_sig = EntraitSignature::new(method.sig);

@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{spanned::Spanned, ImplItemMethod, ItemTrait};
+use syn::{spanned::Spanned, ImplItemFn, ItemTrait};
 
 use crate::{
     generics::TraitIndirection,
@@ -28,6 +28,7 @@ fn process_trait(item_trait: syn::ItemTrait) -> syn::Result<TokenStream> {
         vis,
         unsafety,
         auto_token,
+        restriction: _,
         trait_token,
         ident,
         generics,
@@ -40,7 +41,7 @@ fn process_trait(item_trait: syn::ItemTrait) -> syn::Result<TokenStream> {
 
     for item in items.into_iter() {
         match item {
-            syn::TraitItem::Method(method) if method.sig.asyncness.is_some() => {
+            syn::TraitItem::Fn(method) if method.sig.asyncness.is_some() => {
                 let (sig, trait_indirection) = convert_sig(method.sig, trait_span);
                 let fut = sig.associated_fut_decl(trait_indirection, &crate_idents);
                 let trait_fn_sig = &sig.sig;
@@ -84,8 +85,8 @@ fn process_impl(item_impl: syn::ItemImpl) -> syn::Result<TokenStream> {
         let crate_idents = CrateIdents::new(impl_token.span());
         for item in items.into_iter() {
             match item {
-                syn::ImplItem::Method(method) if method.sig.asyncness.is_some() => {
-                    let ImplItemMethod {
+                syn::ImplItem::Fn(method) if method.sig.asyncness.is_some() => {
+                    let ImplItemFn {
                         attrs,
                         vis,
                         defaultness,

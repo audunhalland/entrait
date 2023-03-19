@@ -180,9 +180,9 @@ impl<'g, 'c> quote::ToTokens for ImplPath<'g, 'c> {
 
         push_tokens!(
             stream,
-            syn::token::Colon2(span),
+            syn::token::PathSep(span),
             self.0.crate_idents.entrait,
-            syn::token::Colon2(span),
+            syn::token::PathSep(span),
             self.0.impl_self,
             syn::token::Lt(span),
             self.0.impl_t,
@@ -220,7 +220,7 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
                 if self.takes_self_by_value.0 {
                     push_tokens!(
                         stream,
-                        syn::token::Add::default(),
+                        syn::token::Plus::default(),
                         // In case T is not a reference, it has to be Send
                         syn::Ident::new("Send", proc_macro2::Span::call_site())
                     );
@@ -229,7 +229,7 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
                 if self.use_associated_future.0 {
                     push_tokens!(
                         stream,
-                        syn::token::Add::default(),
+                        syn::token::Plus::default(),
                         // Deps must be 'static for zero-cost futures to work
                         syn::Lifetime::new("'static", proc_macro2::Span::call_site())
                     );
@@ -368,7 +368,7 @@ fn push_impl_t_bounds(
     let mut bound_punctuator = Punctuator::new(
         stream,
         TokenPair(bound_param, syn::token::Colon(span)),
-        syn::token::Add(span),
+        syn::token::Plus(span),
         EmptyToken,
     );
 

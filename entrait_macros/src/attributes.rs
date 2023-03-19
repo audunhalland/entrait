@@ -63,9 +63,9 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
 
         push_tokens!(
             stream,
-            Colon2::default(),
+            PathSep::default(),
             self.crate_idents.entrait,
-            Colon2::default(),
+            PathSep::default(),
             self.crate_idents.entrait
         );
         Paren::default().surround(stream, |stream| {
@@ -112,11 +112,11 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
 
         push_tokens!(
             stream,
-            Colon2(span),
+            PathSep(span),
             self.crate_idents.entrait,
-            Colon2(span),
+            PathSep(span),
             self.crate_idents.__unimock,
-            Colon2(span),
+            PathSep(span),
             self.crate_idents.unimock
         );
 
@@ -129,9 +129,9 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
                     stream,
                     Ident::new("prefix", span),
                     Eq(span),
-                    Colon2(span),
+                    PathSep(span),
                     self.crate_idents.entrait,
-                    Colon2(span),
+                    PathSep(span),
                     self.crate_idents.__unimock
                 );
             });
@@ -221,9 +221,9 @@ impl ToTokens for MockallAutomockParams {
         let span = self.span;
         push_tokens!(
             stream,
-            syn::token::Colon2(span),
+            syn::token::PathSep(span),
             syn::Ident::new("mockall", span),
-            syn::token::Colon2(span),
+            syn::token::PathSep(span),
             syn::Ident::new("automock", span)
         );
     }
@@ -264,21 +264,21 @@ impl<'a> ToTokens for AsyncTraitParams<'a> {
         if self.use_static {
             push_tokens!(
                 stream,
-                syn::token::Colon2(span),
+                syn::token::PathSep(span),
                 self.crate_idents.entrait,
-                syn::token::Colon2(span),
+                syn::token::PathSep(span),
                 syn::Ident::new("static_async", span),
-                syn::token::Colon2(span),
+                syn::token::PathSep(span),
                 syn::Ident::new("async_trait", span)
             );
         } else {
             push_tokens!(
                 stream,
-                syn::token::Colon2(span),
+                syn::token::PathSep(span),
                 self.crate_idents.entrait,
-                syn::token::Colon2(span),
+                syn::token::PathSep(span),
                 syn::Ident::new("__async_trait", span),
-                syn::token::Colon2(span),
+                syn::token::PathSep(span),
                 syn::Ident::new("async_trait", span)
             );
         }

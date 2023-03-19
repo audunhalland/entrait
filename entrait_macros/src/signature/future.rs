@@ -45,7 +45,7 @@ impl EntraitSignature {
         for fut_lifetime in self.et_lifetimes.iter().filter(|lt| !lt.user_provided.0) {
             generics
                 .params
-                .push(syn::GenericParam::Lifetime(syn::LifetimeDef {
+                .push(syn::GenericParam::Lifetime(syn::LifetimeParam {
                     attrs: vec![],
                     lifetime: fut_lifetime.lifetime.clone(),
                     colon_token: None,
@@ -227,8 +227,8 @@ impl<'s> ToTokens for FutImplBounds<'s> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let mut punctuator = Punctuator::new(
             stream,
-            syn::token::Add::default(),
-            syn::token::Add::default(),
+            syn::token::Plus::default(),
+            syn::token::Plus::default(),
             EmptyToken,
         );
 

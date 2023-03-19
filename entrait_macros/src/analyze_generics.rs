@@ -288,7 +288,7 @@ impl GenericsAnalyzer {
 }
 
 fn extract_trait_bounds(
-    bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
+    bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Plus>,
 ) -> Vec<syn::TypeParamBound> {
     bounds.iter().cloned().collect()
 }

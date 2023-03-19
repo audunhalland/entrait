@@ -575,6 +575,18 @@ mod module_async {
     }
 }
 
+mod module_generic {
+    use entrait::*;
+
+    #[entrait(M1)]
+    mod m1 {
+        use std::any::Any;
+
+        pub fn a<T>(_deps: &impl Any, arg: T) {}
+        pub fn b<U>(_deps: &impl Any, arg: U) {}
+    }
+}
+
 #[test]
 fn level_without_mock_support() {
     use entrait::*;

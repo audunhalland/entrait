@@ -134,6 +134,12 @@ mod test_entrait_for_trait {
         fn generic_param(&self, arg: T) -> i32;
     }
 
+    #[entrait]
+    trait Generic2<T> {
+        fn generic_return<U: 'static>(&self, arg: i32) -> (T, U);
+        fn generic_params<U: 'static>(&self, arg0: T, arg1: U) -> i32;
+    }
+
     impl Plain for () {
         fn method0(&self, arg: i32) -> i32 {
             1337
