@@ -111,7 +111,7 @@ pub enum Supertraits {
     None,
     Some {
         colon_token: syn::token::Colon,
-        bounds: syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Add>,
+        bounds: syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Plus>,
     },
 }
 

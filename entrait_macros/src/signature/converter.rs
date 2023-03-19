@@ -113,11 +113,18 @@ impl<'a> SignatureConverter<'a> {
         span: Span,
         reference: Option<(syn::token::And, Option<syn::Lifetime>)>,
     ) -> syn::FnArg {
+        let ty = match reference {
+            Some(_) => syn::parse_quote!(&Self),
+            None => syn::parse_quote!(Self),
+        };
+
         syn::FnArg::Receiver(syn::Receiver {
             attrs: vec![],
             reference,
             mutability: None,
             self_token: syn::token::SelfValue(span),
+            colon_token: None,
+            ty,
         })
     }
 

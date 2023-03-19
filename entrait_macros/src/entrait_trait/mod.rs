@@ -43,7 +43,7 @@ pub fn output_tokens(
 
     let trait_ident_span = item_trait.ident.span();
     let contains_async = ContainsAsync(item_trait.items.iter().any(|item| match item {
-        syn::TraitItem::Method(method) => method.sig.asyncness.is_some(),
+        syn::TraitItem::Fn(method) => method.sig.asyncness.is_some(),
         _ => false,
     }));
     let impl_attrs = item_trait
@@ -51,7 +51,7 @@ pub fn output_tokens(
         .iter()
         .filter(|attr| {
             matches!(
-                attr.path.segments.last(),
+                attr.path().segments.last(),
                 Some(last_segment) if last_segment.ident == "async_trait"
             )
         })
@@ -301,7 +301,7 @@ fn gen_delegation_method<'s>(
         (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByRef(ref_delegate), _))) => {
             let plus_sync = if contains_async.0 {
                 Some(TokenPair(
-                    syn::token::Add::default(),
+                    syn::token::Plus::default(),
                     syn::Ident::new("Sync", Span::call_site()),
                 ))
             } else {
@@ -514,22 +514,22 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
             RefDelegate::AsRef => {
                 push_tokens!(
                     stream,
-                    Colon2(self.span),
+                    PathSep(self.span),
                     self.generic_idents.crate_idents.core,
-                    Colon2(self.span),
+                    PathSep(self.span),
                     syn::Ident::new("convert", self.span),
-                    Colon2(self.span),
+                    PathSep(self.span),
                     syn::Ident::new("AsRef", self.span)
                 );
             }
             RefDelegate::Borrow => {
                 push_tokens!(
                     stream,
-                    Colon2(self.span),
+                    PathSep(self.span),
                     self.generic_idents.crate_idents.core,
-                    Colon2(self.span),
+                    PathSep(self.span),
                     syn::Ident::new("borrow", self.span),
-                    Colon2(self.span),
+                    PathSep(self.span),
                     syn::Ident::new("Borrow", self.span)
                 );
             }
@@ -546,21 +546,21 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
 
     fn plus_static(&self) -> TokenPair<impl ToTokens, impl ToTokens> {
         TokenPair(
-            syn::token::Add(self.span),
+            syn::token::Plus(self.span),
             syn::Lifetime::new("'static", self.span),
         )
     }
 
     fn plus_send(&self) -> TokenPair<impl ToTokens, impl ToTokens> {
         TokenPair(
-            syn::token::Add(self.span),
+            syn::token::Plus(self.span),
             syn::Ident::new("Send", self.span),
         )
     }
 
     fn plus_sync(&self) -> TokenPair<impl ToTokens, impl ToTokens> {
         TokenPair(
-            syn::token::Add(self.span),
+            syn::token::Plus(self.span),
             syn::Ident::new("Sync", self.span),
         )
     }

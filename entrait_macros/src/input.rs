@@ -409,14 +409,13 @@ fn find_and_remove_derive_impl(
     attributes: &mut Vec<syn::Attribute>,
 ) -> syn::Result<Option<DeriveImplTraitPath>> {
     let index = attributes.iter().position(|attribute| {
-        attribute.path.segments.len() == 1
-            && attribute.path.segments.first().unwrap().ident == "derive_impl"
+        attribute.path().segments.len() == 1
+            && attribute.path().segments.first().unwrap().ident == "derive_impl"
     });
 
     if let Some(index) = index {
-        let attribute = attributes.remove(index);
-        let path = syn::parse2::<DeriveImplTraitPath>(attribute.tokens)?;
-        Ok(Some(path))
+        let _attribute = attributes.remove(index);
+        panic!("TODO: Remove this code");
     } else {
         Ok(None)
     }
