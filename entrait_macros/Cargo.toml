@@ -1,15 +1,17 @@
 [package]
 name = "entrait_macros"
 version = "0.5.2"
-authors = ["Audun Halland <audun.halldand@pm.me>"]
+authors = ["Audun Halland <audun.halland@pm.me>"]
 edition = "2021"
+rust-version = "1.60"
 license = "MIT"
 description = "Procedural macros reexported by entrait"
 repository = "https://github.com/audunhalland/entrait/"
-keywords = []
+keywords = ["macro"]
+categories = ["rust-patterns"]
 
 [dependencies]
-syn = { version = "2", features = ["full", "visit-mut"] }
+syn = { version = "2.0.8", features = ["full", "visit-mut"] }
 quote = "1"
 proc-macro2 = "1"
 
