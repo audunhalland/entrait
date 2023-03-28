@@ -26,7 +26,7 @@ unimock = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
-feignhttp = "0.4"
+feignhttp = "0.5"
 mockall = "0.11"
 tracing = "0.1"
 
