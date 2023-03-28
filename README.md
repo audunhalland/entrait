@@ -364,7 +364,7 @@ To use with some `App`, the app type itself should implement the trait.
 #### Case 3: Hand-written trait as a leaf dependency using _dynamic dispatch_
 Sometimes it might be desirable to have a delegation that involves dynamic dispatch.
 Entrait has a `delegate_by =` option, where you can pass an alternative trait to use as part of the delegation strategy.
-To enable dynamic dispatch, use `ref`:
+To enable dynamic dispatch, use [`ref`](https://doc.rust-lang.org/stable/core/convert/trait.AsRef.html):
 
 ```rust
 #[entrait(delegate_by=ref)]
@@ -386,7 +386,7 @@ impl<T: ::core::convert::AsRef<dyn ReadConfig> + 'static> ReadConfig for Impl<T>
 
 </details>
 
-To use this together with some `App`, it should implement the `AsRef<dyn ReadConfig>` trait.
+To use this together with some `App`, it should implement the [`AsRef<dyn ReadConfig>`](https://doc.rust-lang.org/stable/core/convert/trait.AsRef.html) trait.
 
 
 #### Case 4: Truly inverted _internal dependencies_ - static dispatch
@@ -508,7 +508,7 @@ impl RepositoryImpl for MyRepository {
 }
 ```
 
-The app must now implement `AsRef<dyn RepositoryImpl<Self>>`.
+The app must now implement [`AsRef<dyn RepositoryImpl<Self>>`](https://doc.rust-lang.org/stable/core/convert/trait.AsRef.html).
 
 
 
