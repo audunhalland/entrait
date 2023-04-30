@@ -15,6 +15,7 @@ pub struct OutTrait {
     pub generics: TraitGenerics,
     pub ident: syn::Ident,
     pub supertraits: trait_codegen::Supertraits,
+    pub associated_types: Vec<syn::TraitItemType>,
     pub fns: Vec<TraitFn>,
 }
 
@@ -71,6 +72,7 @@ pub fn analyze_trait(item_trait: syn::ItemTrait) -> syn::Result<OutTrait> {
                 .unwrap_or_default(),
         },
         supertraits,
+        associated_types,
         fns,
     })
 }

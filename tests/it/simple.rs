@@ -255,3 +255,14 @@ mod cfg_attributes {
         app.compiled();
     }
 }
+
+mod assoc_type {
+    use entrait::*;
+
+    #[entrait(mock_api = AssocMock)]
+    trait Assoc {
+        type Type;
+
+        fn get(&self) -> &Self::Type;
+    }
+}

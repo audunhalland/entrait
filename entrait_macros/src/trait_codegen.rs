@@ -18,27 +18,40 @@ pub struct TraitCodegen<'s> {
     pub trait_dependency_mode: &'s TraitDependencyMode<'s, 's>,
 }
 
+pub struct TraitDef<'a> {
+    pub visibility: &'a syn::Visibility,
+    pub trait_ident: &'a syn::Ident,
+    pub trait_generics: &'a generics::TraitGenerics,
+    pub supertraits: &'a Supertraits,
+    pub associated_types: &'a [syn::TraitItemType],
+    pub trait_fns: &'a [TraitFn],
+    pub fn_input_mode: &'a FnInputMode<'a>,
+}
+
 impl<'s> TraitCodegen<'s> {
     pub fn gen_trait_def(
         &self,
-        visibility: &syn::Visibility,
-        trait_ident: &syn::Ident,
-        trait_generics: &generics::TraitGenerics,
-        supertraits: &Supertraits,
-        trait_fns: &[TraitFn],
-        fn_input_mode: &FnInputMode<'_>,
+        TraitDef {
+            visibility,
+            trait_ident,
+            trait_generics,
+            supertraits,
+            associated_types,
+            trait_fns,
+            fn_input_mode,
+        }: TraitDef<'_>,
     ) -> syn::Result<TokenStream> {
         let span = trait_ident.span();
 
         let opt_unimock_attr = match self.opts.default_option(self.opts.unimock, false) {
             SpanOpt(true, span) => Some(attributes::ExportGatedAttr {
                 params: attributes::UnimockAttrParams {
-                    trait_ident,
+                    trait_ident: trait_ident,
                     mock_api: self.opts.mock_api.as_ref(),
                     trait_indirection: self.trait_indirection,
                     crate_idents: self.crate_idents,
-                    trait_fns,
-                    fn_input_mode,
+                    trait_fns: trait_fns,
+                    fn_input_mode: fn_input_mode,
                     span,
                 },
                 opts: self.opts,
@@ -100,6 +113,7 @@ impl<'s> TraitCodegen<'s> {
             #opt_async_trait_attr
             #literal_attrs
             #trait_visibility trait #trait_ident #params #supertraits #where_clause {
+                #(#associated_types)*
                 #(#fn_defs)*
             }
         })

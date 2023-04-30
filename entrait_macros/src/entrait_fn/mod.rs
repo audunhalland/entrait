@@ -15,6 +15,7 @@ use crate::input::{InputFn, InputMod, ModItem};
 use crate::signature;
 use crate::trait_codegen::Supertraits;
 use crate::trait_codegen::TraitCodegen;
+use crate::trait_codegen::TraitDef;
 use input_attr::*;
 
 use proc_macro2::TokenStream;
@@ -50,14 +51,15 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         trait_indirection: generics::TraitIndirection::Plain,
         trait_dependency_mode: &trait_dependency_mode,
     }
-    .gen_trait_def(
-        &attr.trait_visibility,
-        &attr.trait_ident,
-        &trait_generics,
-        &Supertraits::None,
-        &trait_fns,
-        &fn_input_mode,
-    )?;
+    .gen_trait_def(TraitDef {
+        visibility: &attr.trait_visibility,
+        trait_ident: &attr.trait_ident,
+        trait_generics: &trait_generics,
+        supertraits: &Supertraits::None,
+        associated_types: &[],
+        trait_fns: &trait_fns,
+        fn_input_mode: &fn_input_mode,
+    })?;
     let impl_block = fn_delegation_codegen::FnDelegationCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
@@ -122,14 +124,15 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         trait_indirection: generics::TraitIndirection::Plain,
         trait_dependency_mode: &trait_dependency_mode,
     }
-    .gen_trait_def(
-        &attr.trait_visibility,
-        &attr.trait_ident,
-        &trait_generics,
-        &Supertraits::None,
-        &trait_fns,
-        &fn_input_mode,
-    )?;
+    .gen_trait_def(TraitDef {
+        visibility: &attr.trait_visibility,
+        trait_ident: &attr.trait_ident,
+        trait_generics: &trait_generics,
+        supertraits: &Supertraits::None,
+        associated_types: &[],
+        trait_fns: &trait_fns,
+        fn_input_mode: &fn_input_mode,
+    })?;
     let impl_block = fn_delegation_codegen::FnDelegationCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,

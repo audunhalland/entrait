@@ -18,6 +18,7 @@ use crate::opt::*;
 use crate::token_util::*;
 use crate::trait_codegen::Supertraits;
 use crate::trait_codegen::TraitCodegen;
+use crate::trait_codegen::TraitDef;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -67,6 +68,7 @@ pub fn output_tokens(
         TraitDependencyMode::Generic(idents) => idents,
         _ => panic!(),
     };
+    let impl_t = &generic_idents.impl_t;
 
     let mut impl_async_trait_attr =
         attributes::opt_async_trait_attr(&attr.opts, &attr.crate_idents, out_trait.fns.iter());
@@ -83,14 +85,15 @@ pub fn output_tokens(
         trait_indirection: generics::TraitIndirection::Trait,
         trait_dependency_mode: &trait_dependency_mode,
     }
-    .gen_trait_def(
-        &out_trait.vis,
-        &out_trait.ident,
-        &out_trait.generics,
-        &out_trait.supertraits,
-        &out_trait.fns,
-        &FnInputMode::RawTrait(LiteralAttrs(&out_trait.attrs)),
-    )?;
+    .gen_trait_def(TraitDef {
+        visibility: &out_trait.vis,
+        trait_ident: &out_trait.ident,
+        trait_generics: &out_trait.generics,
+        supertraits: &out_trait.supertraits,
+        associated_types: &out_trait.associated_types,
+        trait_fns: &out_trait.fns,
+        fn_input_mode: &FnInputMode::RawTrait(LiteralAttrs(&out_trait.attrs)),
+    })?;
 
     let trait_ident = &out_trait.ident;
     let params = out_trait.generics.impl_params_from_idents(
@@ -111,7 +114,13 @@ pub fn output_tokens(
         span: trait_ident_span,
     };
 
-    let impl_assoc_types = out_trait.fns.iter().filter_map(|trait_fn| {
+    let impl_associated_types = out_trait.associated_types.iter().map(|assoc_type| {
+        let ident = &assoc_type.ident;
+        quote! {
+            type #ident = <#impl_t as #trait_ident>::#ident;
+        }
+    });
+    let impl_future_assoc_types = out_trait.fns.iter().filter_map(|trait_fn| {
         trait_fn
             .entrait_sig
             .associated_fut_impl(generics::TraitIndirection::Plain, &attr.crate_idents)
@@ -130,7 +139,8 @@ pub fn output_tokens(
         #(#impl_attrs)*
         #impl_async_trait_attr
         impl #params #trait_ident #args for #self_ty #where_clause {
-            #(#impl_assoc_types)*
+            #(#impl_associated_types)*
+            #(#impl_future_assoc_types)*
             #(#method_items)*
         }
     })
@@ -193,17 +203,18 @@ fn gen_impl_delegation_trait_defs(
                 trait_indirection: generics::TraitIndirection::StaticImpl,
                 trait_dependency_mode,
             }
-            .gen_trait_def(
-                &trait_copy.vis,
-                &trait_copy.ident,
-                &trait_copy.generics,
-                &Supertraits::Some {
+            .gen_trait_def(TraitDef {
+                visibility: &trait_copy.vis,
+                trait_ident: &trait_copy.ident,
+                trait_generics: &trait_copy.generics,
+                supertraits: &Supertraits::Some {
                     colon_token: syn::token::Colon::default(),
                     bounds: syn::parse_quote! { 'static },
                 },
-                &trait_copy.fns,
-                &FnInputMode::RawTrait(LiteralAttrs(&[])),
-            )?;
+                associated_types: &[],
+                trait_fns: &trait_copy.fns,
+                fn_input_mode: &FnInputMode::RawTrait(LiteralAttrs(&[])),
+            })?;
 
             Ok(Some(quote! {
                 #trait_def
@@ -246,17 +257,18 @@ fn gen_impl_delegation_trait_defs(
                 trait_indirection: generics::TraitIndirection::DynamicImpl,
                 trait_dependency_mode,
             }
-            .gen_trait_def(
-                &trait_copy.vis,
-                &trait_copy.ident,
-                &trait_copy.generics,
-                &Supertraits::Some {
+            .gen_trait_def(TraitDef {
+                visibility: &trait_copy.vis,
+                trait_ident: &trait_copy.ident,
+                trait_generics: &trait_copy.generics,
+                supertraits: &Supertraits::Some {
                     colon_token: syn::token::Colon::default(),
                     bounds: syn::parse_quote! { 'static },
                 },
-                &trait_copy.fns,
-                &FnInputMode::RawTrait(LiteralAttrs(&[])),
-            )?;
+                associated_types: &[],
+                trait_fns: &trait_copy.fns,
+                fn_input_mode: &FnInputMode::RawTrait(LiteralAttrs(&[])),
+            })?;
 
             Ok(Some(trait_def))
         }
