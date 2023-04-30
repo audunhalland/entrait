@@ -13,6 +13,10 @@
     any(feature = "nightly-tests", feature = "use-associated-futures"),
     feature(closure_track_caller)
 )]
+#![cfg_attr(
+    any(feature = "nightly-tests", feature = "use-associated-futures"),
+    feature(impl_trait_in_assoc_type)
+)]
 
 mod delegation_modes;
 mod dependency_inversion;
