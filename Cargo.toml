@@ -22,7 +22,7 @@ nightly-tests = []
 entrait_macros = { path = "entrait_macros", version = "0.5.3" }
 implementation = "0.1"
 async-trait = { version = "0.1", optional = true }
-unimock = { version = "0.4", optional = true }
+unimock = { version = "0.5", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
