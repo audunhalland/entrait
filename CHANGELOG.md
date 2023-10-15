@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Changed
 - Unimock bumped to 0.5.
+### Fixed
+- Stop adding lifetimes to trait generic params ([#30](https://github.com/audunhalland/entrait/pull/30))
 
 ## [0.5.3] - 2023-03-24
 ### Changed
