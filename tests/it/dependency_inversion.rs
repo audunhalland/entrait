@@ -167,3 +167,31 @@ mod async_dyn {
         assert_eq!(1337, app.bar().await);
     }
 }
+
+mod issue_29 {
+    use entrait::*;
+
+    #[entrait(FoobarImpl, delegate_by = DelegateFoobar)]
+    pub trait Foobar {
+        fn foo<'a>(&self, input: &'a str) -> &'a str;
+    }
+
+    pub struct MyImpl;
+
+    #[entrait]
+    impl FoobarImpl for MyImpl {
+        fn foo<'a, D>(deps: &D, input: &'a str) -> &'a str {
+            input
+        }
+    }
+
+    impl DelegateFoobar<Self> for () {
+        type Target = MyImpl;
+    }
+
+    #[test]
+    fn test_mod() {
+        let app = Impl::new(());
+        assert_eq!("foo", app.foo("foo"));
+    }
+}

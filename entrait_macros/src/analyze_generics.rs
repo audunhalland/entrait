@@ -214,7 +214,7 @@ impl GenericsAnalyzer {
             })?;
 
         for (index, param) in generic_params.iter().enumerate() {
-            if index != matching_index {
+            if index != matching_index && !(matches!(param, &syn::GenericParam::Lifetime(_))) {
                 self.trait_generics.params.push(param.clone());
             }
         }
