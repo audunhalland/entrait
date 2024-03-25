@@ -617,3 +617,33 @@ fn level_without_mock_support() {
     takes_b(&Unimock::new(()));
     takes_c(&Unimock::new(()));
 }
+
+// unimock issue https://github.com/audunhalland/unimock/issues/40
+mod arg_mutation_and_result_alias {
+    use std::process::ExitStatus;
+
+    use entrait::*;
+    use unimock::*;
+
+    type MyResult<T> = Result<T, ()>;
+
+    #[entrait(pub Exec, mock_api=ExecMock)]
+    fn exec(
+        _deps: &impl std::any::Any,
+        command: &mut std::process::Command,
+    ) -> MyResult<(ExitStatus, String)> {
+        Err(())
+    }
+
+    #[test]
+    #[should_panic(expected = "Dead mocks should be removed")]
+    fn test() {
+        use std::os::unix::process::ExitStatusExt;
+
+        Unimock::new(
+            ExecMock
+                .each_call(matching!((command) if command.get_program() == "editor"))
+                .answers(&|_, _| Ok((ExitStatusExt::from_raw(1), String::new()))),
+        );
+    }
+}
