@@ -39,18 +39,17 @@ mod borrow_dyn_sync {
     }
 }
 
-#[cfg(feature = "boxed-futures")]
-mod borrow_dyn_use_boxed_futures {
+mod borrow_dyn_with_async_trait {
     use super::*;
     use async_trait::*;
     use entrait::*;
 
-    #[entrait(Foo, box_future)]
+    #[entrait(Foo)]
     async fn foo(deps: &impl Bar) {
         deps.bar().await;
     }
 
-    #[entrait(delegate_by=ref, box_future)]
+    #[entrait(delegate_by=ref)]
     #[async_trait]
     trait Bar: Sync + 'static {
         async fn bar(&self);

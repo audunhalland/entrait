@@ -582,39 +582,24 @@
 //! }
 //! ```
 //!
-//! #### `async` support
-//! Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait.
-//! Enable the `boxed-futures` cargo feature and pass the `box_future` option like this:
+//! #### async support
+//! Zero-cost, static-dispatch `async` works out of the box[^1].
+//!
+//! When dynamic dispatch is needed, for example in combination with `delegate_by=ref`, entrait understands the `#[async_trait]` attribute when applied _after_ the entrait macro.
+//! Entrait will re-apply that macro to the various generated impl blocks as needed.
+//!
+//! ##### async `Send`-ness
+//! Similar to `async_trait`, entrait generates a [Send]-bound on futures by default.
+//! To opt out of the Send bound, pass `?Send` as a macro argument:
 //!
 //! ```rust
-//! # use entrait::entrait;
-//! #[entrait(Foo, box_future)]
-//! async fn foo<D>(deps: &D) {
+//! # use std::{rc::Rc, any::Any};
+//! # use entrait::*;
+//! #[entrait(ReturnRc, ?Send)]
+//! async fn return_rc(_deps: impl Any) -> Rc<i32> {
+//!     Rc::new(42)
 //! }
 //! ```
-//! This is designed to be forwards compatible with [static async fn in traits](https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html).
-//! When that day comes, you should be able to just remove that option and get a proper zero-cost future.
-//!
-//! There is a cargo feature to automatically apply `#[async_trait]` to every generated async trait: `use-boxed-futures`.
-//!
-//! #### Zero-cost async inversion of control - preview mode
-//! Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
-//!
-//! The entrait option is called `associated_future`, and uses GATs and `feature(type_alias_impl_trait)`.
-//! This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
-//! the resulting type of the future:
-//!
-//! ```ignore
-//! #![feature(type_alias_impl_trait)]
-//!
-//! use entrait::*;
-//!
-//! #[entrait(Foo, associated_future)]
-//! async fn foo<D>(deps: &D) {
-//! }
-//! ```
-//!
-//! There is a feature for turning this on everywhere: `use-associated-futures`.
 //!
 //! #### Integrating with other `fn`-targeting macros, and `no_deps`
 //! Some macros are used to transform the body of a function, or generate a body from scratch.
@@ -658,10 +643,6 @@
 //! | Feature                  | Implies         | Description         |
 //! | -------------------      | --------------- | ------------------- |
 //! | `unimock`                |                 | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
-//! | `use-boxed-futures`      | `boxed-futures` | Automatically applies the [async_trait] macro to async trait methods. |
-//! | `use-associated-futures` |                 | Automatically transforms the return type of async trait methods into an associated future by using type-alias-impl-trait syntax. Requires a nightly compiler. |
-//! | `boxed-futures`          |                 | Pulls in the [async_trait] optional dependency, enabling the `box_future` entrait option (macro parameter). |
-//!
 //!
 //!
 //! # "Philosophy"
@@ -704,53 +685,20 @@
 //! One might say that a layered application architecture should never contain cycles.
 //! If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
 //!
+//! [^1]: Literally, out of the [Box]! In entrait version 0.7 and newer, asynchronous functions are zero-cost by default.
 
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "unimock")]
 mod macros {
-    #[cfg(feature = "use-boxed-futures")]
-    mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_unimock_use_box_futures as entrait_export;
-        pub use entrait_macros::entrait_unimock_use_box_futures as entrait;
-    }
-
-    #[cfg(all(feature = "use-associated-futures", not(feature = "use-boxed-futures")))]
-    mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_unimock_use_associated_futures as entrait_export;
-        pub use entrait_macros::entrait_unimock_use_associated_futures as entrait;
-    }
-
-    #[cfg(not(any(feature = "use-boxed-futures", feature = "use-associated-futures")))]
-    mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_unimock as entrait_export;
-        pub use entrait_macros::entrait_unimock as entrait;
-    }
-
-    pub use entrait_auto_async::*;
+    pub use entrait_macros::entrait_export_unimock as entrait_export;
+    pub use entrait_macros::entrait_unimock as entrait;
 }
 
 #[cfg(not(feature = "unimock"))]
 mod macros {
-    #[cfg(feature = "use-boxed-futures")]
-    mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_use_box_futures as entrait_export;
-        pub use entrait_macros::entrait_use_box_futures as entrait;
-    }
-
-    #[cfg(all(feature = "use-associated-futures", not(feature = "use-boxed-futures")))]
-    mod entrait_auto_async {
-        pub use entrait_macros::entrait_export_use_associated_futures as entrait_export;
-        pub use entrait_macros::entrait_use_associated_futures as entrait;
-    }
-
-    #[cfg(not(any(feature = "use-boxed-futures", feature = "use-associated-futures")))]
-    mod entrait_auto_async {
-        pub use entrait_macros::entrait;
-        pub use entrait_macros::entrait_export;
-    }
-
-    pub use entrait_auto_async::*;
+    pub use entrait_macros::entrait;
+    pub use entrait_macros::entrait_export;
 }
 
 /// The entrait attribute macro, used to generate traits and _delegating implementations_ of them.
@@ -928,15 +876,10 @@ mod macros {
 /// | `mock_api`          | `ident`                   | `fn`+`mod`+`trait` |             | The identifier to use for mock APIs (for libraries that support custom identifiers. The `unimock` library requires this to be explicitly specified. |
 /// | `unimock`           | `bool`                    | `fn`+`mod`+`trait` | `false`[^1] | Used to turn _off_ unimock implementation when the `unimock` _feature_ is enabled. |
 /// | `mockall`           | `bool`                    | `fn`+`mod`+`trait` | `false`     | Enable mockall mocks. |
-/// | `box_future`        | `bool`                    | `fn`+`mod`+`trait` | `false`[^2] | In the case of an `async fn`, use the `async_trait` macro on the resulting trait. Requires the `boxed-futures` entrait feature. |
-/// | `associated_future` | `bool`                    | `fn`+`mod`+`trait` | `false`[^3] | In the case of an `async fn`, use an associated future to avoid heap allocation. Currently requires a nighlty Rust compiler, with `feature(type_alias_impl_trait)`. |
 /// | `delegate_by`       | `Self`/`ref`/custom ident | `trait`            | `Self`      | Controls the generated `Impl<T>` delegation of this trait. `Self` generates a `T: Trait` bound. `ref` generates a [`T: AsRef<dyn Trait>`](::core::convert::AsRef) bound. `Borrow` is deprecated and uses the [core::borrow::Borrow] trait. Any other value generates a new trait with that name which controls the delegation. |
+/// | `?Send`             | `true`                    | `fn`+`mod`+`trait` | `false`     | Opts out of `Send` bounds for Future outputs from `async` functions in generated traits.|
 ///
 /// [^1]: Enabled by default by turning on the `unimock` cargo feature.
-///
-/// [^2]: Enabled by default by turning on the `use-boxed-futures` cargo feature.
-///
-/// [^3]: Enabled by default by turning on the `use-associated-futures` cargo feature.
 pub use macros::entrait;
 
 /// Same as the [`entrait`](entrait) macro, only that the `export` option is set to true.
@@ -953,14 +896,3 @@ pub use ::implementation::Impl;
 #[cfg(feature = "unimock")]
 #[doc(hidden)]
 pub use ::unimock as __unimock;
-
-#[cfg(feature = "boxed-futures")]
-#[doc(hidden)]
-pub mod __async_trait {
-    pub use ::async_trait::async_trait;
-}
-
-#[doc(hidden)]
-pub mod static_async {
-    pub use entrait_macros::static_async_trait as async_trait;
-}

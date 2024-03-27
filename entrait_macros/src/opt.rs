@@ -6,10 +6,11 @@ pub struct Opts {
 
     pub no_deps: Option<SpanOpt<bool>>,
     pub debug: Option<SpanOpt<bool>>,
-    pub async_strategy: Option<SpanOpt<AsyncStrategy>>,
 
     /// Whether to export mocks (i.e. not gated with cfg(test))
     pub export: Option<SpanOpt<bool>>,
+
+    pub future_send: Option<SpanOpt<FutureSend>>,
 
     pub mock_api: Option<MockApiIdent>,
 
@@ -21,10 +22,6 @@ pub struct Opts {
 }
 
 impl Opts {
-    pub fn set_fallback_async_strategy(&mut self, strategy: AsyncStrategy) {
-        self.async_strategy.get_or_insert(SpanOpt::of(strategy));
-    }
-
     pub fn no_deps_value(&self) -> bool {
         self.default_option(self.no_deps, false).0
     }
@@ -33,12 +30,12 @@ impl Opts {
         self.default_option(self.debug, false).0
     }
 
-    pub fn async_strategy(&self) -> SpanOpt<AsyncStrategy> {
-        self.default_option(self.async_strategy, AsyncStrategy::NoHack)
-    }
-
     pub fn export_value(&self) -> bool {
         self.default_option(self.export, false).0
+    }
+
+    pub fn future_send(&self) -> FutureSend {
+        self.default_option(self.future_send, FutureSend(true)).0
     }
 
     pub fn mockable(&self) -> Mockable {
@@ -69,13 +66,6 @@ impl Mockable {
     }
 }
 
-#[derive(Clone, Copy)]
-pub enum AsyncStrategy {
-    NoHack,
-    BoxFuture,
-    AssociatedFuture,
-}
-
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
 pub enum Delegate {
@@ -89,6 +79,9 @@ pub enum RefDelegate {
     AsRef,
     Borrow,
 }
+
+#[derive(Clone, Copy)]
+pub struct FutureSend(pub bool);
 
 #[derive(Copy, Clone)]
 pub struct SpanOpt<T>(pub T, pub Span);
@@ -109,11 +102,10 @@ impl<T> SpanOpt<T> {
 pub enum EntraitOpt {
     NoDeps(SpanOpt<bool>),
     Debug(SpanOpt<bool>),
-    BoxFuture(SpanOpt<bool>),
-    AssociatedFuture(SpanOpt<bool>),
     DelegateBy(SpanOpt<Delegate>),
     /// Whether to export mocks
     Export(SpanOpt<bool>),
+    MaybeSend(SpanOpt<FutureSend>),
     /// How to name the mock API
     MockApi(MockApiIdent),
     /// Whether to generate unimock impl
@@ -127,9 +119,8 @@ impl EntraitOpt {
         match self {
             Self::NoDeps(opt) => opt.1,
             Self::Debug(opt) => opt.1,
-            Self::BoxFuture(opt) => opt.1,
-            Self::AssociatedFuture(opt) => opt.1,
             Self::DelegateBy(opt) => opt.1,
+            Self::MaybeSend(opt) => opt.1,
             Self::Export(opt) => opt.1,
             Self::MockApi(ident) => ident.0.span(),
             Self::Unimock(opt) => opt.1,
@@ -140,33 +131,47 @@ impl EntraitOpt {
 
 impl Parse for EntraitOpt {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let ident: syn::Ident = input.parse()?;
-        let span = ident.span();
-        let ident_string = ident.to_string();
-
         use EntraitOpt::*;
 
-        match ident_string.as_str() {
-            "no_deps" => Ok(NoDeps(parse_eq_bool(input, true, span)?)),
-            "debug" => Ok(Debug(parse_eq_bool(input, true, span)?)),
-            "box_future" => Ok(BoxFuture(parse_eq_bool(input, true, span)?)),
-            "associated_future" => Ok(AssociatedFuture(parse_eq_bool(input, true, span)?)),
-            "delegate_by" => Ok(DelegateBy(parse_eq_delegate_by(
-                input,
-                Delegate::BySelf,
-                span,
-            )?)),
-            "export" => Ok(Export(parse_eq_bool(input, true, span)?)),
-            "mock_api" => {
-                let _: syn::token::Eq = input.parse()?;
-                Ok(Self::MockApi(MockApiIdent(input.parse()?)))
+        if input.peek(syn::token::Question) {
+            let _q: syn::token::Question = input.parse().unwrap();
+
+            let ident: syn::Ident = input.parse()?;
+            let span = ident.span();
+            let ident_string = ident.to_string();
+
+            match ident_string.as_str() {
+                "Send" => Ok(MaybeSend(SpanOpt(FutureSend(false), span))),
+                _ => Err(syn::Error::new(
+                    span,
+                    format!("Unkonwn entrait option \"{ident_string}\""),
+                )),
             }
-            "unimock" => Ok(Unimock(parse_eq_bool(input, true, span)?)),
-            "mockall" => Ok(Mockall(parse_eq_bool(input, true, span)?)),
-            _ => Err(syn::Error::new(
-                span,
-                format!("Unkonwn entrait option \"{ident_string}\""),
-            )),
+        } else {
+            let ident: syn::Ident = input.parse()?;
+            let span = ident.span();
+            let ident_string = ident.to_string();
+
+            match ident_string.as_str() {
+                "no_deps" => Ok(NoDeps(parse_eq_bool(input, true, span)?)),
+                "debug" => Ok(Debug(parse_eq_bool(input, true, span)?)),
+                "delegate_by" => Ok(DelegateBy(parse_eq_delegate_by(
+                    input,
+                    Delegate::BySelf,
+                    span,
+                )?)),
+                "export" => Ok(Export(parse_eq_bool(input, true, span)?)),
+                "mock_api" => {
+                    let _: syn::token::Eq = input.parse()?;
+                    Ok(Self::MockApi(MockApiIdent(input.parse()?)))
+                }
+                "unimock" => Ok(Unimock(parse_eq_bool(input, true, span)?)),
+                "mockall" => Ok(Mockall(parse_eq_bool(input, true, span)?)),
+                _ => Err(syn::Error::new(
+                    span,
+                    format!("Unkonwn entrait option \"{ident_string}\""),
+                )),
+            }
         }
     }
 }

@@ -82,11 +82,6 @@ mod bounds {
     }
 }
 
-#[cfg(any(
-    feature = "use-boxed-futures",
-    feature = "use-associated-futures",
-    feature = "nightly-tests"
-))]
 mod no_deps_and_feign {
     use entrait::entrait;
 
@@ -192,7 +187,7 @@ mod module {
             not_included();
         }
 
-        static S: &'static str = "";
+        static S: &str = "";
 
         fn not_included() {}
     }
@@ -253,5 +248,25 @@ mod cfg_attributes {
     fn call_compiled() {
         let app = Impl::new(());
         app.compiled();
+    }
+}
+
+mod future_send_opt_out {
+    use std::rc::Rc;
+
+    use entrait::*;
+
+    #[entrait(Spawning, ?Send)]
+    async fn spawning(deps: &(impl Bar + Clone + Send + Sync + 'static)) -> Rc<i32> {
+        let deps = deps.clone();
+
+        tokio::task::spawn_local(async move { deps.bar().await })
+            .await
+            .unwrap()
+    }
+
+    #[entrait(Bar, ?Send, mock_api = BarMock)]
+    async fn bar<T>(_: T) -> Rc<i32> {
+        Rc::new(42)
     }
 }

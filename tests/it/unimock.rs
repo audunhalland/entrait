@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+use std::future::Future;
+
 mod sync {
     use entrait::*;
 
@@ -15,11 +17,10 @@ mod sync {
     }
 }
 
-#[cfg(any(
-    feature = "use-boxed-futures",
-    feature = "use-associated-futures",
-    feature = "nightly-tests"
-))]
+trait Lol {
+    fn hei(&self) -> impl Future<Output = i32> + Send;
+}
+
 mod auth {
     use entrait::*;
     use unimock::*;
@@ -121,11 +122,6 @@ mod auth {
     }
 }
 
-#[cfg(any(
-    feature = "use-boxed-futures",
-    feature = "use-associated-futures",
-    feature = "nightly-tests"
-))]
 mod multi_mock {
     use entrait::*;
     use unimock::*;
@@ -208,11 +204,9 @@ mod multi_mock {
     }
 }
 
-/// Note: This test does not run under "nightly-tests",
-/// because it uses tokio::spawn, and there is currently
-/// no way to Send-bound futures from plain async fns in traits.
-#[cfg(any(feature = "use-boxed-futures", feature = "use-associated-futures"))]
-mod tokio_spawn {
+mod future_send_bound_for_tokio_spawn {
+    use std::future::Future;
+
     use entrait::*;
     use unimock::*;
 
@@ -260,11 +254,6 @@ mod tokio_spawn {
     }
 }
 
-#[cfg(any(
-    feature = "use-boxed-futures",
-    feature = "use-associated-futures",
-    feature = "nightly-tests"
-))]
 mod more_async {
     use entrait::*;
     use unimock::*;
@@ -305,11 +294,6 @@ mod more_async {
     }
 }
 
-#[cfg(any(
-    feature = "use-boxed-futures",
-    feature = "use-associated-futures",
-    feature = "nightly-tests"
-))]
 mod async_no_deps_etc {
     use entrait::*;
     use unimock::*;
@@ -419,7 +403,7 @@ mod generics {
                     .some_call(matching!("hey"))
                     .returns(42),
             )
-            .generic_deps_generic_param(format!("hey"))
+            .generic_deps_generic_param("hey".to_string())
         );
 
         assert_eq!(
@@ -540,11 +524,6 @@ mod module {
     }
 }
 
-#[cfg(any(
-    feature = "use-boxed-futures",
-    feature = "use-associated-futures",
-    feature = "nightly-tests"
-))]
 mod module_async {
     use entrait::*;
 
@@ -556,9 +535,9 @@ mod module_async {
         pub async fn bar_async(_: &impl Any) {}
     }
 
-    fn takes_mixed(deps: &impl Mixed) {
-        let _ = deps.bar();
-        let _ = deps.bar_async();
+    async fn takes_mixed(deps: &impl Mixed) {
+        deps.bar();
+        let _ = deps.bar_async().await;
     }
 
     #[entrait(pub MultiAsync)]
@@ -616,4 +595,34 @@ fn level_without_mock_support() {
     takes_a(&Unimock::new(()));
     takes_b(&Unimock::new(()));
     takes_c(&Unimock::new(()));
+}
+
+// unimock issue https://github.com/audunhalland/unimock/issues/40
+mod arg_mutation_and_result_alias {
+    use std::process::ExitStatus;
+
+    use entrait::*;
+    use unimock::*;
+
+    type MyResult<T> = Result<T, ()>;
+
+    #[entrait(pub Exec, mock_api=ExecMock)]
+    fn exec(
+        _deps: &impl std::any::Any,
+        command: &mut std::process::Command,
+    ) -> MyResult<(ExitStatus, String)> {
+        Err(())
+    }
+
+    #[test]
+    #[should_panic(expected = "Dead mocks should be removed")]
+    fn test() {
+        use std::os::unix::process::ExitStatusExt;
+
+        Unimock::new(
+            ExecMock
+                .each_call(matching!((command) if command.get_program() == "editor"))
+                .answers(&|_, _| Ok((ExitStatusExt::from_raw(1), String::new()))),
+        );
+    }
 }

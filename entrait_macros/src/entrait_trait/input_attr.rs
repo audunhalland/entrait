@@ -30,8 +30,8 @@ impl Parse for EntraitTraitAttr {
         }
 
         let mut debug = None;
-        let mut async_strategy = None;
         let mut mock_api = None;
+        let mut future_send = None;
         let mut unimock = None;
         let mut mockall = None;
         let mut delegation_kind = None;
@@ -40,13 +40,8 @@ impl Parse for EntraitTraitAttr {
             loop {
                 match input.parse::<EntraitOpt>()? {
                     EntraitOpt::Debug(opt) => debug = Some(opt),
-                    EntraitOpt::BoxFuture(opt) => {
-                        async_strategy = Some(SpanOpt(AsyncStrategy::BoxFuture, opt.1))
-                    }
-                    EntraitOpt::AssociatedFuture(opt) => {
-                        async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))
-                    }
                     EntraitOpt::MockApi(ident) => mock_api = Some(ident),
+                    EntraitOpt::MaybeSend(send) => future_send = Some(send),
                     EntraitOpt::Unimock(opt) => unimock = Some(opt),
                     EntraitOpt::Mockall(opt) => mockall = Some(opt),
                     EntraitOpt::DelegateBy(kind) => delegation_kind = Some(kind),
@@ -69,8 +64,8 @@ impl Parse for EntraitTraitAttr {
                 default_span: proc_macro2::Span::call_site(),
                 no_deps: None,
                 debug,
-                async_strategy,
                 export: None,
+                future_send,
                 mock_api,
                 unimock,
                 mockall,

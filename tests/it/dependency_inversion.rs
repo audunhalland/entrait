@@ -92,7 +92,6 @@ mod simple_dyn {
     }
 }
 
-#[cfg(feature = "nightly-tests")]
 mod async_static {
     use entrait::*;
 
@@ -128,11 +127,11 @@ mod async_static {
     }
 }
 
-#[cfg(any(feature = "boxed-futures"))]
 mod async_dyn {
     use entrait::*;
 
-    #[entrait(FoobarImpl, delegate_by=ref, box_future)]
+    #[entrait(FoobarImpl, delegate_by=ref)]
+    #[async_trait::async_trait]
     pub trait Foobar {
         async fn foo(&self) -> i32;
         async fn bar(&self) -> u32;
@@ -141,6 +140,7 @@ mod async_dyn {
     pub struct Implementor2;
 
     #[entrait(ref)]
+    #[async_trait::async_trait]
     impl FoobarImpl for Implementor2 {
         pub async fn bar<D>(_: &D) -> u32 {
             1337
