@@ -1,39 +1,9 @@
 use super::{
-    EntraitLifetime, EntraitSignature, ReceiverGeneration, SigComponent, UsedInOutput,
-    UserProvidedLifetime,
+    EntraitLifetime, ReceiverGeneration, SigComponent, UsedInOutput, UserProvidedLifetime,
 };
 
 use std::collections::HashSet;
 use syn::visit_mut::VisitMut;
-
-pub fn de_elide_lifetimes(
-    entrait_sig: &mut EntraitSignature,
-    receiver_generation: ReceiverGeneration,
-) {
-    let mut elision_detector = ElisionDetector::new(receiver_generation);
-    elision_detector.detect(&mut entrait_sig.sig);
-
-    let mut visitor = LifetimeMutVisitor::new(elision_detector.elided_params);
-
-    match receiver_generation {
-        ReceiverGeneration::None => {
-            for (index, arg) in entrait_sig.sig.inputs.iter_mut().enumerate() {
-                visitor.de_elide_param(index, arg);
-            }
-        }
-        ReceiverGeneration::Rewrite | ReceiverGeneration::Insert => {
-            visitor.de_elide_receiver(entrait_sig.sig.inputs.first_mut().unwrap());
-
-            for (index, arg) in entrait_sig.sig.inputs.iter_mut().skip(1).enumerate() {
-                visitor.de_elide_param(index, arg);
-            }
-        }
-    }
-
-    visitor.de_elide_output(&mut entrait_sig.sig.output);
-
-    entrait_sig.et_lifetimes.append(&mut visitor.et_lifetimes);
-}
 
 /// Looks at elided lifetimes and makes them explicit.
 /// Also collects all lifetimes into `et_lifetimes`.

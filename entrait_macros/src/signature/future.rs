@@ -1,4 +1,3 @@
-use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
@@ -8,90 +7,8 @@ use crate::idents::CrateIdents;
 use crate::token_util::EmptyToken;
 use crate::token_util::Punctuator;
 
-use super::lifetimes;
 use super::AssociatedFut;
 use super::EntraitSignature;
-use super::ReceiverGeneration;
-use super::SigComponent;
-use super::UsedInOutput;
-use super::UserProvidedLifetime;
-
-impl EntraitSignature {
-    pub fn convert_to_associated_future(
-        &mut self,
-        receiver_generation: ReceiverGeneration,
-        trait_span: Span,
-    ) {
-        lifetimes::de_elide_lifetimes(self, receiver_generation);
-
-        let base_lifetime = syn::Lifetime::new("'entrait_future", Span::call_site());
-        self.et_lifetimes.push(super::EntraitLifetime {
-            lifetime: base_lifetime.clone(),
-            source: SigComponent::Base,
-            user_provided: UserProvidedLifetime(false),
-            used_in_output: UsedInOutput(false),
-        });
-
-        let output = clone_output_type(&self.sig.output);
-
-        // make the function generic if it wasn't already
-        let sig = &mut self.sig;
-        sig.asyncness = None;
-        let generics = &mut sig.generics;
-        generics.lt_token.get_or_insert(syn::parse_quote! { < });
-        generics.gt_token.get_or_insert(syn::parse_quote! { > });
-
-        // insert generated/non-user-provided lifetimes
-        for fut_lifetime in self.et_lifetimes.iter().filter(|lt| !lt.user_provided.0) {
-            generics
-                .params
-                .push(syn::GenericParam::Lifetime(syn::LifetimeParam {
-                    attrs: vec![],
-                    lifetime: fut_lifetime.lifetime.clone(),
-                    colon_token: None,
-                    bounds: syn::punctuated::Punctuated::new(),
-                }));
-        }
-
-        let fut_ident = quote::format_ident!("Fut__{}", sig.ident);
-
-        let fut_lifetimes = self
-            .et_lifetimes_in_assoc_future()
-            .map(|et| &et.lifetime)
-            .collect::<Vec<_>>();
-
-        self.sig.output = syn::parse_quote_spanned! { trait_span =>
-            -> Self::#fut_ident<#(#fut_lifetimes),*>
-        };
-
-        let sig_where_clause = self.sig.generics.make_where_clause();
-        for lifetime in &self.et_lifetimes {
-            if !matches!(lifetime.source, SigComponent::Base) {
-                let lt = &lifetime.lifetime;
-
-                sig_where_clause.predicates.push(syn::parse_quote! {
-                    #lt: #base_lifetime
-                });
-            }
-        }
-        sig_where_clause.predicates.push(syn::parse_quote! {
-            Self: #base_lifetime
-        });
-
-        self.associated_fut = Some(AssociatedFut {
-            ident: fut_ident,
-            output,
-            base_lifetime,
-        });
-    }
-}
-
-fn clone_output_type(return_type: &syn::ReturnType) -> syn::Type {
-    match return_type {
-        syn::ReturnType::Default => syn::parse_quote! { () },
-        syn::ReturnType::Type(_, ty) => ty.as_ref().clone(),
-    }
-}
 
 pub struct FutDecl<'s> {
     pub signature: &'s EntraitSignature,
@@ -155,25 +72,6 @@ impl<'s> ToTokens for FutImpl<'s> {
             type #ident #params = impl ::#core::future::Future<Output = #output> #fut_bounds #where_clause;
         };
         tokens.to_tokens(stream);
-    }
-}
-
-struct FutParams<'s> {
-    signature: &'s EntraitSignature,
-}
-
-impl<'s> ToTokens for FutParams<'s> {
-    fn to_tokens(&self, stream: &mut TokenStream) {
-        let mut punctuator = Punctuator::new(
-            stream,
-            syn::token::Lt::default(),
-            syn::token::Comma::default(),
-            syn::token::Gt::default(),
-        );
-
-        for lt in self.signature.et_lifetimes_in_assoc_future() {
-            punctuator.push(&lt.lifetime);
-        }
     }
 }
 
