@@ -59,7 +59,9 @@ mod rest {
             )
             .await
             .unwrap();
-        let bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), 1_000_000)
+            .await
+            .unwrap();
         let foo: Foo = serde_json::from_slice(&bytes).unwrap();
 
         assert_eq!("mocked", foo.value);
@@ -70,7 +72,6 @@ mod rest {
 async fn main() {
     use axum::extract::Extension;
     use entrait::Impl;
-    use std::net::SocketAddr;
 
     #[derive(Clone)]
     struct App;
@@ -78,8 +79,7 @@ async fn main() {
     let app = Impl::new(App);
     let router = rest::Routes::<Impl<App>>::router().layer(Extension(app));
 
-    axum::Server::bind(&SocketAddr::from(([127, 0, 0, 1], 3000)))
-        .serve(router.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+
+    axum::serve(listener, router).await.unwrap();
 }
