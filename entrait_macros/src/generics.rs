@@ -3,8 +3,6 @@ use proc_macro2::TokenStream;
 use crate::{
     analyze_generics::TraitFn,
     idents::GenericIdents,
-    input::InputFn,
-    opt::{AsyncStrategy, Opts, SpanOpt},
     token_util::{push_tokens, EmptyToken, Punctuator, TokenPair},
 };
 
@@ -13,16 +11,6 @@ pub enum ImplIndirection<'s> {
     None,
     Static { ty: &'s syn::Type },
     Dynamic { ty: &'s syn::Type },
-}
-
-impl<'s> ImplIndirection<'s> {
-    pub fn to_trait_indirection(&'s self) -> TraitIndirection {
-        match self {
-            Self::None => TraitIndirection::Plain,
-            Self::Static { .. } => TraitIndirection::StaticImpl,
-            Self::Dynamic { .. } => TraitIndirection::DynamicImpl,
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -39,23 +27,6 @@ pub enum TraitIndirection {
 
 #[derive(Clone, Copy)]
 pub struct UseAssociatedFuture(pub bool);
-
-pub fn detect_use_associated_future<'i>(
-    opts: &Opts,
-    input_fns: impl Iterator<Item = &'i InputFn>,
-) -> UseAssociatedFuture {
-    UseAssociatedFuture(matches!(
-        (
-            opts.async_strategy(),
-            has_any_async(input_fns.map(|input_fn| &input_fn.fn_sig))
-        ),
-        (SpanOpt(AsyncStrategy::AssociatedFuture, _), true)
-    ))
-}
-
-pub fn has_any_async<'s>(mut signatures: impl Iterator<Item = &'s syn::Signature>) -> bool {
-    signatures.any(|sig| sig.asyncness.is_some())
-}
 
 #[derive(Clone, Copy)]
 pub struct TakesSelfByValue(pub bool);
@@ -95,7 +66,6 @@ impl TraitGenerics {
         ParamsGenerator {
             params: &self.params,
             impl_t: None,
-            use_associated_future: UseAssociatedFuture(false),
             takes_self_by_value: TakesSelfByValue(false),
         }
     }
@@ -109,7 +79,6 @@ impl TraitGenerics {
     pub fn impl_params<'i>(
         &'i self,
         trait_dependency_mode: &'i TraitDependencyMode<'i, '_>,
-        use_associated_future: UseAssociatedFuture,
         takes_self_by_value: TakesSelfByValue,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
@@ -118,7 +87,6 @@ impl TraitGenerics {
                 TraitDependencyMode::Generic(idents) => Some(&idents.impl_t),
                 TraitDependencyMode::Concrete(_) => None,
             },
-            use_associated_future,
             takes_self_by_value,
         }
     }
@@ -126,13 +94,11 @@ impl TraitGenerics {
     pub fn impl_params_from_idents<'i>(
         &'i self,
         idents: &'i GenericIdents,
-        use_associated_future: UseAssociatedFuture,
         takes_self_by_value: TakesSelfByValue,
     ) -> ParamsGenerator<'_> {
         ParamsGenerator {
             params: &self.params,
             impl_t: Some(&idents.impl_t),
-            use_associated_future,
             takes_self_by_value,
         }
     }
@@ -195,7 +161,6 @@ impl<'g, 'c> quote::ToTokens for ImplPath<'g, 'c> {
 pub struct ParamsGenerator<'g> {
     params: &'g syn::punctuated::Punctuated<syn::GenericParam, syn::token::Comma>,
     impl_t: Option<&'g syn::Ident>,
-    use_associated_future: UseAssociatedFuture,
     takes_self_by_value: TakesSelfByValue,
 }
 
@@ -226,7 +191,8 @@ impl<'g> quote::ToTokens for ParamsGenerator<'g> {
                     );
                 }
 
-                if self.use_associated_future.0 {
+                // if self.use_associated_future.0 {
+                if true {
                     push_tokens!(
                         stream,
                         syn::token::Plus::default(),

@@ -21,8 +21,8 @@ impl Parse for EntraitFnAttr {
 
         let mut no_deps = None;
         let mut debug = None;
-        let mut async_strategy = None;
         let mut export = None;
+        let mut future_send = None;
         let mut mock_api = None;
         let mut unimock = None;
         let mut mockall = None;
@@ -33,13 +33,8 @@ impl Parse for EntraitFnAttr {
             match input.parse::<EntraitOpt>()? {
                 EntraitOpt::NoDeps(opt) => no_deps = Some(opt),
                 EntraitOpt::Debug(opt) => debug = Some(opt),
-                EntraitOpt::BoxFuture(opt) => {
-                    async_strategy = Some(SpanOpt(AsyncStrategy::BoxFuture, opt.1))
-                }
-                EntraitOpt::AssociatedFuture(opt) => {
-                    async_strategy = Some(SpanOpt(AsyncStrategy::AssociatedFuture, opt.1))
-                }
                 EntraitOpt::Export(opt) => export = Some(opt),
+                EntraitOpt::MaybeSend(send) => future_send = Some(send),
                 EntraitOpt::MockApi(ident) => mock_api = Some(ident),
                 EntraitOpt::Unimock(opt) => unimock = Some(opt),
                 EntraitOpt::Mockall(opt) => mockall = Some(opt),
@@ -56,8 +51,8 @@ impl Parse for EntraitFnAttr {
                 default_span,
                 no_deps,
                 debug,
-                async_strategy,
                 export,
+                future_send,
                 mock_api,
                 unimock,
                 mockall,

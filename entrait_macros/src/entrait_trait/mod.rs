@@ -7,7 +7,6 @@ use input_attr::EntraitTraitAttr;
 use proc_macro2::Span;
 
 use crate::analyze_generics::TraitFn;
-use crate::attributes;
 use crate::entrait_trait::input_attr::ImplTrait;
 use crate::generics;
 use crate::generics::TraitDependencyMode;
@@ -15,6 +14,8 @@ use crate::idents::GenericIdents;
 use crate::input::FnInputMode;
 use crate::input::LiteralAttrs;
 use crate::opt::*;
+use crate::sub_attributes::analyze_sub_attributes;
+use crate::sub_attributes::SubAttribute;
 use crate::token_util::*;
 use crate::trait_codegen::Supertraits;
 use crate::trait_codegen::TraitCodegen;
@@ -46,19 +47,15 @@ pub fn output_tokens(
         syn::TraitItem::Fn(method) => method.sig.asyncness.is_some(),
         _ => false,
     }));
-    let impl_attrs = item_trait
-        .attrs
-        .iter()
-        .filter(|attr| {
-            matches!(
-                attr.path().segments.last(),
-                Some(last_segment) if last_segment.ident == "async_trait"
-            )
-        })
-        .cloned()
-        .collect::<Vec<_>>();
 
     let out_trait = out_trait::analyze_trait(item_trait)?;
+    let sub_attributes = analyze_sub_attributes(&out_trait.attrs);
+    let impl_sub_attributes: Vec<_> = sub_attributes
+        .iter()
+        .copied()
+        .filter(|sub_attr| matches!(sub_attr, SubAttribute::AsyncTrait(_)))
+        .collect();
+
     let trait_dependency_mode = TraitDependencyMode::Generic(GenericIdents::new(
         &attr.crate_idents,
         out_trait.ident.span(),
@@ -68,20 +65,20 @@ pub fn output_tokens(
         _ => panic!(),
     };
 
-    let mut impl_async_trait_attr =
-        attributes::opt_async_trait_attr(&attr.opts, &attr.crate_idents, out_trait.fns.iter());
-    if !impl_attrs.is_empty() {
-        impl_async_trait_attr = None;
-    }
-
-    let delegation_trait_def =
-        gen_impl_delegation_trait_defs(&out_trait, &trait_dependency_mode, generic_idents, &attr)?;
+    let delegation_trait_def = gen_impl_delegation_trait_defs(
+        &out_trait,
+        &trait_dependency_mode,
+        generic_idents,
+        &impl_sub_attributes,
+        &attr,
+    )?;
 
     let trait_def = TraitCodegen {
         crate_idents: &attr.crate_idents,
         opts: &attr.opts,
         trait_indirection: generics::TraitIndirection::Trait,
         trait_dependency_mode: &trait_dependency_mode,
+        sub_attributes: &sub_attributes,
     }
     .gen_trait_def(
         &out_trait.vis,
@@ -95,7 +92,6 @@ pub fn output_tokens(
     let trait_ident = &out_trait.ident;
     let params = out_trait.generics.impl_params_from_idents(
         generic_idents,
-        generics::UseAssociatedFuture(false),
         generics::TakesSelfByValue(false), // BUG?
     );
     let args = out_trait
@@ -111,35 +107,30 @@ pub fn output_tokens(
         span: trait_ident_span,
     };
 
-    let impl_assoc_types = out_trait.fns.iter().filter_map(|trait_fn| {
-        trait_fn
-            .entrait_sig
-            .associated_fut_impl(generics::TraitIndirection::Plain, &attr.crate_idents)
-    });
-
     let method_items = out_trait
         .fns
         .iter()
         .map(|trait_fn| gen_delegation_method(trait_fn, generic_idents, &attr, contains_async));
 
-    Ok(quote! {
+    let out = quote! {
         #trait_def
 
         #delegation_trait_def
 
-        #(#impl_attrs)*
-        #impl_async_trait_attr
+        #(#impl_sub_attributes)*
         impl #params #trait_ident #args for #self_ty #where_clause {
-            #(#impl_assoc_types)*
             #(#method_items)*
         }
-    })
+    };
+
+    Ok(out)
 }
 
 fn gen_impl_delegation_trait_defs(
     out_trait: &OutTrait,
     trait_dependency_mode: &TraitDependencyMode,
     generic_idents: &GenericIdents,
+    impl_sub_attributes: &[SubAttribute],
     attr: &EntraitTraitAttr,
 ) -> syn::Result<Option<TokenStream>> {
     let entrait = &generic_idents.crate_idents.entrait;
@@ -192,6 +183,7 @@ fn gen_impl_delegation_trait_defs(
                 opts: &no_mock_opts,
                 trait_indirection: generics::TraitIndirection::StaticImpl,
                 trait_dependency_mode,
+                sub_attributes: impl_sub_attributes,
             }
             .gen_trait_def(
                 &trait_copy.vis,
@@ -206,6 +198,7 @@ fn gen_impl_delegation_trait_defs(
             )?;
 
             Ok(Some(quote! {
+                #(#impl_sub_attributes)*
                 #trait_def
 
                 pub trait #delegation_ident<T> {
@@ -245,6 +238,7 @@ fn gen_impl_delegation_trait_defs(
                 opts: &no_mock_opts,
                 trait_indirection: generics::TraitIndirection::DynamicImpl,
                 trait_dependency_mode,
+                sub_attributes: impl_sub_attributes,
             }
             .gen_trait_def(
                 &trait_copy.vis,
@@ -258,7 +252,10 @@ fn gen_impl_delegation_trait_defs(
                 &FnInputMode::RawTrait(LiteralAttrs(&[])),
             )?;
 
-            Ok(Some(trait_def))
+            Ok(Some(quote! {
+                #(#impl_sub_attributes)*
+                #trait_def
+            }))
         }
         _ => Err(syn::Error::new(
             proc_macro2::Span::call_site(),
@@ -289,9 +286,7 @@ fn gen_delegation_method<'s>(
     match (&attr.impl_trait, &attr.delegation_kind) {
         (Some(ImplTrait(_, impl_trait_ident)), Some(SpanOpt(Delegate::ByTrait(_), _))) => {
             DelegatingMethod {
-                attr,
                 trait_fn,
-                needs_async_move: true,
                 call: quote! {
                     // TODO: pass additional generic arguments(?)
                     <#impl_t::Target as #impl_trait_ident<#impl_t>>::#fn_ident(self, #(#arguments),*)
@@ -322,33 +317,22 @@ fn gen_delegation_method<'s>(
                 }
             };
 
-            DelegatingMethod {
-                attr,
-                trait_fn,
-                needs_async_move: false,
-                call,
-            }
+            DelegatingMethod { trait_fn, call }
         }
         (None, Some(SpanOpt(Delegate::ByRef(RefDelegate::AsRef), _))) => DelegatingMethod {
-            attr,
             trait_fn,
-            needs_async_move: false,
             call: quote! {
                 self.as_ref().as_ref().#fn_ident(#(#arguments),*)
             },
         },
         (None, Some(SpanOpt(Delegate::ByRef(RefDelegate::Borrow), _))) => DelegatingMethod {
-            attr,
             trait_fn,
-            needs_async_move: false,
             call: quote! {
                 self.as_ref().borrow().#fn_ident(#(#arguments),*)
             },
         },
         _ => DelegatingMethod {
-            attr,
             trait_fn,
-            needs_async_move: false,
             call: quote! {
                 self.as_ref().#fn_ident(#(#arguments),*)
             },
@@ -357,32 +341,8 @@ fn gen_delegation_method<'s>(
 }
 
 struct DelegatingMethod<'s> {
-    attr: &'s EntraitTraitAttr,
     trait_fn: &'s TraitFn,
-    needs_async_move: bool,
     call: TokenStream,
-}
-
-impl<'s> DelegatingMethod<'s> {
-    fn should_inline(&self) -> bool {
-        if matches!(
-            &self.attr.delegation_kind,
-            Some(SpanOpt(Delegate::ByRef(_), _))
-        ) {
-            return false;
-        }
-
-        if self.trait_fn.originally_async
-            && matches!(
-                self.attr.opts.async_strategy(),
-                SpanOpt(AsyncStrategy::BoxFuture, _)
-            )
-        {
-            return false;
-        }
-
-        true
-    }
 }
 
 impl<'s> ToTokens for DelegatingMethod<'s> {
@@ -395,12 +355,10 @@ impl<'s> ToTokens for DelegatingMethod<'s> {
             push_tokens!(stream, attr);
         }
 
-        if self.should_inline() {
-            quote! { #[inline] }.to_tokens(stream);
-        }
         self.trait_fn.sig().to_tokens(stream);
         syn::token::Brace::default().surround(stream, |stream| {
-            if self.needs_async_move && self.trait_fn.entrait_sig.associated_fut.is_some() {
+            // if self.needs_async_move && self.trait_fn.entrait_sig.associated_fut.is_some() {
+            if false {
                 push_tokens!(
                     stream,
                     syn::token::Async::default(),

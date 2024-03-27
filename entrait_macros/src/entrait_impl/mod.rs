@@ -7,9 +7,9 @@ use crate::fn_delegation_codegen;
 use crate::generics;
 use crate::input::ImplItem;
 use crate::input::InputImpl;
-use crate::opt::AsyncStrategy;
-use crate::opt::SpanOpt;
 use crate::signature;
+use crate::sub_attributes::analyze_sub_attributes;
+use crate::sub_attributes::SubAttribute;
 
 use quote::quote;
 use syn::spanned::Spanned;
@@ -18,7 +18,7 @@ use self::input_attr::EntraitSimpleImplAttr;
 use self::input_attr::ImplKind;
 
 pub fn output_tokens_for_impl(
-    mut attr: EntraitSimpleImplAttr,
+    attr: EntraitSimpleImplAttr,
     InputImpl {
         attrs,
         unsafety,
@@ -30,11 +30,6 @@ pub fn output_tokens_for_impl(
         items,
     }: InputImpl,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    // Using a dyn implementation implies boxed futures.
-    if matches!(attr.impl_kind, ImplKind::DynRef) {
-        attr.opts.async_strategy = Some(SpanOpt(AsyncStrategy::BoxFuture, self_ty.span()));
-    }
-
     let trait_span = trait_path
         .segments
         .last()
@@ -58,16 +53,13 @@ pub fn output_tokens_for_impl(
             .analyze(input_fn.input_sig(), &mut generics_analyzer)
         })
         .collect::<syn::Result<Vec<_>>>()?;
+    let sub_attributes = analyze_sub_attributes(&attrs);
 
     let trait_generics = generics_analyzer.into_trait_generics();
 
     let fn_input_mode = crate::input::FnInputMode::ImplBlock(&self_ty);
     let trait_dependency_mode =
         detect_trait_dependency_mode(&fn_input_mode, &trait_fns, &attr.crate_idents, trait_span)?;
-    let use_associated_future = generics::detect_use_associated_future(
-        &attr.opts,
-        items.iter().filter_map(ImplItem::filter_fn),
-    );
 
     let impl_indirection = match attr.impl_kind {
         ImplKind::Static => generics::ImplIndirection::Static { ty: &self_ty },
@@ -83,12 +75,16 @@ pub fn output_tokens_for_impl(
         trait_generics: &trait_generics,
         fn_input_mode: &fn_input_mode,
         trait_dependency_mode: &trait_dependency_mode,
-        use_associated_future,
+        sub_attributes: &sub_attributes,
     }
     .gen_impl_block(&trait_fns);
 
+    let inherent_sub_attrs = sub_attributes
+        .iter()
+        .filter(|sub_attr| !matches!(sub_attr, SubAttribute::AsyncTrait(_)));
+
     Ok(quote! {
-        #(#attrs)*
+        #(#inherent_sub_attrs)*
         #unsafety #impl_token #self_ty {
             #(#items)*
         }

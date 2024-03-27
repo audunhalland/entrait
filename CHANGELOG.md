@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Changed
+- Unimock bumped to 0.6.
+- Reworked async support. Rust now has native support for async functions in traits, which means that entrait doesn't need to interact with this in a hacky way anymore.
+- Minimum Supported Rust Version bumped to 1.75.
+- `async` entrait functions will get rewritten to the `fn f(..) -> impl Future<Output = ?>` form when appearing in trait definitions, due to the [async_fn_in_trait](https://doc.rust-lang.org/beta/rustc/lints/listing/warn-by-default.html#async-fn-in-trait) warn-by-default lint.
+### Added
+- Improved interoperability with the `async_trait` macro, for scenarios where dynamic dispatch-delegation is used in combination with `async`.
+- `?Send` argument to the entrait macro, for allowing opt-out of `Send` bounds for the `Future`s generated from `async` trait methods.
+### Removed
+- features `boxed-futures`, `use-boxed-futures` and `use-associated-futures`.
 
 ## [0.6.0] - 2023-10-15
 ### Changed

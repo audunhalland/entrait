@@ -1,5 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens};
+use syn::spanned::Spanned;
 
 use crate::{
     analyze_generics::TraitFn,
@@ -8,6 +9,8 @@ use crate::{
     idents::CrateIdents,
     input::FnInputMode,
     opt::{Opts, SpanOpt},
+    signature::EntraitSignature,
+    sub_attributes::{contains_async_trait, SubAttribute},
     token_util::push_tokens,
 };
 
@@ -16,6 +19,7 @@ pub struct TraitCodegen<'s> {
     pub crate_idents: &'s CrateIdents,
     pub trait_indirection: TraitIndirection,
     pub trait_dependency_mode: &'s TraitDependencyMode<'s, 's>,
+    pub sub_attributes: &'s [SubAttribute<'s>],
 }
 
 impl<'s> TraitCodegen<'s> {
@@ -62,29 +66,17 @@ impl<'s> TraitCodegen<'s> {
             }),
             _ => None,
         };
-        let opt_async_trait_attr =
-            attributes::opt_async_trait_attr(self.opts, self.crate_idents, trait_fns.iter());
-
-        let literal_attrs = if let FnInputMode::RawTrait(literal_attrs) = fn_input_mode {
-            Some(literal_attrs)
-        } else {
-            None
-        };
-
         let trait_visibility = TraitVisibility {
             visibility,
             fn_input_mode,
         };
 
         let fn_defs = trait_fns.iter().map(|trait_fn| {
-            let opt_associated_fut_decl = &trait_fn
-                .entrait_sig
-                .associated_fut_decl(self.trait_indirection, self.crate_idents);
             let attrs = &trait_fn.attrs;
-            let trait_fn_sig = trait_fn.sig();
+            let trait_fn_sig =
+                make_trait_fn_sig(&trait_fn.entrait_sig, self.sub_attributes, self.opts);
 
             quote! {
-                #opt_associated_fut_decl
                 #(#attrs)*
                 #trait_fn_sig;
             }
@@ -93,12 +85,18 @@ impl<'s> TraitCodegen<'s> {
         let params = trait_generics.trait_params();
         let where_clause = trait_generics.trait_where_clause();
 
+        let trait_sub_attributes = self.sub_attributes.iter().filter(|attr| {
+            matches!(
+                attr,
+                SubAttribute::AsyncTrait(_) | SubAttribute::Automock(_)
+            )
+        });
+
         Ok(quote_spanned! { span=>
             #opt_unimock_attr
             #opt_entrait_for_trait_attr
             #opt_mockall_automock_attr
-            #opt_async_trait_attr
-            #literal_attrs
+            #(#trait_sub_attributes)*
             #trait_visibility trait #trait_ident #params #supertraits #where_clause {
                 #(#fn_defs)*
             }
@@ -158,4 +156,42 @@ impl<'a> ToTokens for TraitVisibility<'a> {
             }
         }
     }
+}
+
+fn make_trait_fn_sig(
+    entrait_sig: &EntraitSignature,
+    sub_attributes: &[SubAttribute],
+    opts: &Opts,
+) -> syn::Signature {
+    let mut sig = entrait_sig.sig.clone();
+
+    if entrait_sig.sig.asyncness.is_some() && !contains_async_trait(sub_attributes) {
+        sig.asyncness = None;
+
+        let mut return_type = syn::ReturnType::Default;
+        std::mem::swap(&mut return_type, &mut sig.output);
+
+        let span = return_type.span();
+
+        let output_type: syn::Type = match return_type {
+            syn::ReturnType::Default => syn::parse_quote! { () },
+            syn::ReturnType::Type(_, ty) => *ty,
+        };
+
+        let mut bounds: Vec<proc_macro2::TokenStream> = vec![quote! {
+            ::core::future::Future<Output = #output_type>
+        }];
+
+        if opts.future_send().0 {
+            bounds.push(quote! {
+                ::core::marker::Send
+            });
+        }
+
+        sig.output = syn::parse_quote_spanned! {span=>
+            -> impl #(#bounds)+*
+        };
+    }
+
+    sig
 }

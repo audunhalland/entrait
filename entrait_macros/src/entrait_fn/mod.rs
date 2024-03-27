@@ -13,6 +13,7 @@ use crate::generics;
 use crate::input::FnInputMode;
 use crate::input::{InputFn, InputMod, ModItem};
 use crate::signature;
+use crate::sub_attributes::analyze_sub_attributes;
 use crate::trait_codegen::Supertraits;
 use crate::trait_codegen::TraitCodegen;
 use input_attr::*;
@@ -33,6 +34,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         opts: &attr.opts,
     }
     .analyze(input_fn.input_sig(), &mut generics_analyzer)?];
+    let sub_attributes = analyze_sub_attributes(&input_fn.fn_attrs);
 
     let trait_dependency_mode = detect_trait_dependency_mode(
         &fn_input_mode,
@@ -40,15 +42,13 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         &attr.crate_idents,
         attr.trait_ident.span(),
     )?;
-    let use_associated_future =
-        generics::detect_use_associated_future(&attr.opts, [&input_fn].into_iter());
-
     let trait_generics = generics_analyzer.into_trait_generics();
     let trait_def = TraitCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
         trait_indirection: generics::TraitIndirection::Plain,
         trait_dependency_mode: &trait_dependency_mode,
+        sub_attributes: &sub_attributes,
     }
     .gen_trait_def(
         &attr.trait_visibility,
@@ -58,6 +58,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         &trait_fns,
         &fn_input_mode,
     )?;
+
     let impl_block = fn_delegation_codegen::FnDelegationCodegen {
         opts: &attr.opts,
         crate_idents: &attr.crate_idents,
@@ -67,7 +68,7 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         trait_generics: &trait_generics,
         fn_input_mode: &fn_input_mode,
         trait_dependency_mode: &trait_dependency_mode,
-        use_associated_future,
+        sub_attributes: &sub_attributes,
     }
     .gen_impl_block(&trait_fns);
 
@@ -79,11 +80,15 @@ pub fn entrait_for_single_fn(attr: &EntraitFnAttr, input_fn: InputFn) -> syn::Re
         ..
     } = input_fn;
 
-    Ok(quote! {
+    let out = quote! {
         #(#fn_attrs)* #fn_vis #fn_sig #fn_body
         #trait_def
         #impl_block
-    })
+    };
+
+    // println!("\n\nfn output: {out}");
+
+    Ok(out)
 }
 
 pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result<TokenStream> {
@@ -103,6 +108,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
             .analyze(input_fn.input_sig(), &mut generics_analyzer)
         })
         .collect::<syn::Result<Vec<_>>>()?;
+    let sub_attributes = analyze_sub_attributes(&input_mod.attrs);
 
     let trait_dependency_mode = detect_trait_dependency_mode(
         &fn_input_mode,
@@ -110,10 +116,6 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         &attr.crate_idents,
         attr.trait_ident.span(),
     )?;
-    let use_associated_future = generics::detect_use_associated_future(
-        &attr.opts,
-        input_mod.items.iter().filter_map(ModItem::filter_pub_fn),
-    );
 
     let trait_generics = generics_analyzer.into_trait_generics();
     let trait_def = TraitCodegen {
@@ -121,6 +123,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         crate_idents: &attr.crate_idents,
         trait_indirection: generics::TraitIndirection::Plain,
         trait_dependency_mode: &trait_dependency_mode,
+        sub_attributes: &sub_attributes,
     }
     .gen_trait_def(
         &attr.trait_visibility,
@@ -139,7 +142,7 @@ pub fn entrait_for_mod(attr: &EntraitFnAttr, input_mod: InputMod) -> syn::Result
         trait_generics: &trait_generics,
         fn_input_mode: &fn_input_mode,
         trait_dependency_mode: &trait_dependency_mode,
-        use_associated_future,
+        sub_attributes: &sub_attributes,
     }
     .gen_impl_block(&trait_fns);
 

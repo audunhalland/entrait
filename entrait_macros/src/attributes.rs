@@ -2,7 +2,7 @@ use crate::analyze_generics::TraitFn;
 use crate::generics::{self, TraitIndirection};
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
-use crate::opt::{AsyncStrategy, MockApiIdent, Opts, SpanOpt};
+use crate::opt::{MockApiIdent, Opts};
 use crate::token_util::{comma_sep, push_tokens};
 
 use proc_macro2::{Span, TokenStream};
@@ -229,58 +229,22 @@ impl ToTokens for MockallAutomockParams {
     }
 }
 
-pub fn opt_async_trait_attr<'s, 'o>(
-    opts: &'s Opts,
-    crate_idents: &'s CrateIdents,
-    trait_fns: impl Iterator<Item = &'o TraitFn>,
-) -> Option<impl ToTokens + 's> {
-    match (
-        opts.async_strategy(),
-        generics::has_any_async(trait_fns.map(|trait_fn| trait_fn.sig())),
-    ) {
-        (SpanOpt(AsyncStrategy::BoxFuture, span), true) => Some(Attr(AsyncTraitParams {
-            crate_idents,
-            use_static: false,
-            span,
-        })),
-        (SpanOpt(AsyncStrategy::AssociatedFuture, span), true) => Some(Attr(AsyncTraitParams {
-            crate_idents,
-            use_static: true,
-            span,
-        })),
-        _ => None,
-    }
-}
-
 pub struct AsyncTraitParams<'a> {
     pub crate_idents: &'a CrateIdents,
-    pub use_static: bool,
     pub span: Span,
 }
 
 impl<'a> ToTokens for AsyncTraitParams<'a> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.span;
-        if self.use_static {
-            push_tokens!(
-                stream,
-                syn::token::PathSep(span),
-                self.crate_idents.entrait,
-                syn::token::PathSep(span),
-                syn::Ident::new("static_async", span),
-                syn::token::PathSep(span),
-                syn::Ident::new("async_trait", span)
-            );
-        } else {
-            push_tokens!(
-                stream,
-                syn::token::PathSep(span),
-                self.crate_idents.entrait,
-                syn::token::PathSep(span),
-                syn::Ident::new("__async_trait", span),
-                syn::token::PathSep(span),
-                syn::Ident::new("async_trait", span)
-            );
-        }
+        push_tokens!(
+            stream,
+            syn::token::PathSep(span),
+            self.crate_idents.entrait,
+            syn::token::PathSep(span),
+            syn::Ident::new("__async_trait", span),
+            syn::token::PathSep(span),
+            syn::Ident::new("async_trait", span)
+        );
     }
 }
