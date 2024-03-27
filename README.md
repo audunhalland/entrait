@@ -526,11 +526,22 @@ fn foo<D>(deps: &D) { // <-- private function
 }
 ```
 
-##### `async` support
-Zero-cost async works out of the box.
+##### async support
+Zero-cost, static-dispatch `async` works out of the box[^1].
 
-When dynamic dispatch is needed, for example in combination with `delegate_by=ref`, entrait understands the `#[async_trait]` attribute when applied after the entrait macro.
-Entrait will re-apply that macro to the various impl blocks that get generated.
+When dynamic dispatch is needed, for example in combination with `delegate_by=ref`, entrait understands the `#[async_trait]` attribute when applied _after_ the entrait macro.
+Entrait will re-apply that macro to the various generated impl blocks as needed.
+
+###### async `Send`-ness
+Similar to `async_trait`, entrait generates a [Send]-bound on futures by default.
+To opt out of the Send bound, pass `?Send` as a macro argument:
+
+```rust
+#[entrait(ReturnRc, ?Send)]
+async fn return_rc(_deps: impl Any) -> Rc<i32> {
+    Rc::new(42)
+}
+```
 
 ##### Integrating with other `fn`-targeting macros, and `no_deps`
 Some macros are used to transform the body of a function, or generate a body from scratch.
@@ -612,5 +623,7 @@ It is not able to prove that a type implements a trait if it needs to prove that
 While this is a limitation, it is not necessarily a bad one.
 One might say that a layered application architecture should never contain cycles.
 If you do need recursive algorithms, you could model this as utility functions outside of the entraited APIs of the application.
+
+[^1]: Literally, out of the [Box]! In entrait version 0.7 and newer, asynchronous functions are zero-cost by default.
 
 <!-- cargo-rdme end -->
