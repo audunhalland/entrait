@@ -82,11 +82,6 @@ mod bounds {
     }
 }
 
-#[cfg(any(
-    feature = "use-boxed-futures",
-    feature = "use-associated-futures",
-    feature = "nightly-tests"
-))]
 mod no_deps_and_feign {
     use entrait::entrait;
 
@@ -192,7 +187,7 @@ mod module {
             not_included();
         }
 
-        static S: &'static str = "";
+        static S: &str = "";
 
         fn not_included() {}
     }

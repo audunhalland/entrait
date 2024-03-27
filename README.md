@@ -527,37 +527,10 @@ fn foo<D>(deps: &D) { // <-- private function
 ```
 
 ##### `async` support
-Since Rust at the time of writing does not natively support async methods in traits, you may opt in to having `#[async_trait]` generated for your trait.
-Enable the `boxed-futures` cargo feature and pass the `box_future` option like this:
+Zero-cost async works out of the box.
 
-```rust
-#[entrait(Foo, box_future)]
-async fn foo<D>(deps: &D) {
-}
-```
-This is designed to be forwards compatible with [static async fn in traits](https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html).
-When that day comes, you should be able to just remove that option and get a proper zero-cost future.
-
-There is a cargo feature to automatically apply `#[async_trait]` to every generated async trait: `use-boxed-futures`.
-
-##### Zero-cost async inversion of control - preview mode
-Entrait has experimental support for zero-cost futures. A nightly Rust compiler is needed for this feature.
-
-The entrait option is called `associated_future`, and uses GATs and `feature(type_alias_impl_trait)`.
-This feature generates an associated future inside the trait, and the implementations use `impl Trait` syntax to infer
-the resulting type of the future:
-
-```rust
-#![feature(type_alias_impl_trait)]
-
-use entrait::*;
-
-#[entrait(Foo, associated_future)]
-async fn foo<D>(deps: &D) {
-}
-```
-
-There is a feature for turning this on everywhere: `use-associated-futures`.
+When dynamic dispatch is needed, for example in combination with `delegate_by=ref`, entrait understands the `#[async_trait]` attribute when applied after the entrait macro.
+Entrait will re-apply that macro to the various impl blocks that get generated.
 
 ##### Integrating with other `fn`-targeting macros, and `no_deps`
 Some macros are used to transform the body of a function, or generate a body from scratch.
@@ -598,10 +571,6 @@ It is also possible to reduce noise by doing `use entrait::entrait_export as ent
 | Feature                  | Implies         | Description         |
 | -------------------      | --------------- | ------------------- |
 | `unimock`                |                 | Adds the [unimock] dependency, and turns on Unimock implementations for all traits. |
-| `use-boxed-futures`      | `boxed-futures` | Automatically applies the [async_trait] macro to async trait methods. |
-| `use-associated-futures` |                 | Automatically transforms the return type of async trait methods into an associated future by using type-alias-impl-trait syntax. Requires a nightly compiler. |
-| `boxed-futures`          |                 | Pulls in the [async_trait] optional dependency, enabling the `box_future` entrait option (macro parameter). |
-
 
 
 ## "Philosophy"

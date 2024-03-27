@@ -5,16 +5,14 @@ use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
 use crate::analyze_generics::TraitFn;
-use crate::attributes;
 use crate::generics;
 use crate::generics::ImplIndirection;
 use crate::generics::TraitDependencyMode;
 use crate::idents::CrateIdents;
 use crate::input::FnInputMode;
-use crate::opt::AsyncStrategy;
 use crate::opt::Mockable;
 use crate::opt::Opts;
-use crate::opt::SpanOpt;
+use crate::sub_attributes::SubAttribute;
 use crate::token_util::push_tokens;
 use crate::token_util::TokenPair;
 
@@ -28,7 +26,7 @@ pub struct FnDelegationCodegen<'s, TR> {
     pub trait_generics: &'s generics::TraitGenerics,
     pub fn_input_mode: &'s FnInputMode<'s>,
     pub trait_dependency_mode: &'s TraitDependencyMode<'s, 's>,
-    pub use_associated_future: generics::UseAssociatedFuture,
+    pub sub_attributes: &'s [SubAttribute<'s>],
 }
 
 impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
@@ -44,11 +42,8 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
     /// ```
     ///
     pub fn gen_impl_block(&self, trait_fns: &[TraitFn]) -> TokenStream {
-        let async_trait_attribute =
-            attributes::opt_async_trait_attr(self.opts, self.crate_idents, trait_fns.iter());
         let params = self.trait_generics.impl_params(
             self.trait_dependency_mode,
-            self.use_associated_future,
             generics::has_any_self_by_value(trait_fns.iter().map(|trait_fn| trait_fn.sig())),
         );
         let args = self.trait_generics.arguments(&self.impl_indirection);
@@ -65,13 +60,6 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
             self.trait_span,
         );
 
-        let opt_inline_attr = if !matches!(&self.impl_indirection, ImplIndirection::Dynamic { .. })
-        {
-            Some(quote! { #[inline] })
-        } else {
-            None
-        };
-
         let opt_self_scoping = if let FnInputMode::ImplBlock(ty) = self.fn_input_mode {
             Some(TokenPair(
                 syn::token::SelfType(ty.span()),
@@ -82,29 +70,24 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
         };
 
         let items = trait_fns.iter().map(|trait_fn| {
-            let associated_fut_impl = &trait_fn.entrait_sig.associated_fut_impl(
-                self.impl_indirection.to_trait_indirection(),
-                self.crate_idents,
-            );
-
-            let fn_item = self.gen_delegating_fn_item(
-                trait_fn,
-                self.trait_span,
-                opt_inline_attr.as_ref(),
-                &opt_self_scoping,
-            );
+            let fn_item = self.gen_delegating_fn_item(trait_fn, self.trait_span, &opt_self_scoping);
 
             quote! {
-                #associated_fut_impl
                 #fn_item
             }
         });
+
+        let trait_impl_sub_attributes = self
+            .sub_attributes
+            .iter()
+            .copied()
+            .filter(|sub_attr| matches!(sub_attr, SubAttribute::AsyncTrait(_)));
 
         let trait_span = self.trait_span;
         let trait_ref = &self.trait_ref;
 
         quote_spanned! { trait_span=>
-            #async_trait_attribute
+            #(#trait_impl_sub_attributes)*
             impl #params #trait_ref #args for #self_ty #where_clause {
                 #(#items)*
             }
@@ -116,7 +99,6 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
         &self,
         trait_fn: &TraitFn,
         span: Span,
-        mut opt_inline_attr: Option<&TokenStream>,
         opt_self_scoping: &impl ToTokens,
     ) -> TokenStream {
         let entrait_sig = &trait_fn.entrait_sig;
@@ -146,22 +128,9 @@ impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
                 },
             });
 
-        let mut opt_dot_await = trait_fn.opt_dot_await(span);
-        if entrait_sig.associated_fut.is_some() {
-            opt_dot_await = None;
-        }
-
-        if trait_fn.originally_async
-            && matches!(
-                self.opts.async_strategy(),
-                SpanOpt(AsyncStrategy::BoxFuture, _)
-            )
-        {
-            opt_inline_attr = None;
-        }
+        let opt_dot_await = trait_fn.opt_dot_await(span);
 
         quote_spanned! { span=>
-            #opt_inline_attr
             #trait_fn_sig {
                 #opt_self_scoping #fn_ident(#opt_self_comma #(#arguments),*) #opt_dot_await
             }

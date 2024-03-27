@@ -1,4 +1,4 @@
-#![allow(clippy::blacklisted_name)]
+#![allow(clippy::disallowed_names)]
 
 use entrait::*;
 
@@ -11,7 +11,7 @@ pub struct Foo {
 mod business {
     use super::*;
 
-    #[entrait(pub GetFoo, no_deps, box_future, mock_api=GetFooMock)]
+    #[entrait(pub GetFoo, no_deps, mock_api=GetFooMock)]
     async fn get_foo() -> Foo {
         Foo {
             value: "real".to_string(),

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused)]
-#![allow(clippy::blacklisted_name)]
+#![allow(clippy::disallowed_names)]
 #![cfg_attr(
     any(feature = "nightly-tests", feature = "use-associated-futures"),
     feature(type_alias_impl_trait)

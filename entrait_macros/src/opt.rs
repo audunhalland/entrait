@@ -6,7 +6,6 @@ pub struct Opts {
 
     pub no_deps: Option<SpanOpt<bool>>,
     pub debug: Option<SpanOpt<bool>>,
-    pub async_strategy: Option<SpanOpt<AsyncStrategy>>,
 
     /// Whether to export mocks (i.e. not gated with cfg(test))
     pub export: Option<SpanOpt<bool>>,
@@ -21,20 +20,12 @@ pub struct Opts {
 }
 
 impl Opts {
-    pub fn set_fallback_async_strategy(&mut self, strategy: AsyncStrategy) {
-        self.async_strategy.get_or_insert(SpanOpt::of(strategy));
-    }
-
     pub fn no_deps_value(&self) -> bool {
         self.default_option(self.no_deps, false).0
     }
 
     pub fn debug_value(&self) -> bool {
         self.default_option(self.debug, false).0
-    }
-
-    pub fn async_strategy(&self) -> SpanOpt<AsyncStrategy> {
-        self.default_option(self.async_strategy, AsyncStrategy::NoHack)
     }
 
     pub fn export_value(&self) -> bool {
@@ -67,13 +58,6 @@ impl Mockable {
     pub fn yes(self) -> bool {
         matches!(self, Self::Yes)
     }
-}
-
-#[derive(Clone, Copy)]
-pub enum AsyncStrategy {
-    NoHack,
-    BoxFuture,
-    AssociatedFuture,
 }
 
 #[derive(Clone)]
@@ -109,8 +93,6 @@ impl<T> SpanOpt<T> {
 pub enum EntraitOpt {
     NoDeps(SpanOpt<bool>),
     Debug(SpanOpt<bool>),
-    BoxFuture(SpanOpt<bool>),
-    AssociatedFuture(SpanOpt<bool>),
     DelegateBy(SpanOpt<Delegate>),
     /// Whether to export mocks
     Export(SpanOpt<bool>),
@@ -127,8 +109,6 @@ impl EntraitOpt {
         match self {
             Self::NoDeps(opt) => opt.1,
             Self::Debug(opt) => opt.1,
-            Self::BoxFuture(opt) => opt.1,
-            Self::AssociatedFuture(opt) => opt.1,
             Self::DelegateBy(opt) => opt.1,
             Self::Export(opt) => opt.1,
             Self::MockApi(ident) => ident.0.span(),
@@ -149,8 +129,6 @@ impl Parse for EntraitOpt {
         match ident_string.as_str() {
             "no_deps" => Ok(NoDeps(parse_eq_bool(input, true, span)?)),
             "debug" => Ok(Debug(parse_eq_bool(input, true, span)?)),
-            "box_future" => Ok(BoxFuture(parse_eq_bool(input, true, span)?)),
-            "associated_future" => Ok(AssociatedFuture(parse_eq_bool(input, true, span)?)),
             "delegate_by" => Ok(DelegateBy(parse_eq_delegate_by(
                 input,
                 Delegate::BySelf,
