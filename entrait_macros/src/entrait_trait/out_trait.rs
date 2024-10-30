@@ -11,6 +11,7 @@ use syn::spanned::Spanned;
 pub struct OutTrait {
     pub attrs: Vec<syn::Attribute>,
     pub vis: syn::Visibility,
+    #[expect(unused)]
     pub trait_token: syn::token::Trait,
     pub generics: TraitGenerics,
     pub ident: syn::Ident,

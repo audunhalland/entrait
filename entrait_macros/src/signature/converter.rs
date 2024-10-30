@@ -7,7 +7,9 @@ use syn::spanned::Spanned;
 
 pub struct SignatureConverter<'a> {
     pub crate_idents: &'a CrateIdents,
+    #[expect(unused)]
     pub trait_span: Span,
+    #[expect(unused)]
     pub opts: &'a Opts,
     pub input_sig: InputSig<'a>,
     pub deps: &'a FnDeps,

@@ -19,6 +19,7 @@ use crate::token_util::TokenPair;
 /// Generate impls that call standalone generic functions
 pub struct FnDelegationCodegen<'s, TR> {
     pub opts: &'s Opts,
+    #[expect(unused)]
     pub crate_idents: &'s CrateIdents,
     pub trait_ref: &'s TR,
     pub trait_span: Span,

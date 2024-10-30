@@ -229,6 +229,7 @@ mod module {
     // The macro cannot just append a another `::super`, because `pub(super::super)` is invalid syntax.
 }
 
+#[expect(unexpected_cfgs)]
 mod cfg_attributes {
     use entrait::*;
 
