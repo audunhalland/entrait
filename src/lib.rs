@@ -687,6 +687,7 @@
 //!
 //! [^1]: Literally, out of the [Box]! In entrait version 0.7 and newer, asynchronous functions are zero-cost by default.
 
+#![no_std]
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "unimock")]
