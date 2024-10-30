@@ -84,6 +84,7 @@ impl<'a> ToTokens for EntraitForTraitParams<'a> {
 }
 
 pub struct UnimockAttrParams<'s> {
+    #[expect(unused)]
     pub trait_ident: &'s syn::Ident,
     pub mock_api: Option<&'s MockApiIdent>,
     pub trait_indirection: TraitIndirection,

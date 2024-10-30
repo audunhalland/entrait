@@ -26,9 +26,6 @@ pub enum TraitIndirection {
 }
 
 #[derive(Clone, Copy)]
-pub struct UseAssociatedFuture(pub bool);
-
-#[derive(Clone, Copy)]
 pub struct TakesSelfByValue(pub bool);
 
 pub fn has_any_self_by_value<'s>(
