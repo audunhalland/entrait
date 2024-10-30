@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.7.1] - 2024-10-30
+### Added
+- #![no_std]
+
 ## [0.7.0] - 2024-03-27
 ### Changed
 - Unimock bumped to 0.6.
