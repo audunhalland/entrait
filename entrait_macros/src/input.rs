@@ -13,6 +13,7 @@ use syn::{
     spanned::Spanned,
 };
 
+#[expect(unused)]
 pub enum FnInputMode<'a> {
     SingleFn(&'a syn::Ident),
     Module(&'a syn::Ident),
@@ -159,6 +160,7 @@ impl ToTokens for ModItem {
     }
 }
 
+#[expect(unused)]
 pub struct DeriveImplTraitPath(pub syn::Path);
 
 /// An impl block
@@ -168,8 +170,10 @@ pub struct InputImpl {
     pub unsafety: Option<syn::token::Unsafe>,
     pub impl_token: syn::token::Impl,
     pub trait_path: syn::Path,
+    #[expect(unused)]
     pub for_token: syn::token::For,
     pub self_ty: syn::Type,
+    #[expect(unused)]
     pub brace_token: syn::token::Brace,
     pub items: Vec<ImplItem>,
 }

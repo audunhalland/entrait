@@ -36,6 +36,7 @@ pub enum ImplReceiverKind {
 #[derive(Clone)]
 pub struct EntraitSignature {
     pub sig: syn::Signature,
+    #[expect(unused)]
     pub et_lifetimes: Vec<EntraitLifetime>,
 }
 
@@ -48,16 +49,10 @@ impl EntraitSignature {
     }
 }
 
-#[derive(Clone)]
-pub struct AssociatedFut {
-    pub ident: syn::Ident,
-    pub output: syn::Type,
-    pub base_lifetime: syn::Lifetime,
-}
-
 /// Only used for associated future:
 #[derive(Clone)]
 pub struct EntraitLifetime {
+    #[expect(unused)]
     pub lifetime: syn::Lifetime,
 }
 

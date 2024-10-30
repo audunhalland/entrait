@@ -10,6 +10,7 @@ pub struct EntraitTraitAttr {
     pub crate_idents: CrateIdents,
 }
 
+#[expect(unused)]
 pub struct ImplTrait(pub syn::Visibility, pub syn::Ident);
 
 impl Parse for EntraitTraitAttr {

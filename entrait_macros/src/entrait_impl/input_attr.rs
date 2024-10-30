@@ -63,6 +63,7 @@ impl Parse for EntraitSimpleImplAttr {
     }
 }
 
+#[expect(unused)]
 pub struct EntraitImplAttr {
     pub opts: Opts,
     pub crate_idents: CrateIdents,
