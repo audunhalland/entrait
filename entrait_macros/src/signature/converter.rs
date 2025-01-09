@@ -16,7 +16,7 @@ pub struct SignatureConverter<'a> {
     pub impl_receiver_kind: ImplReceiverKind,
 }
 
-impl<'a> SignatureConverter<'a> {
+impl SignatureConverter<'_> {
     /// Convert from an standalone `fn` signature to a trait `fn` signature.
     pub fn convert_fn_to_trait_fn(&self) -> EntraitSignature {
         let mut entrait_sig = EntraitSignature::new(self.input_sig.sig.clone());

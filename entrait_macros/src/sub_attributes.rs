@@ -35,7 +35,7 @@ pub fn contains_async_trait(sub_attributes: &[SubAttribute]) -> bool {
         .any(|sub_attributes| matches!(sub_attributes, SubAttribute::AsyncTrait(_)))
 }
 
-impl<'t> ToTokens for SubAttribute<'t> {
+impl ToTokens for SubAttribute<'_> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             Self::AsyncTrait(attr) => attr.to_tokens(tokens),

@@ -23,7 +23,7 @@ pub enum FnInputMode<'a> {
 
 pub struct LiteralAttrs<'a>(pub &'a [syn::Attribute]);
 
-impl<'a> ToTokens for LiteralAttrs<'a> {
+impl ToTokens for LiteralAttrs<'_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         for attr in self.0 {
             attr.to_tokens(stream);

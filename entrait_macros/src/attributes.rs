@@ -28,7 +28,7 @@ pub struct ExportGatedAttr<'a, P: ToTokens + IsEmpty> {
     pub opts: &'a Opts,
 }
 
-impl<'a, P: ToTokens + IsEmpty> ToTokens for ExportGatedAttr<'a, P> {
+impl<P: ToTokens + IsEmpty> ToTokens for ExportGatedAttr<'_, P> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         if self.params.is_empty() {
             return;
@@ -56,7 +56,7 @@ pub struct EntraitForTraitParams<'a> {
     pub crate_idents: &'a CrateIdents,
 }
 
-impl<'a> ToTokens for EntraitForTraitParams<'a> {
+impl ToTokens for EntraitForTraitParams<'_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         use syn::token::*;
         use syn::Ident;
@@ -94,13 +94,13 @@ pub struct UnimockAttrParams<'s> {
     pub span: Span,
 }
 
-impl<'s> IsEmpty for UnimockAttrParams<'s> {
+impl IsEmpty for UnimockAttrParams<'_> {
     fn is_empty(&self) -> bool {
         matches!(self.trait_indirection, TraitIndirection::Plain) && self.mock_api.is_none()
     }
 }
 
-impl<'s> ToTokens for UnimockAttrParams<'s> {
+impl ToTokens for UnimockAttrParams<'_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         if self.is_empty() {
             return;
@@ -162,7 +162,7 @@ impl<'s> ToTokens for UnimockAttrParams<'s> {
     }
 }
 
-impl<'s> UnimockAttrParams<'s> {
+impl UnimockAttrParams<'_> {
     fn unmock_with(&self, stream: &mut TokenStream) {
         use syn::token::*;
         use syn::Ident;
@@ -235,7 +235,7 @@ pub struct AsyncTraitParams<'a> {
     pub span: Span,
 }
 
-impl<'a> ToTokens for AsyncTraitParams<'a> {
+impl ToTokens for AsyncTraitParams<'_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.span;
         push_tokens!(

@@ -77,7 +77,7 @@ impl TraitGenerics {
         &'i self,
         trait_dependency_mode: &'i TraitDependencyMode<'i, '_>,
         takes_self_by_value: TakesSelfByValue,
-    ) -> ParamsGenerator<'_> {
+    ) -> ParamsGenerator<'i> {
         ParamsGenerator {
             params: &self.params,
             impl_t: match trait_dependency_mode {
@@ -92,7 +92,7 @@ impl TraitGenerics {
         &'i self,
         idents: &'i GenericIdents,
         takes_self_by_value: TakesSelfByValue,
-    ) -> ParamsGenerator<'_> {
+    ) -> ParamsGenerator<'i> {
         ParamsGenerator {
             params: &self.params,
             impl_t: Some(&idents.impl_t),
@@ -137,7 +137,7 @@ impl<'c> GenericIdents<'c> {
 /// `::entrait::Impl<EntraitT>`
 pub struct ImplPath<'g, 'c>(&'g GenericIdents<'c>, proc_macro2::Span);
 
-impl<'g, 'c> quote::ToTokens for ImplPath<'g, 'c> {
+impl quote::ToTokens for ImplPath<'_, '_> {
     fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let span = self.1;
 
@@ -161,7 +161,7 @@ pub struct ParamsGenerator<'g> {
     takes_self_by_value: TakesSelfByValue,
 }
 
-impl<'g> quote::ToTokens for ParamsGenerator<'g> {
+impl quote::ToTokens for ParamsGenerator<'_> {
     fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let mut punctuator = Punctuator::new(
             stream,
@@ -212,7 +212,7 @@ pub struct ArgumentsGenerator<'g> {
     impl_indirection: &'g ImplIndirection<'g>,
 }
 
-impl<'g> quote::ToTokens for ArgumentsGenerator<'g> {
+impl quote::ToTokens for ArgumentsGenerator<'_> {
     fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let mut punctuator = Punctuator::new(
             stream,
@@ -248,7 +248,7 @@ pub struct TraitWhereClauseGenerator<'g> {
     where_predicates: &'g syn::punctuated::Punctuated<syn::WherePredicate, syn::token::Comma>,
 }
 
-impl<'g> quote::ToTokens for TraitWhereClauseGenerator<'g> {
+impl quote::ToTokens for TraitWhereClauseGenerator<'_> {
     fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         if self.where_predicates.is_empty() {
             return;
@@ -270,7 +270,7 @@ pub struct ImplWhereClauseGenerator<'g, 's, 'c> {
     span: proc_macro2::Span,
 }
 
-impl<'g, 's, 'c> quote::ToTokens for ImplWhereClauseGenerator<'g, 's, 'c> {
+impl quote::ToTokens for ImplWhereClauseGenerator<'_, '_, '_> {
     fn to_tokens(&self, stream: &mut proc_macro2::TokenStream) {
         let mut punctuator = Punctuator::new(
             stream,

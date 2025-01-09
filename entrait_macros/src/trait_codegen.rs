@@ -22,7 +22,7 @@ pub struct TraitCodegen<'s> {
     pub sub_attributes: &'s [SubAttribute<'s>],
 }
 
-impl<'s> TraitCodegen<'s> {
+impl TraitCodegen<'_> {
     pub fn gen_trait_def(
         &self,
         visibility: &syn::Visibility,
@@ -130,7 +130,7 @@ struct TraitVisibility<'a> {
     fn_input_mode: &'a FnInputMode<'a>,
 }
 
-impl<'a> ToTokens for TraitVisibility<'a> {
+impl ToTokens for TraitVisibility<'_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         match &self.fn_input_mode {
             FnInputMode::Module(_) | FnInputMode::ImplBlock(_) => {

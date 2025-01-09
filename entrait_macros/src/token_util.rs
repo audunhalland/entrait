@@ -82,7 +82,7 @@ where
     }
 }
 
-impl<'s, S, P, E> Drop for Punctuator<'s, S, P, E>
+impl<S, P, E> Drop for Punctuator<'_, S, P, E>
 where
     E: quote::ToTokens,
 {

@@ -345,7 +345,7 @@ struct DelegatingMethod<'s> {
     call: TokenStream,
 }
 
-impl<'s> ToTokens for DelegatingMethod<'s> {
+impl ToTokens for DelegatingMethod<'_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         // Just "mirroring" all the attributes from
         // the trait definition to the implementation
@@ -395,7 +395,7 @@ struct ImplWhereClause<'g, 'c> {
     span: proc_macro2::Span,
 }
 
-impl<'g, 'c> ImplWhereClause<'g, 'c> {
+impl ImplWhereClause<'_, '_> {
     fn push_impl_t_bounds(&self, stream: &mut TokenStream) {
         use syn::token::*;
 
@@ -524,7 +524,7 @@ impl<'g, 'c> ImplWhereClause<'g, 'c> {
     }
 }
 
-impl<'g, 'c> quote::ToTokens for ImplWhereClause<'g, 'c> {
+impl quote::ToTokens for ImplWhereClause<'_, '_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let mut punctuator = Punctuator::new(
             stream,

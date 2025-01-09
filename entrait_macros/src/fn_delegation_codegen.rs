@@ -30,7 +30,7 @@ pub struct FnDelegationCodegen<'s, TR> {
     pub sub_attributes: &'s [SubAttribute<'s>],
 }
 
-impl<'s, TR: ToTokens> FnDelegationCodegen<'s, TR> {
+impl<TR: ToTokens> FnDelegationCodegen<'_, TR> {
     ///
     /// Generate code like
     ///
@@ -146,7 +146,7 @@ struct SelfTy<'g, 'c> {
     span: Span,
 }
 
-impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
+impl quote::ToTokens for SelfTy<'_, '_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         match &self.trait_dependency_mode {
             TraitDependencyMode::Generic(idents) => match self.impl_indirection {
@@ -174,7 +174,7 @@ impl<'g, 'c> quote::ToTokens for SelfTy<'g, 'c> {
 // i.e. `self,`
 struct SelfArgComma<'g>(&'g ImplIndirection<'g>, Span);
 
-impl<'g> quote::ToTokens for SelfArgComma<'g> {
+impl quote::ToTokens for SelfArgComma<'_> {
     fn to_tokens(&self, stream: &mut TokenStream) {
         let span = self.1;
         match &self.0 {

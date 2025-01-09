@@ -38,7 +38,7 @@ pub struct TraitFnAnalyzer<'s> {
     pub opts: &'s Opts,
 }
 
-impl<'s> TraitFnAnalyzer<'s> {
+impl TraitFnAnalyzer<'_> {
     pub fn analyze(
         self,
         input_sig: InputSig<'_>,
